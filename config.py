@@ -1,1 +1,18 @@
 # Contains your DHAN_API_KEY, CLIENT_ID, MTM target, Telegram configs
+# config.py
+
+# Your Dhan API credentials
+DHAN_API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzU0OTI0MTYyLCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwMDkyMjIyNiJ9.YcY7_aIOuhDBQ9VD3yyfz9eIMnDcD3o3aEgwfR38q4ZRJ2Vkdl44103dIZIdibk0kilRUeA451LH9mBHQjra4A"
+DHAN_CLIENT_ID = "1100922226"  # replace with your Dhan client ID
+
+# Telegram bot config
+TELEGRAM_TOKEN = "7770202577:AAHjZFGJg2Gt3c5S77i__SOCMVqRXd6ofY0"
+TELEGRAM_CHAT_ID = "1872844861"
+
+# MTM Target (e.g., 0.002 means 0.20% of total margin)
+MTM_TARGET_PCT = 0.002
+
+# Entry and exit time config
+ENTRY_START_TIME = "09:20"
+ENTRY_END_TIME = "09:35"
+EXIT_TIME = "15:15"
