@@ -21,7 +21,9 @@ def run_strategy():
     send_telegram_message("Iron Condor strategy started.")
 
     # Initialize trader
-    trader = DhanTrader()
+    from config import DHAN_API_KEY, DHAN_CLIENT_ID
+    trader = DhanTrader(DHAN_API_KEY, DHAN_CLIENT_ID)
+
 
     # Check market open
     if not is_market_open():
