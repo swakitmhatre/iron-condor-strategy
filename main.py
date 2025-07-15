@@ -1,5 +1,6 @@
 from strategy import run_strategy
-from utils.logger import setup_logger
+from utils import log_message
+
 from utils.telegram_bot import send_telegram_message
 import time
 
