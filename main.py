@@ -4,7 +4,7 @@ import time
 import os
 import datetime as dt
 from utils import *
-from market_status import is_market_open  # <-- this line is missing
+#from market_status import is_market_open  # <-- this line is missing
 from config import *
 from telegram_bot import send_telegram_message
 
