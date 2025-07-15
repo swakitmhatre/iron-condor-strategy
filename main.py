@@ -1,75 +1,61 @@
-# main.py
-
-import time
 import os
-import datetime as dt
+import time
+from datetime import datetime
 from utils import *
-#from market_status import is_market_open  # <-- this line is missing
 from config import *
-from telegram_bot import send_telegram_message
+from dhan_api import DhanTrader
+from position_handler import PositionHandler
+from market_status import is_market_open
 
+# Entry time window (you can customize)
+entry_start_time = "09:30"
+entry_end_time = "11:30"
 
-def main():
-    send_telegram_message("\u2705 Iron Condor Strategy Started")
-    log("Strategy started")
+# Initialize
+log_message("Strategy started")
+trader = DhanTrader()
+handler = PositionHandler(trader)
 
+try:
+    # Exit if market is closed
     if not is_market_open():
-        log("Market closed, exiting.")
-        send_telegram_message("\u274C Market is closed. Strategy exiting.")
-        return
+        log_message("Market is closed. Exiting.")
+        exit()
 
+    # Entry Time Window Check
     if not is_time_between(entry_start_time, entry_end_time):
-        log("Outside entry window, exiting.")
-        send_telegram_message("\u274C Outside entry window. Strategy exiting.")
-        return
+        log_message("Outside entry time window. Exiting.")
+        exit()
 
-    if os.path.exists("stop.flag"):
-        log("Manual stop.flag detected. Exiting.")
-        send_telegram_message("\u274C Manual stop.flag found. Exiting strategy.")
-        return
+    # Check if manual override
+    if os.path.exists("force_entry.flag"):
+        log_message("Force entry flag detected. Proceeding despite filters.")
+    elif not is_conditions_favorable():
+        log_message("Unfavorable market conditions. Entry aborted.")
+        exit()
 
-    if not check_market_conditions():
-        if os.path.exists("force_entry.flag"):
-            log("Force entry flag found. Skipping market condition checks.")
-            send_telegram_message("\u26a0\ufe0f Force entry flag active. Ignoring market conditions.")
-        else:
-            log("Unfavorable market conditions. Exiting.")
-            send_telegram_message("\u274C Unfavorable market conditions. No trade taken.")
-            return
+    # Run strategy
+    log_message("Conditions favorable. Executing strategy...")
+    handler.execute_iron_condor()
 
-    instrument, strikes = get_atm_strikes()
-    log(f"Underlying: {instrument}, Strikes: {strikes}")
+    # Monitor strategy
+    while True:
+        if os.path.exists("stop.flag"):
+            log_message("Manual stop triggered via stop.flag")
+            handler.exit_all_positions(reason="Manual Stop")
+            break
 
-    buy_order_ids = place_buy_legs(instrument, strikes)
-    if not buy_order_ids:
-        log("Buy legs failed. Aborting.")
-        send_telegram_message("\u274C Buy legs placement failed.")
-        return
-    time.sleep(2)
+        if handler.check_mtm_targets():
+            break
 
-    sell_order_ids = place_sell_legs(instrument, strikes)
-    if not sell_order_ids:
-        log("Sell legs failed. Attempting to exit buy legs.")
-        square_off_orders(buy_order_ids)
-        send_telegram_message("\u274C Sell legs failed. Buy legs squared off.")
-        return
+        if handler.check_intraday_movement():
+            break
 
-    log("All positions placed successfully")
-    send_telegram_message("\u2705 Iron Condor placed successfully")
+        time.sleep(5)
 
-    entry_time = dt.datetime.now().strftime("%H:%M:%S")
-    log(f"Entry Time: {entry_time}")
-    track_mtm_and_exit(instrument, buy_order_ids, sell_order_ids)
-
-
-if __name__ == "__main__":
+except Exception as e:
+    log_message(f"Exception: {e}")
     try:
-        main()
-    except Exception as e:
-        log(f"Exception: {str(e)}")
-        send_telegram_message(f"\u274C Strategy Error: {str(e)}")
-        try:
-            square_off_all_positions()
-        except:
-            log("Emergency exit failed")
-        send_telegram_message("\u26a0\ufe0f Emergency exit attempted. Strategy stopped.")
+        handler.exit_all_positions(reason="Error")
+    except:
+        log_message("Emergency exit failed")
