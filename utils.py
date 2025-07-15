@@ -16,6 +16,12 @@ def send_telegram_message(bot_token, chat_id, message):
         requests.post(url, data=payload)
     except Exception as e:
         print(f"[{now()}] Telegram send error: {e}")
+        
+# Check if market is open (simple check for NSE timings)
+def is_market_open():
+    now_time = datetime.now().time()
+    return now_time >= datetime.strptime("09:15", "%H:%M").time() and now_time <= datetime.strptime("15:30", "%H:%M").time()
+
 
 # Write strategy logs
 def log(message, log_file="strategy.log"):
