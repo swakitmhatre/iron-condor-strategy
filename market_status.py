@@ -1,0 +1,1 @@
+# Checks NSE market open/close using public API
