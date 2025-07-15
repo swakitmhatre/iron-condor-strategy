@@ -1,0 +1,6 @@
+# Main strategy runner
+print('Iron Condor strategy started...')
+with open("logs/strategy.log", "a") as f:
+
+    f.write("Main.py started successfully\n")
+
