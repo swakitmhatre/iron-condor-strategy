@@ -22,6 +22,13 @@ def is_market_open():
     now_time = datetime.now().time()
     return now_time >= datetime.strptime("09:15", "%H:%M").time() and now_time <= datetime.strptime("15:30", "%H:%M").time()
 
+def is_time_between(start_time_str, end_time_str):
+    now = datetime.now().time()
+    start_time = datetime.strptime(start_time_str, "%H:%M").time()
+    end_time = datetime.strptime(end_time_str, "%H:%M").time()
+    return start_time <= now <= end_time
+
+
 
 # Write strategy logs
 def log(message, log_file="strategy.log"):
