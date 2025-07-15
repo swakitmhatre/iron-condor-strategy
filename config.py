@@ -1,8 +1,22 @@
-# Configuration file
-PAPER_TRADE = True
-MTM_TARGET_PERCENT = 0.20
-
 # config.py
 
 # === DHAN SETTINGS ===
-DHAN_API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzU0OTI0MTYyLCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwMDkyMjIyNiJ9.YcY7_aIOuhDBQ9VD3yyfz9eIMnDcD3
+DHAN_API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzU0OTI0MTYyLCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwMDkyMjIyNiJ9.YcY7_aIOuhDBQ9VD3yyfz9eIMnDcD3o3aEgwfR38q4ZRJ2Vkdl44103dIZIdibk0kilRUeA451LH9mBHQjra4A"
+
+# === TELEGRAM SETTINGS ===
+TELEGRAM_BOT_TOKEN = "7770202577:AAHjZFGJg2Gt3c5S77i__SOCMVqRXd6ofY0"
+TELEGRAM_CHAT_ID = "1872844861"
+
+# === STRATEGY SETTINGS ===
+MTM_TARGET_PERCENT = 0.20   # as percentage of margin (0.20%)
+MTM_STOPLOSS_PERCENT = 0.00  # default no stoploss, can be adjusted
+INTRADAY_EXIT_MOVE_PERCENT = 1.0  # NIFTY 1% move exit condition
+STRATEGY_MARGIN = 140000  # margin used to calculate MTM target
+ENTRY_START_TIME = "09:20"
+ENTRY_END_TIME = "10:10"
+EXIT_TIME = "15:15"
+SYMBOL = "NIFTY"
+
+# === FLAGS ===
+FORCE_ENTRY_FILE = "force_entry.flag"
+MANUAL_EXIT_FILE = "stop.flag"
