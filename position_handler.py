@@ -1,38 +1,22 @@
-# position_handler.py
-
-from dhan import Dhan
-from utils import get_strike_prices, log_message
-import time
+from utils import log_message
+from strike_selection import get_strike_prices
 
 def place_iron_condor(dhan):
-    # ✅ Get spot price from Dhan
     spot = dhan.get_nifty_spot()
-    log_message(f"Fetched spot price: {spot}")
-
-    # ✅ Get strike prices based on spot
     ce_strike, pe_strike, hedge_ce, hedge_pe = get_strike_prices(spot)
 
-    positions = []
+    log_message(f"Placing Iron Condor with strikes: CE {ce_strike}, PE {pe_strike}, Hedge CE {hedge_ce}, Hedge PE {hedge_pe}")
 
-    # BUY hedge legs first
-    hedge_ce_order = dhan.place_order(symbol="NIFTY", strike=hedge_ce, side="BUY")
-    hedge_pe_order = dhan.place_order(symbol="NIFTY", strike=hedge_pe, side="BUY")
+    # This is placeholder order placement logic
+    # Replace with actual API logic as required
+    positions = [
+        {"symbol": f"NIFTY{ce_strike}CE", "action": "SELL"},
+        {"symbol": f"NIFTY{pe_strike}PE", "action": "SELL"},
+        {"symbol": f"NIFTY{hedge_ce}CE", "action": "BUY"},
+        {"symbol": f"NIFTY{hedge_pe}PE", "action": "BUY"},
+    ]
 
-    positions.extend([hedge_ce_order, hedge_pe_order])
-    time.sleep(1)
-
-    # SELL main legs
-    ce_order = dhan.place_order(symbol="NIFTY", strike=ce_strike, side="SELL")
-    pe_order = dhan.place_order(symbol="NIFTY", strike=pe_strike, side="SELL")
-
-    positions.extend([ce_order, pe_order])
-
-    log_message(f"Orders placed: {[p['id'] for p in positions]}")
     return True, positions
 
-def exit_all_positions(dhan, positions):
-    for p in positions:
-        opposite_side = "SELL" if p["side"] == "BUY" else "BUY"
-        dhan.place_order(symbol=p["symbol"], strike=p["strike"], side=opposite_side)
-        log_message(f"Exited: {p['symbol']} {p['strike']} {opposite_side}")
-        time.sleep(1)
+def exit_all_positions(dhan):
+    log_message("Exiting all positions (placeholder logic).")
