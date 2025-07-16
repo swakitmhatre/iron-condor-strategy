@@ -6,8 +6,8 @@ from utils import log_message
 
 
 if __name__ == "__main__":
-    #log_message("Iron Condor strategy running")
-    log("Main.py started successfully")
+    log_message("Iron Condor strategy running")
+    #log("Main.py started successfully")
 
     run_strategy()
 
