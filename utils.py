@@ -1,57 +1,77 @@
-# utils.py
-
-import datetime
-import os
-import pytz
 import json
-import requests
+import os
+from datetime import datetime, timedelta, time
+import pytz
 
-# Constants
-LOT_SIZE = 50  # for NIFTY
+# === Config ===
+NIFTY_SYMBOL = "NIFTY"
+FORCE_ENTRY_FILE = "force_entry.flag"
+STOP_FLAG_FILE = "stop.flag"
 
-def get_ist_now():
-    return datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+# === Timezone handling ===
+def get_ist_time():
+    return datetime.now(pytz.timezone('Asia/Kolkata'))
 
-def get_next_week_expiry():
-    today = get_ist_now().date()
-    weekday = today.weekday()
+# === Market Time Logic ===
+def is_market_open():
+    now = get_ist_time()
+    market_open = time(9, 15)
+    market_close = time(15, 30)
+    is_weekday = now.weekday() < 5  # Monday to Friday
 
-    # If today is Thursday (3), next expiry is next Thursday
-    days_ahead = 3 - weekday + 7
-    next_expiry = today + datetime.timedelta(days=days_ahead)
-    return next_expiry.strftime("%Y-%m-%d")
+    log(f"Market check time: {now.strftime('%Y-%m-%d %H:%M:%S')} | Weekday: {now.weekday()}")
 
-def get_strike_prices(spot_price, step=50):
-    atm = round(spot_price / step) * step
+    return is_weekday and market_open <= now.time() <= market_close
+
+# === Holiday Logic (can be expanded) ===
+def is_holiday(today=None):
+    if today is None:
+        today = get_ist_time().date()
+    
+    holidays = [
+        # Add your actual NSE holiday dates here (yyyy-mm-dd)
+        datetime(2025, 1, 26).date(),  # Republic Day
+        datetime(2025, 8, 15).date(),  # Independence Day
+        datetime(2025, 10, 2).date(),  # Gandhi Jayanti
+    ]
+    return today in holidays
+
+# === Manual Stop / Force Flags ===
+def check_manual_exit():
+    return os.path.exists(STOP_FLAG_FILE)
+
+def check_force_entry():
+    return os.path.exists(FORCE_ENTRY_FILE)
+
+# === Strike Rounding ===
+def get_strike_prices(spot_price):
+    atm = round(spot_price / 50) * 50
     ce_strike = atm + 300
     pe_strike = atm - 300
-    hedge_ce = ce_strike + 200
-    hedge_pe = pe_strike - 200
-    return ce_strike, pe_strike, hedge_ce, hedge_pe
+    return pe_strike, ce_strike
 
-def get_mtm(positions_file="logs/positions.json"):
-    try:
-        if not os.path.exists(positions_file):
-            return 0.0
+# === Get Next Week Expiry ===
+def get_next_week_expiry():
+    today = get_ist_time().date()
+    weekday = today.weekday()  # Monday = 0
 
-        with open(positions_file, "r") as f:
-            data = json.load(f)
+    days_ahead = (3 - weekday + 7) % 7  # 3 = Thursday
+    if days_ahead == 0:
+        days_ahead = 7
+    expiry = today + timedelta(days=days_ahead)
+    return expiry.strftime('%Y-%m-%d')
 
-        total_mtm = 0.0
-        for pos in data.get("positions", []):
-            total_mtm += pos.get("pnl", 0.0)
-        return round(total_mtm, 2)
-    except Exception as e:
-        print(f"[MTM] Error calculating MTM: {e}")
-        return 0.0
+# === Calculate MTM ===
+def get_mtm(positions):
+    return sum((p['ltp'] - p['entry_price']) * p['quantity'] for p in positions)
 
+# === Margin Estimator (per lot) ===
 def get_required_margin():
-    # Replace with actual margin fetching using Dhan API if needed
-    # For now assume ₹1.2 lakh per Iron Condor (4 legs)
-    return 120000.0
+    # Approx ₹90,000 for 1-lot Iron Condor
+    return 90000
 
-def log_message(message, log_file="logs/strategy.log"):
-    now = get_ist_now().strftime("%Y-%m-%d %H:%M:%S")
-    with open(log_file, "a") as f:
-        f.write(f"[{now}] {message}\n")
-    print(f"[{now}] {message}")
+# === Logger for quick debug ===
+def log(message):
+    timestamp = get_ist_time().strftime('%Y-%m-%d %H:%M:%S')
+    with open("logs/strategy.log", "a") as f:
+        f.write(f"{timestamp} - {message}\n")
