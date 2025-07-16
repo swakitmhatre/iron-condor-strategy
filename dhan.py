@@ -2,7 +2,6 @@
 
 import requests
 import json
-from utils import log_message
 
 class Dhan:
     def __init__(self, auth_token):
@@ -38,8 +37,8 @@ class Dhan:
         res = requests.post(url, json=data, headers=self.headers)
         try:
             return res.json()
-        except:
-            log_message(f"Error placing order: {res.text}")
+        except Exception as e:
+            print(f"[ERROR] Order placement failed: {res.text}")
             return {}
 
     def exit_order(self, order_id):
