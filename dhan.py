@@ -1,47 +1,30 @@
 # dhan.py
 
 import requests
-import json
+from config import DHAN_API_KEY
 
 class Dhan:
     def __init__(self, auth_token):
-        self.base_url = "https://api.dhan.co"
         self.auth_token = auth_token
+        self.base_url = "https://api.dhan.co"
         self.headers = {
             "accept": "application/json",
-            "access-token": self.auth_token
+            "access-token": self.auth_token,
+            "Dhan-Client-Id": DHAN_API_KEY
         }
 
-    def get_positions(self):
-        url = f"{self.base_url}/positions"
-        res = requests.get(url, headers=self.headers)
-        return res.json() if res.status_code == 200 else []
+    def get_nifty_spot(self):
+        url = f"{self.base_url}/quotes/indices/NSE_INDEX_NIFTY"
+        response = requests.get(url, headers=self.headers)
+        data = response.json()
+        return float(data['lastTradedPrice']) / 100  # Dhan returns price in paisa
 
-    def get_orders(self):
-        url = f"{self.base_url}/orders"
-        res = requests.get(url, headers=self.headers)
-        return res.json() if res.status_code == 200 else []
-
-    def get_holdings(self):
-        url = f"{self.base_url}/holdings"
-        res = requests.get(url, headers=self.headers)
-        return res.json() if res.status_code == 200 else []
-
-    def get_fund_margin(self):
-        url = f"{self.base_url}/margins/fund"
-        res = requests.get(url, headers=self.headers)
-        return res.json() if res.status_code == 200 else {}
-
-    def place_order(self, data):
-        url = f"{self.base_url}/orders"
-        res = requests.post(url, json=data, headers=self.headers)
-        try:
-            return res.json()
-        except Exception as e:
-            print(f"[ERROR] Order placement failed: {res.text}")
-            return {}
-
-    def exit_order(self, order_id):
-        url = f"{self.base_url}/orders/{order_id}"
-        res = requests.delete(url, headers=self.headers)
-        return res.status_code == 200
+    def place_order(self, symbol, strike, side):
+        # Simulated order placement (for paper trading)
+        order = {
+            "symbol": symbol,
+            "strike": strike,
+            "side": side,
+            "id": f"{symbol}-{strike}-{side}"
+        }
+        return order
