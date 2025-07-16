@@ -1,10 +1,13 @@
 # main.py
 
 from strategy import run_strategy
-from utils import log_message
+from utils import log
+
 
 if __name__ == "__main__":
-    log_message("Iron Condor strategy running")
+    #log_message("Iron Condor strategy running")
+    log("Main.py started successfully")
+
     run_strategy()
 
 
