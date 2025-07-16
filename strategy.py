@@ -22,7 +22,7 @@ def run_strategy():
         log_message("No entry.flag or force_entry.flag present")
         return
 
-    dhan = Dhan()
+    dhan = Dhan(DHAN_API_TOKEN)
 
     # Place iron condor
     success, positions = place_iron_condor(dhan)
