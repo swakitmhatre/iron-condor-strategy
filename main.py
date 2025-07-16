@@ -1,7 +1,8 @@
 # main.py
 
 from strategy import run_strategy
-from utils import log
+#from utils import log
+from utils import log_message 
 
 
 if __name__ == "__main__":
