@@ -1,33 +1,32 @@
-from datetime import datetime, timedelta
+from datetime import datetime, time
+from pytz import timezone
 from utils import log_message
 
 def market_open():
     """
-    Check if the market is open based on Indian market hours (IST).
-    Market hours: Monday–Friday, 09:15 to 15:30 IST
+    Checks if current time (IST) is within Indian market hours.
+    Market hours: 09:15 to 15:30 IST, Monday to Friday
     """
-    # Get current UTC time
-    now_utc = datetime.utcnow()
 
-    # Convert UTC to IST
-    now_ist = now_utc + timedelta(hours=5, minutes=30)
+    # Use pytz to get IST timezone
+    ist = timezone('Asia/Kolkata')
+    now_ist = datetime.now(ist)
 
-    # Define market open and close times in IST
-    market_start = now_ist.replace(hour=9, minute=15, second=0, microsecond=0)
-    market_end = now_ist.replace(hour=15, minute=30, second=0, microsecond=0)
+    # Define market start and end times
+    market_start = time(9, 15)
+    market_end = time(15, 30)
 
-    # Logging for debug
-    log_message(f"[DEBUG] UTC now: {now_utc.strftime('%Y-%m-%d %H:%M:%S')}")
-    log_message(f"[DEBUG] IST now: {now_ist.strftime('%Y-%m-%d %H:%M:%S')}")
-    log_message(f"[DEBUG] Market hours IST: {market_start.strftime('%H:%M:%S')} to {market_end.strftime('%H:%M:%S')}")
+    # Log debug info
+    log_message(f"[DEBUG] Current IST time: {now_ist.strftime('%Y-%m-%d %H:%M:%S')}")
 
-    # Check if today is weekend
+    # Check for weekend
     if now_ist.weekday() >= 5:
         log_message("Market closed (Weekend)")
         return False
 
-    # Check if current time is within market hours
-    if market_start <= now_ist <= market_end:
+    # Check time range
+    current_time = now_ist.time()
+    if market_start <= current_time <= market_end:
         return True
 
     log_message("Market closed (Outside market hours)")
