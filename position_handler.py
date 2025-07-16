@@ -1,30 +1,34 @@
-# Handles entry, exit, MTM tracking, stop flag, intraday checks
 # position_handler.py
 
-from dhan_api import DhanTrader
-from utils import get_strike_prices
-from config import DHAN_API_KEY, DHAN_CLIENT_ID
+from dhan import Dhan
+from utils import get_strike_prices, log_message
+import time
 
-dhan = DhanTrader(DHAN_API_KEY, DHAN_CLIENT_ID)
+def place_iron_condor(dhan):
+    # Example logic — replace with actual logic if needed
+    ce_strike, pe_strike, hedge_ce, hedge_pe = get_strike_prices()
 
-def place_iron_condor():
-    atm_ce, atm_pe, otm_ce, otm_pe = get_strike_prices()
+    positions = []
 
-    orders = [
-        {"symbol": otm_ce, "side": "SELL"},
-        {"symbol": otm_pe, "side": "SELL"},
-        {"symbol": atm_ce, "side": "BUY"},
-        {"symbol": atm_pe, "side": "BUY"},
-    ]
+    # BUY hedge legs first
+    hedge_ce_order = dhan.place_order(symbol="NIFTY", strike=hedge_ce, side="BUY")
+    hedge_pe_order = dhan.place_order(symbol="NIFTY", strike=hedge_pe, side="BUY")
 
-    success = True
-    for order in orders:
-        result = dhan.place_order(order["symbol"], order["side"])
-        if not result:
-            success = False
-            print(f"Failed to place {order['side']} order for {order['symbol']}")
-    
-    return success
+    positions.extend([hedge_ce_order, hedge_pe_order])
+    time.sleep(1)
 
-def exit_all_positions():
-    dhan.exit_all_positions()
+    # SELL main legs
+    ce_order = dhan.place_order(symbol="NIFTY", strike=ce_strike, side="SELL")
+    pe_order = dhan.place_order(symbol="NIFTY", strike=pe_strike, side="SELL")
+
+    positions.extend([ce_order, pe_order])
+
+    log_message(f"Orders placed: {[p['id'] for p in positions]}")
+    return True, positions
+
+def exit_all_positions(dhan, positions):
+    for p in positions:
+        opposite_side = "SELL" if p["side"] == "BUY" else "BUY"
+        dhan.place_order(symbol=p["symbol"], strike=p["strike"], side=opposite_side)
+        log_message(f"Exited: {p['symbol']} {p['strike']} {opposite_side}")
+        time.sleep(1)
