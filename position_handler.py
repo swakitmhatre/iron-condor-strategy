@@ -5,8 +5,12 @@ from utils import get_strike_prices, log_message
 import time
 
 def place_iron_condor(dhan):
-    # Example logic — replace with actual logic if needed
-    ce_strike, pe_strike, hedge_ce, hedge_pe = get_strike_prices()
+    # ✅ Get spot price from Dhan
+    spot = dhan.get_nifty_spot()
+    log_message(f"Fetched spot price: {spot}")
+
+    # ✅ Get strike prices based on spot
+    ce_strike, pe_strike, hedge_ce, hedge_pe = get_strike_prices(spot)
 
     positions = []
 
