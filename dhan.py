@@ -11,10 +11,9 @@ class Dhan:
         }
 
     def get_nifty_spot(self):
-        # FIXED: Correct URL with proper query param
-        url = f"{self.base_url}/market/live/quote"
-        params = {"securityId": "1333"}  # NIFTY 50 Index
-        response = requests.get(url, headers=self.headers, params=params)
+        # ✅ Final confirmed endpoint
+        url = f"{self.base_url}/quotes/indices/NSE_NIFTY_50"
+        response = requests.get(url, headers=self.headers)
         data = response.json()
         log_message(f"NIFTY spot API response: {json.dumps(data)}")
 
