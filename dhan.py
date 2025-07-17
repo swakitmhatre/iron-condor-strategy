@@ -11,16 +11,16 @@ class Dhan:
         }
 
     def get_nifty_spot(self):
-        # ✅ Final confirmed endpoint
-        url = f"{self.base_url}/quotes/indices/NSE_NIFTY_50"
-        response = requests.get(url, headers=self.headers)
-        data = response.json()
-        log_message(f"NIFTY spot API response: {json.dumps(data)}")
+    url = f"{self.base_url}/market/live/quotes/indices/NSE_INDEX/Nifty 50"
+    response = requests.get(url, headers=self.headers)
+    data = response.json()
+    log_message(f"NIFTY spot API response: {json.dumps(data)}")
 
-        try:
-            return float(data['lastTradedPrice']) / 100
-        except KeyError:
-            raise ValueError(f"Could not fetch NIFTY spot. Response: {data}")
+    try:
+        return float(data['lastTradedPrice']) / 100
+    except KeyError:
+        raise ValueError(f"Could not fetch NIFTY spot. Response: {data}")
+
 
     def place_order(self, order_payload):
         url = f"{self.base_url}/orders"
