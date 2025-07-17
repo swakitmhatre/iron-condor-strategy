@@ -9,6 +9,8 @@ from dhan_api import DhanTrader
 from position_handler import PositionHandler
 from market_status import is_market_open
 from filters import is_time_between, is_conditions_favorable
+from config import ENTRY_START, ENTRY_END
+
 
 entry_start_time = "09:30"
 entry_end_time = "14:30"
