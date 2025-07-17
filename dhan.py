@@ -11,15 +11,15 @@ class Dhan:
         }
 
     def get_nifty_spot(self):
-    url = f"{self.base_url}/market/live/quotes/indices/NSE_INDEX/Nifty 50"
-    response = requests.get(url, headers=self.headers)
-    data = response.json()
-    log_message(f"NIFTY spot API response: {json.dumps(data)}")
-
-    try:
-        return float(data['lastTradedPrice']) / 100
-    except KeyError:
-        raise ValueError(f"Could not fetch NIFTY spot. Response: {data}")
+        url = f"{self.base_url}/market/live/quotes/indices/NSE_INDEX/Nifty 50"
+        response = requests.get(url, headers=self.headers)
+        data = response.json()
+        log_message(f"NIFTY spot API response: {json.dumps(data)}")
+    
+        try:
+            return float(data['lastTradedPrice']) / 100
+        except KeyError:
+            raise ValueError(f"Could not fetch NIFTY spot. Response: {data}")
 
 
 
