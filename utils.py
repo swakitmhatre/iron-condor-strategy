@@ -1,27 +1,27 @@
 import os
+import json
 from datetime import datetime
 
-LOG_FILE = "strategy.log"
-MTM_FILE = "mtm.txt"
+def log_message(msg):
+    print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {msg}")
+    with open("strategy.log", "a") as f:
+        f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {msg}\n")
 
-def log_message(message):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    full_message = f"{timestamp} - {message}"
-    print(full_message)
-    with open(LOG_FILE, "a") as f:
-        f.write(full_message + "\n")
+def get_strike_prices(spot, step=50):
+    atm = round(spot / step) * step
+    return {
+        "ce_sell": atm + 300,
+        "pe_sell": atm - 300,
+        "ce_buy": atm + 500,
+        "pe_buy": atm - 500
+    }
 
-def save_mtm(mtm_value):
-    with open(MTM_FILE, "w") as f:
-        f.write(str(mtm_value))
+def should_exit_due_to_market_move(initial_spot, current_spot):
+    move_percent = abs(current_spot - initial_spot) / initial_spot
+    return move_percent >= 0.01
 
-def get_mtm():
-    try:
-        with open(MTM_FILE, "r") as f:
-            return float(f.read())
-    except FileNotFoundError:
-        return 0.0
+def check_manual_exit():
+    return os.path.exists("stop.flag")
 
-def get_required_margin():
-    # Placeholder: Replace this with dynamic margin logic if available
-    return 110000.0  # for 1-lot Iron Condor approx
+def check_force_entry():
+    return os.path.exists("force_entry.flag")
