@@ -11,7 +11,7 @@ from market_status import is_market_open
 from filters import is_time_between, is_conditions_favorable
 
 entry_start_time = "09:30"
-entry_end_time = "11:30"
+entry_end_time = "14:30"
 
 log_message("Iron Condor strategy running")
 trader = DhanTrader()
