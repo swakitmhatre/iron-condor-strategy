@@ -22,6 +22,7 @@ class Dhan:
         raise ValueError(f"Could not fetch NIFTY spot. Response: {data}")
 
 
+
     def place_order(self, order_payload):
         url = f"{self.base_url}/orders"
         response = requests.post(url, json=order_payload, headers=self.headers)
