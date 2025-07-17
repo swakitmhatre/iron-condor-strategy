@@ -1,27 +1,25 @@
-import os
-import json
+# utils.py
+
 from datetime import datetime
+from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
+import requests
 
 def log_message(msg):
-    print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {msg}")
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    final_msg = f"{ts} - {msg}"
+    print(final_msg)
     with open("strategy.log", "a") as f:
-        f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {msg}\n")
+        f.write(final_msg + "\n")
+    send_telegram_message(msg)
 
-def get_strike_prices(spot, step=50):
-    atm = round(spot / step) * step
-    return {
-        "ce_sell": atm + 300,
-        "pe_sell": atm - 300,
-        "ce_buy": atm + 500,
-        "pe_buy": atm - 500
+def send_telegram_message(text):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": text,
+        "parse_mode": "Markdown"
     }
-
-def should_exit_due_to_market_move(initial_spot, current_spot):
-    move_percent = abs(current_spot - initial_spot) / initial_spot
-    return move_percent >= 0.01
-
-def check_manual_exit():
-    return os.path.exists("stop.flag")
-
-def check_force_entry():
-    return os.path.exists("force_entry.flag")
+    try:
+        requests.post(url, data=payload)
+    except:
+        pass
