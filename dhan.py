@@ -1,44 +1,31 @@
 import requests
 import json
-from datetime import datetime
+from utils import log_message
 
 class Dhan:
-    def __init__(self, auth_token):
-        self.auth_token = auth_token
+    def __init__(self, auth_token: str):
         self.base_url = "https://api.dhan.co"
         self.headers = {
-            "Accept": "application/json",
-            "Authorization": f"Bearer {self.auth_token}"
+            "accept": "application/json",
+            "authorization": f"Bearer {auth_token}"
         }
 
     def get_nifty_spot(self):
-        url = f"{self.base_url}/market/feed/indices/NSE_NIFTY"
+        url = f"{self.base_url}/market/live/quotes/NSE_INDEX/Nifty%2050"
         response = requests.get(url, headers=self.headers)
         data = response.json()
-
-        from utils import log_message
         log_message(f"NIFTY spot API response: {json.dumps(data)}")
-
-        if 'lastTradedPrice' in data:
+        try:
             return float(data['lastTradedPrice']) / 100  # Dhan returns price in paisa
-        raise ValueError(f"Could not fetch NIFTY spot. Response: {data}")
+        except KeyError:
+            raise ValueError(f"Could not fetch NIFTY spot. Response: {data}")
 
-    def place_order(self, payload):
+    def place_order(self, order_payload):
         url = f"{self.base_url}/orders"
-        response = requests.post(url, headers=self.headers, json=payload)
+        response = requests.post(url, json=order_payload, headers=self.headers)
         return response.json()
 
-    def get_order_status(self, order_id):
-        url = f"{self.base_url}/orders/{order_id}"
-        response = requests.get(url, headers=self.headers)
-        return response.json()
-
-    def get_margin_required(self, legs):
-        url = f"{self.base_url}/margin"
-        response = requests.post(url, headers=self.headers, json={"legs": legs})
-        return response.json()
-
-    def get_positions(self):
-        url = f"{self.base_url}/positions"
-        response = requests.get(url, headers=self.headers)
+    def get_required_margin(self, payload):
+        url = f"{self.base_url}/margin/calculator"
+        response = requests.post(url, json=payload, headers=self.headers)
         return response.json()
