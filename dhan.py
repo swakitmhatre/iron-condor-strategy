@@ -11,12 +11,13 @@ class Dhan:
         }
 
     def get_nifty_spot(self):
-        url = f"{self.base_url}/market/live/quotes/NSE_INDEX/Nifty%2050"
+        url = f"{self.base_url}/market/live/quote?securityId=1333"  # 1333 = Nifty 50 index
         response = requests.get(url, headers=self.headers)
         data = response.json()
         log_message(f"NIFTY spot API response: {json.dumps(data)}")
+
         try:
-            return float(data['lastTradedPrice']) / 100  # Dhan returns price in paisa
+            return float(data['lastTradedPrice']) / 100
         except KeyError:
             raise ValueError(f"Could not fetch NIFTY spot. Response: {data}")
 
