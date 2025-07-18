@@ -24,16 +24,19 @@ try:
         log_message("Market is closed. Exiting.")
         exit()
 
-    if not is_time_between(entry_start_time, entry_end_time):
-        log_message("Outside entry time window. Exiting.")
-        exit()
-
+   # Manual override check first
     if os.path.exists("force_entry.flag"):
-        log_message("Force entry flag detected. Proceeding.")
-    elif not is_conditions_favorable():
-        log_message("Unfavorable market conditions. Exiting.")
-        exit()
+        log_message("Force entry flag detected. Proceeding despite filters.")
+    else:
+        # Entry Time Window Check
+        if not is_time_between(entry_start_time, entry_end_time):
+            log_message("Outside entry time window. Exiting.")
+            exit()
 
+        # Market conditions check
+        if not is_conditions_favorable():
+            log_message("Unfavorable market conditions. Entry aborted.")
+            exit()
     log_message("Conditions favorable. Executing strategy...")
     handler.execute_iron_condor()
 
