@@ -1,6 +1,17 @@
+
 # utils.py
 
 from datetime import datetime
+
+def log_message(msg):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    message = f"{timestamp} - {msg}"
+    print(message)
+    with open("strategy.log", "a") as f:
+        f.write(message + "\n")
+
+
+'''from datetime import datetime
 from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
 import requests
 
@@ -22,4 +33,4 @@ def send_telegram_message(text):
     try:
         requests.post(url, data=payload)
     except:
-        pass
+        pass'''
