@@ -1,45 +1,49 @@
+# strategy.py
+
+import os
 import time
-from utils import (
-    log_message,
-    should_exit_due_to_market_move,
-    check_manual_exit,
-    check_force_entry
-)
+from utils import *
+from filters import *
 from dhan import Dhan
-from position_handler import place_iron_condor, exit_all_positions
+from position_handler import place_iron_condor
+
+# Entry window
+entry_start = time_obj(9, 15)
+entry_end = time_obj(15, 30)
 
 def run_strategy():
-    log_message("Iron Condor strategy running")
-
-    dhan = Dhan(auth_token="your_dhan_api_token_here")
-
     log_message("Iron Condor strategy started")
 
-    # Check market time & conditions here (or skip with force_entry)
-    if not check_force_entry():
-        log_message("Skipping entry — outside valid conditions and no force flag")
+    # Market open check
+    if not is_market_open():
+        log_message("Market is closed. Exiting.")
         return
 
-    success, positions = place_iron_condor(dhan)
-
-    if not success:
-        log_message("Entry failed.")
+    # Time window check
+    now = datetime.now().time()
+    if not (entry_start <= now <= entry_end):
+        log_message("Outside entry time window. Exiting.")
         return
 
-    entry_time = time.time()
-    entry_spot = dhan.get_nifty_spot()
+    # Conditions
+    if os.path.exists("force_entry.flag"):
+        log_message("Force entry flag detected. Proceeding despite filters.")
+    elif not is_conditions_favorable():
+        log_message("Unfavorable market conditions. Entry aborted.")
+        return
 
-    # Monitor loop
-    while True:
-        if check_manual_exit():
-            log_message("Manual exit flag detected.")
-            break
+    # Setup Dhan
+    from config import DHAN_AUTH_TOKEN, DHAN_CLIENT_ID
+    dhan = Dhan(DHAN_AUTH_TOKEN, DHAN_CLIENT_ID)
 
-        current_spot = dhan.get_nifty_spot()
-        if should_exit_due_to_market_move(entry_spot, current_spot):
-            log_message(f"Market moved more than 1%. Entry: {entry_spot}, Now: {current_spot}")
-            break
+    log_message("Conditions favorable. Executing strategy...")
 
-        time.sleep(15)
-
-    exit_all_positions(dhan)
+    try:
+        success, positions = place_iron_condor(dhan)
+        if success:
+            log_message("Positions placed successfully.")
+        else:
+            log_message("Failed to place positions.")
+    except Exception as e:
+        log_message(f"Exception occurred: {e}")
+        log_message("Exited all positions due to Exception.")
