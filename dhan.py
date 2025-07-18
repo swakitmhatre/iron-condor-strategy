@@ -8,19 +8,20 @@ class Dhan:
         self.base = "https://api.dhan.co/v2"
         self.headers = {
             "Accept": "application/json",
-            "Access-Token": auth_token,
-            "Client-Id": client_id,
+            "Content-Type": "application/json",
+            "access-token": auth_token,
+            "client-id": client_id,
         }
 
     def get_nifty_spot(self):
-        url = f"{self.base}/market/live/quote"
-        params = {
-            "exchangeSegment": 0,
-            "securityId": 13
-        }
-        resp = requests.get(url, headers=self.headers, params=params)
+        url = f"{self.base}/marketfeed/ltp"
+        body = {"NSE_INDEX": [2]}  # 2 is Nifty 50 instrument ID :contentReference[oaicite:8]{index=8}
+        resp = requests.post(url, headers=self.headers, json=body, timeout=5)
         data = resp.json()
         log_message(f"NIFTY LTP API response: {data}")
-        if resp.status_code != 200 or data.get("status") == "failed" or "lastTradedPrice" not in data.get("Data", {}):
+        if resp.status_code != 200 or data.get("status") != "success" or "NSE_INDEX" not in data.get("data", {}):
             raise Exception(f"Fetch NIFTY spot failed: {data}")
-        return float(data["Data"]["lastTradedPrice"])
+        ltp = data["data"]["NSE_INDEX"].get("2", {}).get("last_price")
+        if ltp is None:
+            raise Exception(f"Missing last_price in response: {data}")
+        return float(ltp)
