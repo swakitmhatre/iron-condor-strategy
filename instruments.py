@@ -1,6 +1,22 @@
 # instruments.py
+# instruments.py
 
 from datetime import datetime, timedelta
+
+def get_next_week_expiry():
+    today = datetime.today()
+    weekday = today.weekday()
+    days_until_thursday = (3 - weekday + 7) % 7
+    next_expiry = today + timedelta(days=days_until_thursday + 7)
+    return next_expiry.strftime('%d%b%Y').upper()
+
+def get_nifty_spot():
+    return 22200  # placeholder or fetch live from API
+
+def get_nifty_option_symbol(strike, option_type, expiry):
+    return f"NIFTY{expiry}{strike}{option_type}"
+
+'''from datetime import datetime, timedelta
 
 def get_next_week_expiry():
     today = datetime.now()
@@ -21,3 +37,4 @@ def get_nifty_option_symbol(expiry_str, strike_price, option_type):
     option_type: 'CE' or 'PE'
     """
     return f"NIFTY{expiry_str}{strike_price}{option_type}"
+    '''
