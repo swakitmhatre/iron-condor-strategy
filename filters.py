@@ -1,14 +1,15 @@
 # filters.py
 
-import random
 from datetime import datetime, time
+from utils import log_message
 
-def is_time_between(start_str, end_str):
+def time_obj(hr, min):
+    return time(hr, min)
+
+def is_market_open():
     now = datetime.now().time()
-    start = datetime.strptime(start_str, "%H:%M").time()
-    end = datetime.strptime(end_str, "%H:%M").time()
-    return start <= now <= end
+    return time(9, 15) <= now <= time(15, 30)
 
 def is_conditions_favorable():
-    # Simulated check
-    return random.choice([True, True, True, False])
+    # For now always true. You can add IV, news, or trend filters here.
+    return True
