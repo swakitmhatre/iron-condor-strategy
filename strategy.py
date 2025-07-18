@@ -1,6 +1,84 @@
 # strategy.py
+# strategy.py
 
+import os
 import logging
+from datetime import datetime
+from config import ENTRY_START_TIME, ENTRY_END_TIME
+from utils import (
+    is_market_open,
+    within_entry_window,
+    place_iron_condor,
+    exit_all_positions,
+    calculate_mtm,
+    log_message,
+    get_mtm_target_amount,
+)
+from dhan_api import Dhan
+from telegram_alerts import send_telegram_message
+
+def run_strategy():
+    log_message("Strategy started")
+
+    dhan = Dhan()
+
+    if os.path.exists("stop.flag"):
+        log_message("❌ Manual stop flag detected. Exiting positions.")
+        exit_all_positions(dhan)
+        send_telegram_message("🛑 Manual stop triggered. Exiting all positions.")
+        os.remove("stop.flag")
+        return
+
+    if not is_market_open():
+        log_message("📛 Market is closed. Strategy halted.")
+        return
+
+    now = datetime.now().time()
+    if not within_entry_window(now):
+        log_message("⏰ Outside entry window.")
+        return
+
+    if not os.path.exists("force_entry.flag"):
+        log_message("⚠️ No force entry flag. Entry skipped.")
+        return
+    else:
+        log_message("✔ Force entry flag detected.")
+
+    positions = place_iron_condor(dhan)
+    if not positions:
+        log_message("❌ Entry failed. No positions placed.")
+        return
+
+    log_message(f"✅ Iron Condor placed: {positions}")
+    send_telegram_message(f"✅ Iron Condor entry: {positions}")
+
+    mtm_target = get_mtm_target_amount()
+    log_message(f"🎯 MTM Target: ₹{mtm_target:.2f}")
+
+    mtm_hit = False
+    first_hit_time = None
+
+    while True:
+        mtm = calculate_mtm(dhan, positions)
+        if mtm is None:
+            log_message("⚠️ Could not fetch MTM. Retrying...")
+            continue
+
+        log_message(f"💹 Current MTM: ₹{mtm:.2f}")
+
+        if not mtm_hit and mtm >= mtm_target:
+            mtm_hit = True
+            first_hit_time = datetime.now()
+            log_message(f"🎉 MTM target first hit at {first_hit_time}")
+            send_telegram_message(f"🎉 MTM target hit: ₹{mtm:.2f}")
+
+        if mtm >= mtm_target or os.path.exists("stop.flag"):
+            log_message("🏁 Exiting all positions due to MTM target or stop flag.")
+            exit_all_positions(dhan)
+            send_telegram_message("🏁 Exiting positions. MTM or manual exit.")
+            break
+
+'''import logging
 import os
 from datetime import datetime
 from utils import (
@@ -90,3 +168,4 @@ def run_strategy():
     except Exception as e:
         logging.exception(f"❌ Error executing strategy: {e}")
         send_telegram_message(f"❌ Strategy error: {e}", TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)
+        '''
