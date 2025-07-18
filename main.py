@@ -1,5 +1,21 @@
 # main.py
 
+from strategy import run_strategy
+from utils import log_message
+
+if __name__ == "__main__":
+    log_message("Iron Condor strategy running")
+    try:
+        run_strategy()
+    except Exception as e:
+        log_message(f"Exception occurred: {e}")
+
+
+
+
+
+'''# main.py
+
 import os
 import time
 from datetime import datetime
@@ -60,3 +76,4 @@ except Exception as e:
         handler.exit_all_positions(reason="Exception")
     except:
         log_message("Emergency exit failed.")
+        '''
