@@ -4,7 +4,7 @@ import requests
 from utils import log_message
 from config import DHAN_API_KEY, DHAN_ACCESS_TOKEN, DHAN_CLIENT_ID
 
-class DhanAPI:
+class Dhan:
     def __init__(self):
         self.base = "https://api.dhan.co"
         self.headers = {
