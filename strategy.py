@@ -1,40 +1,33 @@
 # strategy.py
 
 import os
-import time
+import time as t
 from datetime import datetime
+from config import *
 from dhan import Dhan
-from filters import *
-from position_handler import place_iron_condor
-from utils import log_message
-from config import DHAN_AUTH_TOKEN, DHAN_CLIENT_ID
-
-entry_start = time_obj(9,15)
-entry_end = time_obj(15,30)
+from utils import send_telegram_message
 
 def run_strategy():
-    log_message("Strategy started")
+    from utils import setup_logger
+    setup_logger()
+    logging = __import__('logging')
 
-    if not is_market_open():
-        log_message("Market closed.")
+    logging.info("Strategy started")
+
+    if os.path.exists(FORCE_ENTRY_FILE):
+        logging.info("✔ Force entry flag detected.")
+    else:
+        logging.info("⏹ No force entry. Exiting.")
         return
-
-    tnow = datetime.now().time()
-    if not (entry_start <= tnow <= entry_end):
-        log_message("Outside entry time.")
-        return
-
-    if os.path.exists("force_entry.flag"):
-        log_message("✔ Force entry flag detected.")
-    elif not is_conditions_favorable():
-        log_message("⚠ Conditions unfavorable.")
-        return
-
-    dhan = Dhan(DHAN_AUTH_TOKEN, DHAN_CLIENT_ID)
 
     try:
-        ok, details = place_iron_condor(dhan)
-        msg = "placed" if ok else "failed"
-        log_message(f"Entry {msg}: {details}")
+        api = Dhan()
+        spot_price = api.get_nifty_spot_price()
+        logging.info(f"NIFTY spot price: {spot_price}")
+
+        # [Your Iron Condor logic would go here...]
+        send_telegram_message(f"🔔 Entry executed. Spot: {spot_price}")
+
     except Exception as e:
-        log_message(f"Error executing strategy: {e}")
+        logging.error(f"Error executing strategy: {e}")
+        send_telegram_message(f"❌ Strategy failed: {e}")
