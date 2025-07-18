@@ -1,14 +1,12 @@
 # utils.py
 
 import os
-import logging
 from datetime import datetime, time
-from dhan import Dhan
-from instruments import get_nifty_option_symbol
+import logging
+from dhan_api import Dhan
+from instruments import get_option_symbols, get_option_ltp, get_next_thursday_expiry
 
-logger = logging.getLogger()
-
-# ---- Market Conditions ----
+from config import ENTRY_START_TIME, ENTRY_END_TIME
 
 def is_market_open():
     now = datetime.now().time()
@@ -16,49 +14,38 @@ def is_market_open():
 
 def within_entry_window():
     now = datetime.now().time()
-    return time(9, 20) <= now <= time(9, 45)
+    return ENTRY_START_TIME <= now <= ENTRY_END_TIME
 
-# ---- Iron Condor Entry ----
+def place_iron_condor(dhan: Dhan, spot_price: float, use_next_week: bool):
+    expiry = get_next_thursday_expiry(weeks_ahead=1 if use_next_week else 0)
+    ce_sell, ce_buy, pe_sell, pe_buy = get_option_symbols(spot_price, expiry)
 
-def place_iron_condor(dhan: Dhan, spot_price: float):
-    ce_strike = round(spot_price / 50) * 50 + 200  # OTM CE
-    pe_strike = round(spot_price / 50) * 50 - 200  # OTM PE
+    # Place buy legs first
+    dhan.place_order(ce_buy, 'BUY')
+    dhan.place_order(pe_buy, 'BUY')
+    dhan.place_order(ce_sell, 'SELL')
+    dhan.place_order(pe_sell, 'SELL')
 
-    expiry = dhan.get_next_week_expiry()
+    return [ce_sell, ce_buy, pe_sell, pe_buy]
 
-    symbols = {
-        "ce_sell": get_nifty_option_symbol(expiry, ce_strike, "CE"),
-        "pe_sell": get_nifty_option_symbol(expiry, pe_strike, "PE"),
-        "ce_buy": get_nifty_option_symbol(expiry, ce_strike + 100, "CE"),
-        "pe_buy": get_nifty_option_symbol(expiry, pe_strike - 100, "PE"),
-    }
+def exit_all_positions(dhan: Dhan):
+    positions = dhan.get_positions()
+    for pos in positions:
+        if pos['quantity'] != 0:
+            dhan.exit_position(pos['trading_symbol'])
 
-    qty = 50  # 1 lot
-    positions = []
+def calculate_mtm(dhan: Dhan, traded_symbols: list):
+    mtm = 0
+    for sym in traded_symbols:
+        ltp = get_option_ltp(dhan, sym)
+        if ltp is None:
+            continue
+        buy_or_sell = 'SELL' if 'CE' in sym or 'PE' in sym else 'BUY'
+        mtm += -ltp if buy_or_sell == 'SELL' else ltp
+    return mtm
 
-    # Buy Legs First (for margin efficiency)
-    dhan.place_order(symbols["ce_buy"], qty, "BUY")
-    dhan.place_order(symbols["pe_buy"], qty, "BUY")
-    dhan.place_order(symbols["ce_sell"], qty, "SELL")
-    dhan.place_order(symbols["pe_sell"], qty, "SELL")
-
-    positions.extend(symbols.values())
-    return positions
-
-# ---- Safe Exit Logic ----
-
-def exit_all_positions():
-    try:
-        with open("open_positions.txt", "r") as f:
-            symbols = [line.strip() for line in f.readlines()]
-    except FileNotFoundError:
-        logger.info("No open positions to exit.")
-        return
-
-    try:
-        dhan = Dhan(os.getenv("DHAN_ACCESS_TOKEN"), os.getenv("DHAN_CLIENT_ID"))
-        for sym in symbols:
-            dhan.place_order(sym, 50, "EXIT")
-            logger.info(f"Exited: {sym}")
-    except Exception as e:
-        logger.error(f"Error during exit: {e}")
+def save_timestamp_log(event_type: str):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    filename = "target_hit.log" if event_type == "target" else "stoploss_hit.log"
+    with open(filename, "a") as f:
+        f.write(f"{now}\n")
