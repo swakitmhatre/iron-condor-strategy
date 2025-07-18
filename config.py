@@ -1,25 +1,28 @@
 # config.py
-'''
-# Dhan credentials
-DHAN_API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzU0OTI0MTYyLCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwMDkyMjIyNiJ9.YcY7_aIOuhDBQ9VD3yyfz9eIMnDcD3o3aEgwfR38q4ZRJ2Vkdl44103dIZIdibk0kilRUeA451LH9mBHQjra4A"
 
-DHAN_ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzU0OTI0MTYyLCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwMDkyMjIyNiJ9.YcY7_aIOuhDBQ9VD3yyfz9eIMnDcD3o3aEgwfR38q4ZRJ2Vkdl44103dIZIdibk0kilRUeA451LH9mBHQjra4A"
-
+# Dhan API configuration
+DHAN_API_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzU0OTI0MTYyLCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwMDkyMjIyNiJ9.YcY7_aIOuhDBQ9VD3yyfz9eIMnDcD3o3aEgwfR38q4ZRJ2Vkdl44103dIZIdibk0kilRUeA451LH9mBHQjra4A"
 DHAN_CLIENT_ID = "1100922226"
+DHAN_BASE_URL = "https://api.dhan.co"
 
-# Telegram credentials
-TELEGRAM_BOT_TOKEN = "7770202577:AAHjZFGJg2Gt3c5S77i__SOCMVqRXd6ofY0"
+# Entry time window
+from datetime import time
+ENTRY_START_TIME = time(9, 20)
+ENTRY_END_TIME = time(9, 45)
+
+# MTM targets (change if needed)
+MTM_TARGET_PERCENT = 0.20  # 0.20% of margin
+MTM_STOPLOSS_PERCENT = None  # No stoploss for now (set as float if needed)
+
+# Strategy config
+STRATEGY_MARGIN = 150000  # Update as per your actual required margin
+
+# Telegram config
+TELEGRAM_TOKEN = "7770202577:AAHjZFGJg2Gt3c5S77i__SOCMVqRXd6ofY0"
 TELEGRAM_CHAT_ID = "1872844861"
 
-# Strategy constants
-MTM_TARGET_PERCENT = 0.20  # Target 0.20% of margin
-MARGIN_PER_LOT = 120000
-FORCE_ENTRY_FILE = "force_entry.flag"
-STOP_FILE = "stop.flag"
 
 '''
-
-
 # config.py
 
 # Dhan credentials
@@ -48,4 +51,4 @@ FORCE_NEXT_WEEK_EXPIRY = True
 # Delay between retries (in seconds) if API fails
 RETRY_DELAY = 2
 MAX_RETRIES = 3
-
+'''
