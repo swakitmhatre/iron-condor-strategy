@@ -1,25 +1,22 @@
 # dhan.py
-
 import requests
-from config import DHAN_ACCESS_TOKEN, DHAN_CLIENT_ID
 
 class Dhan:
-    BASE_URL = "https://api.dhan.co"
+    def __init__(self, access_token: str, client_id: str):
+        self.access_token = access_token
+        self.client_id = client_id
+        self.base = "https://api.dhan.co/v2"
 
-    def __init__(self):
-        self.session = requests.Session()
-        self.headers = {
-            "access-token": DHAN_ACCESS_TOKEN,
-            "client-id": DHAN_CLIENT_ID
+    def get_nifty_spot(self) -> float:
+        url = f"{self.base}/marketfeed/ltp"
+        hdrs = {
+            "Content-Type": "application/json",
+            "access-token": self.access_token,
+            "client-id": self.client_id,
         }
-
-    def get_nifty_spot_price(self):
-        url = f"{self.BASE_URL}/market/live/quote"
-        params = {"securityId": "1333"}  # ✅ Correct security ID for NIFTY 50 Index
-        response = self.session.get(url, headers=self.headers, params=params)
-        data = response.json()
-
-        if "data" in data and "lastTradedPrice" in data["data"]:
-            return float(data["data"]["lastTradedPrice"]) / 100
-        else:
-            raise Exception(f"Fetch NIFTY spot failed: {data}")
+        data = {"IDX_I": [13]}
+        resp = requests.post(url, json=data, headers=hdrs)
+        result = resp.json()
+        if resp.status_code == 200 and result.get("status") == "success":
+            return float(result["data"]["IDX_I"]["13"]["last_price"])
+        raise ValueError(f"Fetch NIFTY spot failed: {result}")
