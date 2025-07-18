@@ -1,39 +1,16 @@
-# Contains your DHAN_API_KEY, CLIENT_ID, MTM target, Telegram configs
 # config.py
 
-# Your Dhan API credentials
-'''DHAN_API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzU0OTI0MTYyLCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwMDkyMjIyNiJ9.YcY7_aIOuhDBQ9VD3yyfz9eIMnDcD3o3aEgwfR38q4ZRJ2Vkdl44103dIZIdibk0kilRUeA451LH9mBHQjra4A"
-DHAN_CLIENT_ID = "1100922226"  # replace with your Dhan client ID
+# Dhan credentials
+DHAN_API_KEY = "your_dhan_api_key"
+DHAN_ACCESS_TOKEN = "your_dhan_access_token"
+DHAN_CLIENT_ID = "1100922226"
 
-# Telegram bot config
-#TELEGRAM_TOKEN = "7770202577:AAHjZFGJg2Gt3c5S77i__SOCMVqRXd6ofY0"
-#TELEGRAM_CHAT_ID = "1872844861"
-
+# Telegram credentials
 TELEGRAM_BOT_TOKEN = "7770202577:AAHjZFGJg2Gt3c5S77i__SOCMVqRXd6ofY0"
 TELEGRAM_CHAT_ID = "1872844861"
 
-
-# MTM Target (e.g., 0.002 means 0.20% of total margin)
-MTM_TARGET_PCT = 0.002
-
-# Entry and exit time config
-ENTRY_START_TIME = "09:20"
-ENTRY_END_TIME = "09:35"
-EXIT_TIME = "15:15"
-'''
-
-# config.py
-
-DHAN_BASE_URL = "https://api.dhan.co"
-DHAN_ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzU0OTI0MTYyLCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwMDkyMjIyNiJ9.YcY7_aIOuhDBQ9VD3yyfz9eIMnDcD3o3aEgwfR38q4ZRJ2Vkdl44103dIZIdibk0kilRUeA451LH9mBHQjra4A"
-DHAN_CLIENT_ID = "1100922226"
-DHAN_API_KEY="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzU0OTI0MTYyLCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwMDkyMjIyNiJ9.YcY7_aIOuhDBQ9VD3yyfz9eIMnDcD3o3aEgwfR38q4ZRJ2Vkdl44103dIZIdibk0kilRUeA451LH9mBHQjra4A"
-
-
-TELEGRAM_TOKEN = "7770202577:AAHjZFGJg2Gt3c5S77i__SOCMVqRXd6ofY0"
-TELEGRAM_CHAT_ID = "1872844861"
-
-MTM_TARGET_PERCENT = 0.2  # 0.20% of margin
-CHECK_INTERVAL = 5        # seconds
-ENTRY_START = "09:15"     # extended window
-ENTRY_END = "14:45"
+# Strategy constants
+MTM_TARGET_PERCENT = 0.20  # Target: 0.20% of margin
+MARGIN_PER_LOT = 120000    # Approx margin per lot
+FORCE_ENTRY_FILE = "force_entry.flag"
+STOP_FILE = "stop.flag"
