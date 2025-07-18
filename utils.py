@@ -1,10 +1,23 @@
 # utils.py
 
-from datetime import datetime
+import logging
+from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+import requests
 
-def log_message(msg):
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    text = f"{ts} - {msg}"
-    print(text)
-    with open("strategy.log", "a") as f:
-        f.write(text + "\n")
+def setup_logger():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(message)s",
+        handlers=[
+            logging.FileHandler("strategy.log"),
+            logging.StreamHandler()
+        ]
+    )
+
+def send_telegram_message(message):
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
+        requests.post(url, data=payload)
+    except Exception as e:
+        logging.error(f"Telegram error: {e}")
