@@ -5,7 +5,7 @@ from utils import log_message
 
 class Dhan:
     def __init__(self, auth_token, client_id):
-        self.base_url = "https://api.dhan.co"
+        self.base = "https://api.dhan.co"
         self.headers = {
             "Accept": "application/json",
             "Access-Token": auth_token,
@@ -13,19 +13,13 @@ class Dhan:
         }
 
     def get_nifty_spot(self):
-        url = f"{self.base_url}/market/quotes/instrument/quote"
+        url = self.base + "/market/quotes/instrument/quote"
         params = {
-            "securityId": "1333",  # NIFTY 50 index security ID from Dhan
-            "exchangeSegment": "NSE_INDEX",
-            "instrumentType": "INDEX"
+            "instrumentToken": "260105",  # NIFTY 50 token
         }
-        response = requests.get(url, headers=self.headers, params=params)
-        data = response.json()
-
+        resp = requests.get(url, headers=self.headers, params=params)
+        data = resp.json()
         log_message(f"NIFTY LTP API response: {data}")
-
-        try:
-            ltp = data["lastTradedPrice"]
-            return float(ltp) / 100
-        except Exception:
+        if resp.status_code != 200 or "lastTradedPrice" not in data:
             raise Exception(f"Fetch NIFTY spot failed: {data}")
+        return float(data["lastTradedPrice"])
