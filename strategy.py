@@ -1,17 +1,22 @@
 # strategy.py
 
-import os
 import logging
+import os
 from datetime import datetime
-from dhan import Dhan
 from utils import is_market_open, within_entry_window, place_iron_condor, exit_all_positions
+from instruments import get_nifty_spot
 from config import (
-    DHAN_ACCESS_TOKEN,
-    DHAN_CLIENT_ID,
-    MTM_TARGET_PERCENT,
     STRATEGY_MARGIN,
+    MTM_TARGET_PERCENT,
+    MTM_STOPLOSS_PERCENT,
+    ENTRY_START_TIME,
+    ENTRY_END_TIME,
+    TELEGRAM_BOT_TOKEN,
+    TELEGRAM_CHAT_ID,
+    FORCE_NEXT_WEEK_EXPIRY,
 )
-
+from telegram_utils import send_telegram_message
+from dhan_api import Dhan
 logger = logging.getLogger()
 
 def run_strategy():
