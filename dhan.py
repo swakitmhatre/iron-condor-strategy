@@ -1,34 +1,31 @@
+# dhan.py
+
 import requests
-import json
 from utils import log_message
 
 class Dhan:
-    def __init__(self, auth_token: str):
+    def __init__(self, auth_token, client_id):
         self.base_url = "https://api.dhan.co"
         self.headers = {
-            "accept": "application/json",
-            "authorization": f"Bearer {auth_token}"
+            "Accept": "application/json",
+            "Access-Token": auth_token,
+            "Client-Id": client_id,
         }
 
     def get_nifty_spot(self):
-        url = f"{self.base_url}/market/live/quotes/indices/NSE_INDEX/Nifty 50"
-        response = requests.get(url, headers=self.headers)
+        url = f"{self.base_url}/market/quotes/instrument/quote"
+        params = {
+            "securityId": "1333",  # NIFTY 50 index security ID from Dhan
+            "exchangeSegment": "NSE_INDEX",
+            "instrumentType": "INDEX"
+        }
+        response = requests.get(url, headers=self.headers, params=params)
         data = response.json()
-        log_message(f"NIFTY spot API response: {json.dumps(data)}")
-    
+
+        log_message(f"NIFTY LTP API response: {data}")
+
         try:
-            return float(data['lastTradedPrice']) / 100
-        except KeyError:
-            raise ValueError(f"Could not fetch NIFTY spot. Response: {data}")
-
-
-
-    def place_order(self, order_payload):
-        url = f"{self.base_url}/orders"
-        response = requests.post(url, json=order_payload, headers=self.headers)
-        return response.json()
-
-    def get_required_margin(self, payload):
-        url = f"{self.base_url}/margin/calculator"
-        response = requests.post(url, json=payload, headers=self.headers)
-        return response.json()
+            ltp = data["lastTradedPrice"]
+            return float(ltp) / 100
+        except Exception:
+            raise Exception(f"Fetch NIFTY spot failed: {data}")
