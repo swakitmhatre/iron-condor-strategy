@@ -1,5 +1,46 @@
 # utils.py
+# utils.py
 
+import logging
+from datetime import time, datetime
+from dhan_api import Dhan
+from instruments import get_nifty_spot, get_nifty_option_symbol, get_next_week_expiry
+from config import ENTRY_START_TIME, ENTRY_END_TIME, STRATEGY_MARGIN, MTM_TARGET_PCT
+
+def log_message(msg):
+    logging.info(msg)
+    print(msg)
+
+def is_market_open():
+    now = datetime.now().time()
+    return time(9, 15) <= now <= time(15, 30)
+
+def within_entry_window(current_time):
+    start = time(*ENTRY_START_TIME)
+    end = time(*ENTRY_END_TIME)
+    return start <= current_time <= end
+
+def get_mtm_target_amount():
+    return STRATEGY_MARGIN * MTM_TARGET_PCT
+
+def place_iron_condor(dhan):
+    spot = get_nifty_spot()
+    expiry = get_next_week_expiry()
+    ce_sell = get_nifty_option_symbol(strike=spot + 300, option_type="CE", expiry=expiry)
+    pe_sell = get_nifty_option_symbol(strike=spot - 300, option_type="PE", expiry=expiry)
+
+    success_ce = dhan.place_order(ce_sell, 50, "SELL")
+    success_pe = dhan.place_order(pe_sell, 50, "SELL")
+
+    if success_ce and success_pe:
+        return [ce_sell, pe_sell]
+    return []
+
+def calculate_mtm(dhan, positions):
+    # Placeholder MTM logic
+    return 310  # assume dummy MTM
+
+'''
 import os
 from datetime import datetime, time
 import logging
@@ -49,3 +90,4 @@ def save_timestamp_log(event_type: str):
     filename = "target_hit.log" if event_type == "target" else "stoploss_hit.log"
     with open(filename, "a") as f:
         f.write(f"{now}\n")
+        '''
