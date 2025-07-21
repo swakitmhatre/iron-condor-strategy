@@ -80,7 +80,7 @@ def resolve_option_tokens(df, atm_strike):
         s = expiry
         converted = f"{s[:2]} {s[2:5]}"
         print("converted----->",converted)
-        ts="NIFTY "+converted+" "+strike+" "
+        ts="NIFTY "+converted+" "+str(strike)+" "
         ts = f"{ts}{'PUT' if 'PE' in leg else 'CALL'}"
         print("FINAL token symbol---->",ts)
         
