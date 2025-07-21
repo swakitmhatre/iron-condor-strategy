@@ -154,7 +154,7 @@ def get_margin_requirement(resolved):
             "price": 0,
             "triggerPrice": 0
         })
-
+        print("legs----->",legs)
     try:
         res = requests.post(
             "https://api.dhan.co/v2/margincalculator",
