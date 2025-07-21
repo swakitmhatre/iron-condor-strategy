@@ -90,7 +90,7 @@ def resolve_option_tokens(df, atm_strike):
         if row.empty:
             log(f"[ERROR] Token not found for {ts}")
             return None
-        resolved[leg] = row.iloc[0]["SEM_SMST_SECURITY_ID'"]
+        resolved[leg] = row.iloc[0]["SEM_SMST_SECURITY_ID"]
         resolved["LOT_SIZE"] = int(row.iloc[0]["Lot Size"])
     return resolved
 
