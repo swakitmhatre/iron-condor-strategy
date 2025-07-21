@@ -77,6 +77,9 @@ def resolve_option_tokens(df, atm_strike):
         print("expiry---->",expiry)
         print("strike---->",strike)
         print("token symbol---->",ts)
+        s = expiry
+        converted = f"{s[:2]} {s[2:5]}"
+        print("converted----->",converted)
         row = df[df["Trading Symbol"] == ts]
         if row.empty:
             log(f"[ERROR] Token not found for {ts}")
