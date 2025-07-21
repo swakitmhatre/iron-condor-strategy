@@ -168,13 +168,15 @@ def get_margin_requirement(resolved):
 
     try:
         res = requests.post(
-            "https://api.dhan.co/positions/margin-required/",
+            "https://api.dhan.co/v2/margin/calculator",
             headers={
-                "Authorization": f"Bearer {ACCESS_TOKEN}",
-                "Content-Type": "application/json"
+                "access-token": ACCESS_TOKEN,
+                "client-id": CLIENT_ID,
+                "Content-Type": "application/json",
+                "Accept": "application/json"
             },
-            json=legs,
-            timeout=3
+            json={"legs": legs},  # NOTE: You must wrap legs in a dict
+            timeout=5
         )
 
         if res.status_code != 200:
