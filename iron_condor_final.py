@@ -150,6 +150,7 @@ def get_margin_requirement(resolved):
             "securityId": str(int(resolved[key])),
             "transactionType": actions[i],
             "quantity": int(resolved["LOT_SIZE"] * NUM_CONDORS),
+            "orderType": "MARKET",
             "productType": "INTRADAY",
             "price": 0,
             "triggerPrice": 0
