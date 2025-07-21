@@ -101,7 +101,7 @@ def get_margin_requirement(resolved):
     total = 0
     count=0
     for key in ['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']:
-        sec_id = resolved[key]
+        sec_id = int(resolved[key])
         my_actions = ["BUY", "SELL", "SELL", "BUY"]
         print("resolved---->",resolved)
         print("sec_id----->",sec_id)
@@ -113,8 +113,8 @@ def get_margin_requirement(resolved):
                       }
             payload = [{
                 "security_id": sec_id,
-                "quantity": resolved["LOT_SIZE"] * NUM_CONDORS,
-                "order_type": my_actions[count],
+                "quantity": int(resolved["LOT_SIZE"] * NUM_CONDORS),
+                "order_type":str( my_actions[count]),
             }]
             res = requests.post(f"{BASE}/orders/margins", headers=HEADERS, json=payload, timeout=1)
             #res = requests.post(url, headers=headers, payload=json.dumps(payload))
