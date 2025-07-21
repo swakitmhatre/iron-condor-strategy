@@ -112,9 +112,9 @@ def get_margin_requirement(resolved):
             print("res----->",res)
             total += float(res.json()[0].get("margin", 0))
             
-       ''' except:
-            log(f"[ERROR] Failed margin fetch for {key}")
-            return 0'''
+       #except:
+            #log(f"[ERROR] Failed margin fetch for {key}")
+            #return 0'''
         except requests.exceptions.Timeout:
             print("Request timed out. Please try again later.")
             return 0
