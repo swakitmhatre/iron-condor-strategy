@@ -79,14 +79,14 @@ def resolve_option_tokens(df, atm_strike):
         print("token symbol---->",ts)
         s = expiry
         converted = f"{s[:2]} {s[2:5]}"
-        print("converted----->",converted)
+        #print("converted----->",converted)
         ts="NIFTY "+converted+" "+str(strike)+" "
         ts = f"{ts}{'PUT' if 'PE' in leg else 'CALL'}"
-        print("FINAL token symbol---->",ts)
-        print("column names--->",df.columns)
+        #print("FINAL token symbol---->",ts)
+        #print("column names--->",df.columns)
         
         row = df[df["SEM_CUSTOM_SYMBOL"] == ts]
-        print("row----->",row["SEM_SMST_SECURITY_ID"])
+        #print("row----->",row["SEM_SMST_SECURITY_ID"])
         if row.empty:
             log(f"[ERROR] Token not found for {ts}")
             return None
@@ -99,12 +99,14 @@ def get_margin_requirement(resolved):
     total = 0
     for key in ['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']:
         sec_id = resolved[key]
+        print("sec_id----->",sec_id)
         try:
             payload = [{
                 "security_id": sec_id,
                 "quantity": resolved["LOT_SIZE"] * NUM_CONDORS
             }]
             res = requests.post(f"{BASE}/orders/margins", headers=HEADERS, json=payload, timeout=1)
+            print("res----->",res)
             total += float(res.json()[0].get("margin", 0))
             
         except:
