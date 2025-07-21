@@ -112,15 +112,15 @@ def get_margin_requirement(resolved):
                   "Content-Type": "application/json"
                       }
             payload = [{
-                "security_id": sec_id,
+                "security_id": str(sec_id),
                 "quantity": int(resolved["LOT_SIZE"] * NUM_CONDORS),
                 "order_type":str( my_actions[count]),
             }]
-            res = requests.post(f"{BASE}/orders/margins", headers=HEADERS, json=payload, timeout=1)
+            res = requests.post(f"{BASE}/orders/margins", headers=headers, json=json.dumps(payload), timeout=1)
             #res = requests.post(url, headers=headers, payload=json.dumps(payload))
             #margin = get_margin_for_strategy(access_token, instrument, quantity, order_type)
             count=count+1
-            print("res----->",res)
+            print("res----->",res.json())
             total += float(res.json()[0].get("margin", 0))
             
        #except:
