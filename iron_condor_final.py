@@ -18,7 +18,7 @@ ENTRY_TIMEOUT = 0.8                # Max allowed entry delay (seconds)
 
 # === CONSTANTS === #
 BASE = "https://api.dhan.co"
-SYMBOL_MASTER_URL = "https://images.dhan.co/api-data/scrip-master-csv-format/fo_security_list.csv"
+SYMBOL_MASTER_URL = "https://api.dhan.co/v2/instrument/NSE_FO"
 LOG_FILE = "iron_condor_log.txt"
 
 HEADERS = {
