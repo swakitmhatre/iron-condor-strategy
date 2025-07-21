@@ -106,9 +106,11 @@ def get_margin_requirement(resolved):
             }]
             res = requests.post(f"{BASE}/orders/margins", headers=HEADERS, json=payload, timeout=1)
             total += float(res.json()[0].get("margin", 0))
+            
         except:
             log(f"[ERROR] Failed margin fetch for {key}")
             return 0
+    print("total margin needed---->",total)
     return total
 
 
