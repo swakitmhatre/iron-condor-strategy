@@ -83,6 +83,7 @@ def resolve_option_tokens(df, atm_strike):
         ts="NIFTY "+converted+" "+str(strike)+" "
         ts = f"{ts}{'PUT' if 'PE' in leg else 'CALL'}"
         print("FINAL token symbol---->",ts)
+        print("column names--->",df.columns)
         
         row = df[df["Trading Symbol"] == ts]
         if row.empty:
