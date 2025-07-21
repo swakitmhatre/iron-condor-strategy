@@ -106,12 +106,12 @@ def get_margin_requirement(resolved):
         print("resolved---->",resolved)
         print("sec_id----->",sec_id)
         try:
-            url = "https://api.dhan.co/V2/margincalculator/"  # <-- ✅ Fixed endpoint
+            url = "https://api.dhan.co/v2/margincalculator/"  # <-- ✅ Fixed endpoint
             headers = {
                   "access-token": ACCESS_TOKEN,
                   "client-id": CLIENT_ID,
                   "Content-Type": "application/json",
-                  "Accept": "application/json"
+                  "Accept": "application/json",
                       }
             payload = [{
                 "dhanClientId": CLIENT_ID,
@@ -122,7 +122,7 @@ def get_margin_requirement(resolved):
                 "orderType": "MARKET",
                 "productType": "INTRADAY",
                 "price": 0,
-                "triggerPrice": 0
+                "triggerPrice": 0,
             }]
             log("Sending legs to margin API:\n" + json.dumps(payload, indent=2))
             res = requests.post(url, headers=headers, json=json.dumps(payload), timeout=1)
