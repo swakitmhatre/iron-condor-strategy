@@ -168,7 +168,7 @@ def get_margin_requirement(resolved):
 
     try:
         res = requests.post(
-            "https://api.dhan.co/positions/margin-required",
+            "https://api.dhan.co/positions/margin-required/",
             headers={
                 "Authorization": f"Bearer {ACCESS_TOKEN}",
                 "Content-Type": "application/json"
