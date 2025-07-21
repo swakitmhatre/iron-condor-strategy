@@ -117,7 +117,7 @@ def get_margin_requirement(resolved):
                 "dhanClientId": CLIENT_ID,
                 "exchangeSegment": "NSE_FNO",
                 "securityId": str(int(resolved[key])),
-                "transactionType": actions[i],
+                "transactionType": my_actions[count],
                 "quantity": int(resolved["LOT_SIZE"] * NUM_CONDORS),
                 "orderType": "MARKET",
                 "productType": "INTRADAY",
