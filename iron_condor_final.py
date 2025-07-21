@@ -135,38 +135,46 @@ def get_margin_requirement(resolved):
     print("total margin needed---->",total)
     return total
 '''
+
+import requests
+import json
+
 def get_margin_requirement(resolved):
-    total = 0
-    count = 0
+    total_qty = int(resolved["LOT_SIZE"] * NUM_CONDORS)
+    legs = []
+
     keys = ['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']
     actions = ["BUY", "SELL", "SELL", "BUY"]
 
-    legs = []
-
     for i, key in enumerate(keys):
         legs.append({
-            "dhanClientId": CLIENT_ID,  # Ensure this is set correctly
+            "dhanClientId": CLIENT_ID,  # Must be correct
             "exchangeSegment": "NSE_FNO",
-            "securityId": str(int(resolved[key])),
+            "securityId": str(int(resolved[key])),  # Convert np.int64 safely
             "transactionType": actions[i],
-            "quantity": int(resolved["LOT_SIZE"] * NUM_CONDORS),
+            "quantity": total_qty,
             "orderType": "MARKET",
             "productType": "INTRADAY",
             "price": 0,
             "triggerPrice": 0
         })
-        print("legs----->",legs)
+
+    # Log full request
+    print("Resolved =", resolved)
+    print("Num Condors =", NUM_CONDORS)
+    print("Access Token =", ACCESS_TOKEN)
+    print("Sending legs to margin API:")
+    print(json.dumps(legs, indent=2))
+
     try:
         res = requests.post(
-            "https://api.dhan.co/v2/margincalculator",
+            "https://api.dhan.co/positions/margin-required",
             headers={
-                "accept": "application/json",
-                "access-token": ACCESS_TOKEN,
-                "client-id": CLIENT_ID,
+                "Authorization": f"Bearer {ACCESS_TOKEN}",
                 "Content-Type": "application/json"
             },
             json=legs,
-            timeout=2
+            timeout=3
         )
 
         if res.status_code != 200:
