@@ -97,6 +97,7 @@ def resolve_option_tokens(df, atm_strike):
 
 def get_margin_requirement(resolved):
     total = 0
+    count=0
     for key in ['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']:
         sec_id = resolved[key]
         my_actions = ["BUY", "SELL", "SELL", "BUY"]
@@ -111,12 +112,12 @@ def get_margin_requirement(resolved):
             payload = [{
                 "security_id": sec_id,
                 "quantity": resolved["LOT_SIZE"] * NUM_CONDORS,
-                "order_type": my_actions[key],
+                "order_type": my_actions[count],
             }]
             #res = requests.post(f"{BASE}/orders/margins", headers=HEADERS, json=payload, timeout=1)
             res = requests.post(url, headers=headers, payload=json.dumps(payload))
             #margin = get_margin_for_strategy(access_token, instrument, quantity, order_type)
-
+            count=count+1
             print("res----->",res)
             total += float(res.json()[0].get("margin", 0))
             
