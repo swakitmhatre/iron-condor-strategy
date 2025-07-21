@@ -74,6 +74,7 @@ def resolve_option_tokens(df, atm_strike):
     resolved = {}
     for leg, strike in strike_map.items():
         ts = f"NIFTY{expiry}{strike}{'PE' if 'PE' in leg else 'CE'}"
+        print("token symbol---->",ts)
         row = df[df["Trading Symbol"] == ts]
         if row.empty:
             log(f"[ERROR] Token not found for {ts}")
