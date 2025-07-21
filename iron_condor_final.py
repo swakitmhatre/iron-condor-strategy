@@ -96,7 +96,7 @@ def resolve_option_tokens(df, atm_strike):
         resolved["LOT_SIZE"] = int(row.iloc[0]["SEM_LOT_UNITS"])
     return resolved
 
-
+'''
 def get_margin_requirement(resolved):
     total = 0
     count=0
@@ -125,7 +125,7 @@ def get_margin_requirement(resolved):
             
        #except:
             #log(f"[ERROR] Failed margin fetch for {key}")
-            #return 0'''
+            #return 0
         except requests.exceptions.Timeout:
             print("Request timed out. Please try again later.")
             return 0
@@ -134,6 +134,57 @@ def get_margin_requirement(resolved):
             return 0
     print("total margin needed---->",total)
     return total
+'''
+
+def get_margin_requirement(resolved):
+    total = 0
+    actions = ["BUY", "SELL", "SELL", "BUY"]
+    keys = ['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']
+    
+    for i, key in enumerate(keys):
+        sec_id = int(resolved[key])
+        quantity = int(resolved["LOT_SIZE"] * NUM_CONDORS)
+
+        payload = [{
+            "security_id": str(sec_id),
+            "quantity": quantity,
+            "order_type": actions[i]
+        }]
+
+        headers = {
+            "Authorization": f"Bearer {ACCESS_TOKEN}",
+            "Content-Type": "application/json"
+        }
+
+        try:
+            url = "https://api.dhan.co/margincalculator"
+            res = requests.post(url, headers=headers, json=payload, timeout=2)
+
+            if res.status_code != 200:
+                print(f"[ERROR] Margin API failed: {res.status_code}")
+                print("Response:", res.text)
+                return 0
+
+            data = res.json()
+
+            if isinstance(data, list) and "margin" in data[0]:
+                margin_value = float(data[0].get("margin", 0))
+                total += margin_value
+                print(f"[MARGIN] {key} margin: {margin_value}")
+            else:
+                print("[ERROR] Unexpected response format:", data)
+                return 0
+
+        except requests.exceptions.Timeout:
+            print("Request timed out.")
+            return 0
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            return 0
+
+    print("[MARGIN] Total margin needed:", total)
+    return total
+
 
 
 def place_order(security_id, side, qty):
