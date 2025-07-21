@@ -136,42 +136,50 @@ def get_margin_requirement(resolved):
     return total
 '''
 def get_margin_requirement(resolved):
-    legs = []
-    actions = ["BUY", "SELL", "SELL", "BUY"]
+    total = 0
+    count = 0
     keys = ['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']
+    actions = ["BUY", "SELL", "SELL", "BUY"]
+
+    legs = []
 
     for i, key in enumerate(keys):
         legs.append({
-            "dhanClientId": CLIENT_ID,
+            "dhanClientId": CLIENT_ID,  # Ensure this is set correctly
             "exchangeSegment": "NSE_FNO",
+            "securityId": str(int(resolved[key])),
             "transactionType": actions[i],
             "quantity": int(resolved["LOT_SIZE"] * NUM_CONDORS),
             "productType": "INTRADAY",
-            "securityId": str(int(resolved[key])),
             "price": 0,
             "triggerPrice": 0
         })
 
-    res = requests.post(
-        "https://api.dhan.co/v2/margincalculator",
-        headers={
-            "accept": "application/json",
-            "access-token": ACCESS_TOKEN,
-            "client-id": CLIENT_ID,
-            "Content-Type": "application/json"
-        },
-        json=legs,
-        timeout=2
-    )
+    try:
+        res = requests.post(
+            "https://api.dhan.co/v2/margincalculator",
+            headers={
+                "accept": "application/json",
+                "access-token": ACCESS_TOKEN,
+                "client-id": CLIENT_ID,
+                "Content-Type": "application/json"
+            },
+            json=legs,
+            timeout=2
+        )
 
-    if res.status_code != 200:
-        log(f"[ERROR] Margin API failed: {res.status_code} {res.text}")
+        if res.status_code != 200:
+            log(f"[ERROR] Margin API failed: {res.status_code} {res.text}")
+            return 0
+
+        data = res.json()
+        margin = float(data.get("totalMargin", 0))
+        log(f"[MARGIN] Total required margin: ₹{margin}")
+        return margin
+
+    except Exception as e:
+        log(f"[EXCEPTION] Margin fetch error: {e}")
         return 0
-
-    data = res.json()
-    margin = float(data.get("totalMargin", 0))
-    log(f"[MARGIN] Total required margin: ₹{margin}")
-    return margin
 
 def place_order(security_id, side, qty):
     payload = {
