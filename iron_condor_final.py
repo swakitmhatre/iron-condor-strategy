@@ -96,7 +96,7 @@ def resolve_option_tokens(df, atm_strike):
         resolved["LOT_SIZE"] = int(row.iloc[0]["SEM_LOT_UNITS"])
     return resolved
 
-'''
+
 def get_margin_requirement(resolved):
     total = 0
     count=0
@@ -106,21 +106,32 @@ def get_margin_requirement(resolved):
         print("resolved---->",resolved)
         print("sec_id----->",sec_id)
         try:
-            url = "https://api.dhan.co/margincalculator"
+            url = https://api.dhan.co/margin/calculator",  # <-- ✅ Fixed endpoint
             headers = {
-                  "Authorization": f"Bearer {ACCESS_TOKEN}",
-                  "Content-Type": "application/json"
+                  "access-token": ACCESS_TOKEN,
+                  "client-id": CLIENT_ID,
+                  "Content-Type": "application/json",
+                  "Accept": "application/json"
                       }
             payload = [{
-                "security_id": str(sec_id),
+                "dhanClientId": CLIENT_ID,
+                "exchangeSegment": "NSE_FNO",
+                "securityId": str(int(resolved[key])),
+                "transactionType": actions[i],
                 "quantity": int(resolved["LOT_SIZE"] * NUM_CONDORS),
-                "order_type":str( my_actions[count]),
+                "orderType": "MARKET",
+                "productType": "INTRADAY",
+                "price": 0,
+                "triggerPrice": 0
             }]
+            log("Sending legs to margin API:\n" + json.dumps(payload, indent=2))
             res = requests.post(f"{BASE}/orders/margins", headers=headers, json=json.dumps(payload), timeout=1)
             #res = requests.post(url, headers=headers, payload=json.dumps(payload))
             #margin = get_margin_for_strategy(access_token, instrument, quantity, order_type)
             count=count+1
             print("res----->",res.json())
+            
+
             total += float(res.json()[0].get("margin", 0))
             
        #except:
@@ -182,6 +193,7 @@ def get_margin_requirement(resolved):
     except Exception as e:
         log(f"[EXCEPTION] Margin fetch error: {e}")
         return 0
+'''
 def place_order(security_id, side, qty):
     payload = {
         "account_id": ACCOUNT_ID,
