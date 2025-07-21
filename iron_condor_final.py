@@ -99,15 +99,23 @@ def get_margin_requirement(resolved):
     total = 0
     for key in ['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']:
         sec_id = resolved[key]
+        my_actions = ["BUY", "SELL", "SELL", "BUY"]
         print("resolved---->",resolved)
         print("sec_id----->",sec_id)
         try:
+            url = "https://api.dhan.co/margincalculator"
+            headers = {
+                  "Authorization": f"Bearer {ACCESS_TOKEN}",
+                  "Content-Type": "application/json"
+                      }
             payload = [{
                 "security_id": sec_id,
-                "quantity": resolved["LOT_SIZE"] * NUM_CONDORS
+                "quantity": resolved["LOT_SIZE"] * NUM_CONDORS,
+                "order_type": my_actions[key],
             }]
-            res = requests.post(f"{BASE}/orders/margins", headers=HEADERS, json=payload, timeout=1)
-            margin = get_margin_for_strategy(access_token, instrument, quantity, order_type)
+            #res = requests.post(f"{BASE}/orders/margins", headers=HEADERS, json=payload, timeout=1)
+            res = requests.post(url, headers=headers, payload=json.dumps(payload))
+            #margin = get_margin_for_strategy(access_token, instrument, quantity, order_type)
 
             print("res----->",res)
             total += float(res.json()[0].get("margin", 0))
