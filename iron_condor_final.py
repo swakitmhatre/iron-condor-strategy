@@ -106,7 +106,7 @@ def get_margin_requirement(resolved):
         print("resolved---->",resolved)
         print("sec_id----->",sec_id)
         try:
-            url = https://api.dhan.co/margin/calculator/"  # <-- ✅ Fixed endpoint
+            url = "https://api.dhan.co/margin/calculator/"  # <-- ✅ Fixed endpoint
             headers = {
                   "access-token": ACCESS_TOKEN,
                   "client-id": CLIENT_ID,
