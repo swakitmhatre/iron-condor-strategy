@@ -73,7 +73,7 @@ def resolve_option_tokens(df, atm_strike):
 
     resolved = {}
     for leg, strike in strike_map.items():
-        #ts = f"NIFTY{expiry}{strike}{'PE' if 'PE' in leg else 'CE'}"
+        ts = f"NIFTY{expiry}{strike}{'PE' if 'PE' in leg else 'CE'}"
         print("expiry---->",expiry)
         print("strike---->",strike)
         print("token symbol---->",ts)
