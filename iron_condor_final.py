@@ -86,6 +86,7 @@ def resolve_option_tokens(df, atm_strike):
         print("column names--->",df.columns)
         
         row = df[df["SEM_CUSTOM_SYMBOL"] == ts]
+        print("row----->",row)
         if row.empty:
             log(f"[ERROR] Token not found for {ts}")
             return None
