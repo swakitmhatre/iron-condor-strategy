@@ -74,9 +74,9 @@ def resolve_option_tokens(df, atm_strike):
     resolved = {}
     for leg, strike in strike_map.items():
         ts = f"NIFTY{expiry}{strike}{'PE' if 'PE' in leg else 'CE'}"
-        print("expiry---->",expiry)
-        print("strike---->",strike)
-        print("token symbol---->",ts)
+        #print("expiry---->",expiry)
+        #print("strike---->",strike)
+        #print("token symbol---->",ts)
         s = expiry
         converted = f"{s[:2]} {s[2:5]}"
         #print("converted----->",converted)
@@ -99,6 +99,7 @@ def get_margin_requirement(resolved):
     total = 0
     for key in ['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']:
         sec_id = resolved[key]
+        print("resolved---->",resolved)
         print("sec_id----->",sec_id)
         try:
             payload = [{
@@ -106,11 +107,19 @@ def get_margin_requirement(resolved):
                 "quantity": resolved["LOT_SIZE"] * NUM_CONDORS
             }]
             res = requests.post(f"{BASE}/orders/margins", headers=HEADERS, json=payload, timeout=1)
+            margin = get_margin_for_strategy(access_token, instrument, quantity, order_type)
+
             print("res----->",res)
             total += float(res.json()[0].get("margin", 0))
             
-        except:
+       ''' except:
             log(f"[ERROR] Failed margin fetch for {key}")
+            return 0'''
+        except requests.exceptions.Timeout:
+            print("Request timed out. Please try again later.")
+            return 0
+        except requests.exceptions.RequestException as e:
+            print(f"Request failed: {e}")
             return 0
     print("total margin needed---->",total)
     return total
