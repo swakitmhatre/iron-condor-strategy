@@ -136,46 +136,37 @@ def get_margin_requirement(resolved):
     return total
 '''
 
-import requests
-import json
-
 def get_margin_requirement(resolved):
-    total_qty = int(resolved["LOT_SIZE"] * NUM_CONDORS)
-    legs = []
-
     keys = ['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']
     actions = ["BUY", "SELL", "SELL", "BUY"]
 
+    legs = []
+
     for i, key in enumerate(keys):
         legs.append({
-            "dhanClientId": CLIENT_ID,  # Must be correct
+            "dhanClientId": CLIENT_ID,
             "exchangeSegment": "NSE_FNO",
-            "securityId": str(int(resolved[key])),  # Convert np.int64 safely
+            "securityId": str(int(resolved[key])),
             "transactionType": actions[i],
-            "quantity": total_qty,
+            "quantity": int(resolved["LOT_SIZE"] * NUM_CONDORS),
             "orderType": "MARKET",
             "productType": "INTRADAY",
             "price": 0,
             "triggerPrice": 0
         })
 
-    # Log full request
-    print("Resolved =", resolved)
-    print("Num Condors =", NUM_CONDORS)
-    print("Access Token =", ACCESS_TOKEN)
-    print("Sending legs to margin API:")
-    print(json.dumps(legs, indent=2))
+    log("Sending legs to margin API:\n" + json.dumps(legs, indent=2))
 
     try:
         res = requests.post(
-            "https://api.dhan.co/v2/margin/calculator",
+            "https://api.dhan.co/margin/calculator",  # <-- ✅ Fixed endpoint
             headers={
                 "access-token": ACCESS_TOKEN,
                 "client-id": CLIENT_ID,
                 "Content-Type": "application/json",
                 "Accept": "application/json"
             },
-            json={"legs": legs},  # NOTE: You must wrap legs in a dict
+            json={"legs": legs},  # <-- ✅ Wrapped in a dict
             timeout=5
         )
 
@@ -191,7 +182,6 @@ def get_margin_requirement(resolved):
     except Exception as e:
         log(f"[EXCEPTION] Margin fetch error: {e}")
         return 0
-
 def place_order(security_id, side, qty):
     payload = {
         "account_id": ACCOUNT_ID,
