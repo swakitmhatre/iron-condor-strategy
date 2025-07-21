@@ -46,7 +46,7 @@ def get_next_thursday():
 
 
 def fetch_symbol_master():
-    return pd.read_csv(SYMBOL_MASTER_URL)
+    return pd.read_csv(SYMBOL_MASTER_URL,low_memory=False)
 
 
 def fetch_nifty_spot():
