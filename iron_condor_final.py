@@ -170,7 +170,7 @@ def get_margin_requirement(resolved):
 
     try:
         res = requests.post(
-            "https://api.dhan.co/margin/calculator",  # <-- ✅ Fixed endpoint
+            "https://api.dhan.co/v2/margincalculator/",  # <-- ✅ Fixed endpoint
             headers={
                 "access-token": ACCESS_TOKEN,
                 "client-id": CLIENT_ID,
