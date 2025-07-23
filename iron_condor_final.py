@@ -96,7 +96,7 @@ def resolve_option_tokens(df, atm_strike):
         resolved["LOT_SIZE"] = int(row.iloc[0]["SEM_LOT_UNITS"])
     return resolved
 
-
+'''
 def get_margin_requirement(resolved):
     total = 0
     count=0
@@ -177,7 +177,8 @@ def get_margin_requirement(resolved):
                 "Content-Type": "application/json",
                 "Accept": "application/json"
             },
-            json={"legs": legs},  # <-- ✅ Wrapped in a dict
+            #json={"legs": legs},  # <-- ✅ Wrapped in a dict
+            json=legs,
             timeout=5
         )
 
@@ -193,7 +194,7 @@ def get_margin_requirement(resolved):
     except Exception as e:
         log(f"[EXCEPTION] Margin fetch error: {e}")
         return 0
-'''
+
 def place_order(security_id, side, qty):
     payload = {
         "account_id": ACCOUNT_ID,
