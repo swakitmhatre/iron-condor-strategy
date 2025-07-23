@@ -197,56 +197,43 @@ def get_margin_requirement(resolved):
         return 0
 '''
 import requests
-import json
 
-def get_margin_requirement(resolved):
-    keys = ['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']
-    actions = ['BUY', 'SELL', 'SELL', 'BUY']
-    legs = []
+# Build your legs as individual dicts
+legs = []
+for i, key in enumerate(['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']):
+    leg = {
+        "dhanClientId": CLIENT_ID,
+        "exchangeSegment": "NSE_FNO",
+        "securityId": str(int(resolved[key])),
+        "transactionType": ["BUY", "SELL", "SELL", "BUY"][i],
+        "quantity": int(resolved["LOT_SIZE"] * NUM_CONDORS),
+        "orderType": "MARKET",
+        "productType": "INTRADAY",
+        "price": 0,
+        "triggerPrice": 0
+    }
+    legs.append(leg)
 
-    for i, key in enumerate(keys):
-        leg = {
-            "dhanClientId": CLIENT_ID,
-            "exchangeSegment": "NSE_FNO",
-            "securityId": str(int(resolved[key])),
-            "transactionType": actions[i],
-            "quantity": int(resolved["LOT_SIZE"] * NUM_CONDORS),
-            "orderType": "MARKET",
-            "productType": "INTRADAY",
-            "price": 0,
-            "triggerPrice": 0
-        }
-        legs.append(leg)
-    print("legs",legs)
-    last_leg = legs[-1]
-    print("Last leg:", last_leg)
+# Convert each leg to JSON and join with commas
+raw_payload = ",".join(json.dumps(leg) for leg in legs)
 
-    # ✅ Send all legs together to calculate net margin
-    try:
-        res = requests.post(
-            "https://api.dhan.co/v2/margincalculator",
-            headers={
-                "access-token": ACCESS_TOKEN,
-                "client-id": CLIENT_ID,
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            },
-            json=legs,
-            timeout=5
-        )
+# Optional: check what you’re sending
+print("Raw payload:\n", raw_payload)
 
-        if res.status_code != 200:
-            print(f"[ERROR] Margin API failed: {res.status_code} {res.text}")
-            return 0
+# Send as raw data (not as JSON)
+response = requests.post(
+    "https://api.dhan.co/v2/margincalculator",
+    headers={
+        "access-token": ACCESS_TOKEN,
+        "client-id": CLIENT_ID,
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    },
+    data=raw_payload  # 👈 not using json=..., we use data=...
+)
 
-        data = res.json()
-        margin = float(data.get("totalMargin", 0))
-        print(f"✅ Net Margin Required: ₹{margin}")
-        return margin
+print("Response:", response.text)
 
-    except Exception as e:
-        print(f"[EXCEPTION] Margin calculation failed: {e}")
-        return 0
 
 def place_order(security_id, side, qty):
     payload = {
