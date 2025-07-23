@@ -132,7 +132,7 @@ def get_margin_requirement(resolved):
             print("res----->",res.json())
             
 
-            total += float(res.json().get("totalMargin", 0))
+            total += float(res.json()[0].get("totalMargin", 0))
             
        #except:
             #log(f"[ERROR] Failed margin fetch for {key}")
