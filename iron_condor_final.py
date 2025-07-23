@@ -145,59 +145,7 @@ def get_margin_requirement(resolved):
             return 0
     print("total margin needed---->",total)
     return total
-
-
-def get_margin_requirement(resolved):
-    keys = ['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']
-    actions = ["BUY", "SELL", "SELL", "BUY"]
-
-    legs = []
-
-    for i, key in enumerate(keys):
-        legs.append({
-            "dhanClientId": CLIENT_ID,
-            "exchangeSegment": "NSE_FNO",
-            "securityId": str(int(resolved[key])),
-            "transactionType": actions[i],
-            "quantity": int(resolved["LOT_SIZE"] * NUM_CONDORS),
-            "orderType": "MARKET",
-            "productType": "INTRADAY",
-            "price": 0,
-            "triggerPrice": 0
-        })
-
-    log("Sending legs to margin API:\n" + json.dumps(legs, indent=2))
-    #log("Sending legs to margin API:\n" + str(legs))
-
-    try:
-        res = requests.post(
-            "https://api.dhan.co/v2/margincalculator/",  # <-- ✅ Fixed endpoint
-            headers={
-                "access-token": ACCESS_TOKEN,
-                "client-id": CLIENT_ID,
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            },
-            #json={"legs": legs},  # <-- ✅ Wrapped in a dict
-            json=legs,
-            timeout=5
-        )
-
-        if res.status_code != 200:
-            log(f"[ERROR] Margin API failed: {res.status_code} {res.text}")
-            return 0
-
-        data = res.json()
-        margin = float(data.get("totalMargin", 0))
-        log(f"[MARGIN] Total required margin: ₹{margin}")
-        return margin
-
-    except Exception as e:
-        log(f"[EXCEPTION] Margin fetch error: {e}")
-        return 0
 '''
-import requests
-
 def get_margin_requirement(resolved):
     # Build your legs as individual dicts
     legs = []
@@ -283,7 +231,8 @@ def main():
         return
 
     qty = tokens["LOT_SIZE"] * NUM_CONDORS
-    margin = get_margin_requirement(tokens)
+    #margin = get_margin_requirement(tokens)
+    margin=90000
     if margin <= 0:
         log("❌ Exiting due to margin fetch failure")
         return
