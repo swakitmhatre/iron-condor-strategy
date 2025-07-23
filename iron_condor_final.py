@@ -193,7 +193,7 @@ def get_margin_requirement(resolved):
     except Exception as e:
         log(f"[EXCEPTION] Margin fetch error: {e}")
         return 0
-'''
+
 def place_order(security_id, side, qty):
     payload = {
         "account_id": ACCOUNT_ID,
