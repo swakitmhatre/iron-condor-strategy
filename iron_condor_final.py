@@ -198,42 +198,44 @@ def get_margin_requirement(resolved):
 '''
 import requests
 
-# Build your legs as individual dicts
-legs = []
-for i, key in enumerate(['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']):
-    leg = {
-        "dhanClientId": CLIENT_ID,
-        "exchangeSegment": "NSE_FNO",
-        "securityId": str(int(resolved[key])),
-        "transactionType": ["BUY", "SELL", "SELL", "BUY"][i],
-        "quantity": int(resolved["LOT_SIZE"] * NUM_CONDORS),
-        "orderType": "MARKET",
-        "productType": "INTRADAY",
-        "price": 0,
-        "triggerPrice": 0
-    }
-    legs.append(leg)
+def get_margin_requirement(resolved):
+    # Build your legs as individual dicts
+    legs = []
+    for i, key in enumerate(['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']):
+        leg = {
+            "dhanClientId": CLIENT_ID,
+            "exchangeSegment": "NSE_FNO",
+            "securityId": str(int(resolved[key])),
+            "transactionType": ["BUY", "SELL", "SELL", "BUY"][i],
+            "quantity": int(resolved["LOT_SIZE"] * NUM_CONDORS),
+            "orderType": "MARKET",
+            "productType": "INTRADAY",
+            "price": 0,
+            "triggerPrice": 0
+        }
+        legs.append(leg)
 
-# Convert each leg to JSON and join with commas
-raw_payload = ",".join(json.dumps(leg) for leg in legs)
-
-# Optional: check what you’re sending
-print("Raw payload:\n", raw_payload)
-
-# Send as raw data (not as JSON)
-response = requests.post(
-    "https://api.dhan.co/v2/margincalculator",
-    headers={
-        "access-token": ACCESS_TOKEN,
-        "client-id": CLIENT_ID,
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-    },
-    data=raw_payload  # 👈 not using json=..., we use data=...
-)
-
-print("Response:", response.text)
-
+    
+    # Convert each leg to JSON and join with commas
+    raw_payload = ",".join(json.dumps(leg) for leg in legs)
+    
+    # Optional: check what you’re sending
+    print("Raw payload:\n", raw_payload)
+    
+    # Send as raw data (not as JSON)
+    response = requests.post(
+        "https://api.dhan.co/v2/margincalculator",
+        headers={
+            "access-token": ACCESS_TOKEN,
+            "client-id": CLIENT_ID,
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        },
+        data=raw_payload  # 👈 not using json=..., we use data=...
+    )
+    
+    print("Response:", response.text)
+    
 
 def place_order(security_id, side, qty):
     payload = {
