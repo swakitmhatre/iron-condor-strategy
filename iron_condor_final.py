@@ -146,7 +146,7 @@ def get_margin_requirement(resolved):
     print("total margin needed---->",total)
     return total
 
-'''
+
 def get_margin_requirement(resolved):
     keys = ['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']
     actions = ["BUY", "SELL", "SELL", "BUY"]
@@ -166,8 +166,8 @@ def get_margin_requirement(resolved):
             "triggerPrice": 0
         })
 
-    #log("Sending legs to margin API:\n" + json.dumps(legs, indent=2))
-    log("Sending legs to margin API:\n" + str(legs))
+    log("Sending legs to margin API:\n" + json.dumps(legs, indent=2))
+    #log("Sending legs to margin API:\n" + str(legs))
 
     try:
         res = requests.post(
@@ -194,6 +194,55 @@ def get_margin_requirement(resolved):
 
     except Exception as e:
         log(f"[EXCEPTION] Margin fetch error: {e}")
+        return 0
+'''
+import requests
+import json
+
+def get_net_margin(resolved):
+    keys = ['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']
+    actions = ['BUY', 'SELL', 'SELL', 'BUY']
+    legs = []
+
+    for i, key in enumerate(keys):
+        leg = {
+            "dhanClientId": CLIENT_ID,
+            "exchangeSegment": "NSE_FNO",
+            "securityId": str(int(resolved[key])),
+            "transactionType": actions[i],
+            "quantity": int(resolved["LOT_SIZE"] * NUM_CONDORS),
+            "orderType": "MARKET",
+            "productType": "INTRADAY",
+            "price": 0,
+            "triggerPrice": 0
+        }
+        legs.append(leg)
+
+    # ✅ Send all legs together to calculate net margin
+    try:
+        res = requests.post(
+            "https://api.dhan.co/v2/margincalculator",
+            headers={
+                "access-token": ACCESS_TOKEN,
+                "client-id": CLIENT_ID,
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            },
+            json=legs,
+            timeout=5
+        )
+
+        if res.status_code != 200:
+            print(f"[ERROR] Margin API failed: {res.status_code} {res.text}")
+            return 0
+
+        data = res.json()
+        margin = float(data.get("totalMargin", 0))
+        print(f"✅ Net Margin Required: ₹{margin}")
+        return margin
+
+    except Exception as e:
+        print(f"[EXCEPTION] Margin calculation failed: {e}")
         return 0
 
 def place_order(security_id, side, qty):
