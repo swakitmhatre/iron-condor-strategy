@@ -107,12 +107,12 @@ def get_margin_requirement(resolved):
         print("sec_id----->",sec_id)
         try:
             url = "https://api.dhan.co/v2/margincalculator/"  # <-- ✅ Fixed endpoint
-            headers = '{
+            headers = {
                   "access-token": ACCESS_TOKEN,
                   "client-id": CLIENT_ID,
                   "Content-Type": "application/json",
                   "Accept": "application/json",
-                      }'
+                      }
             payload = '{
                 "dhanClientId": CLIENT_ID,
                 "exchangeSegment": "NSE_FNO",
