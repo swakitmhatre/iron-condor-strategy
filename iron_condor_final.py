@@ -217,7 +217,7 @@ def get_margin_requirement(resolved):
             "triggerPrice": 0
         }
         legs.append(leg)
-        print(legs)
+        print(legs[3])
 
     # ✅ Send all legs together to calculate net margin
     try:
