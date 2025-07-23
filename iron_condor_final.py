@@ -166,8 +166,8 @@ def get_margin_requirement(resolved):
             "triggerPrice": 0
         })
 
-    log("Sending legs to margin API:\n" + json.dumps(legs, indent=2))
-    log("Sending legs to margin API:\n" + legs)
+    #log("Sending legs to margin API:\n" + json.dumps(legs, indent=2))
+    log("Sending legs to margin API:\n" + str(legs))
 
     try:
         res = requests.post(
