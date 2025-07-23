@@ -199,7 +199,7 @@ def get_margin_requirement(resolved):
 import requests
 import json
 
-def get_net_margin(resolved):
+def get_margin_requirement(resolved):
     keys = ['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']
     actions = ['BUY', 'SELL', 'SELL', 'BUY']
     legs = []
