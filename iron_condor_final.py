@@ -67,6 +67,7 @@ def fetch_nifty_spot():
         print("spot value----->",float(res.json().get("last_price", 22500)))
     except:
         #return 22500
+        print("spot value----->",22500)
 
 
 def round_to_strike(price):
