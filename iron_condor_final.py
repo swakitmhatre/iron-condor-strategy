@@ -26,7 +26,8 @@ LOG_FILE = "iron_condor_log.txt"
 HEADERS = {
     "access-token": ACCESS_TOKEN,
     "client-id": CLIENT_ID,
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
+    "Accept": "application/json",
 }
 
 
