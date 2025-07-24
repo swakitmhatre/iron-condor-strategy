@@ -203,7 +203,7 @@ def place_order(security_id, side, qty):
         "validity": "DAY"
     }
     start = time.perf_counter()
-    res = requests.post("https://api.dhan.co/v2/orders", headers=HEADERS, json=payload)
+    res = requests.post("https://api.dhan.co/v2/orders", headers=headers, json=payload)
     delay = round((time.perf_counter() - start) * 1000, 2)
     log(f"ORDER | {side} | {security_id} | qty={qty} | delay={delay}ms | code={res.status_code}")
     return delay
