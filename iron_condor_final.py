@@ -292,6 +292,7 @@ def main():
         if mtm >= target_profit or mtm <= TARGET_LOSS:
             condition_met_time = datetime.now()
             log(f"🎯 TARGET HIT at {condition_met_time}")
+            log(f"📈 MTM = ₹{mtm:.2f}")
 
             # Exit Sell Legs First
             place_order(tokens["PE_SELL"], "BUY", qty)
