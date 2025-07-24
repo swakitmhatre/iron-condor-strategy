@@ -206,8 +206,8 @@ def place_order(security_id, side, qty):
         "productType": "INTRADAY",
         "orderType": "MARKET",
         "validity": "DAY",
-        "securityId": "49292",
-        "quantity": 75,
+        "securityId": str(security_id),
+        "quantity": qty,
         "price": 0,
         "triggerPrice": 0
     }
