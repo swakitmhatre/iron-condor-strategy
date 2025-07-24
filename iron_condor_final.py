@@ -57,12 +57,17 @@ def fetch_symbol_master():
 
 
 def fetch_nifty_spot():
-    url = f"{BASE}/market/quote/NIFTY"
+    url = "https://api.dhan.co/v2/marketfeed/ltp"
+    payload=
+    {  
+    "IDX_I":[13]
+    }
     try:
-        res = requests.get(url, headers=HEADERS, timeout=0.5)
-        return float(res.json().get("last_traded_price", 22500))
+        res = requests.get(url, headers=HEADERS,json=payload, timeout=0.5)
+        #return float(res.json().get("last_price", 22500))
+        print("spot value----->",float(res.json().get("last_price", 22500)))
     except:
-        return 22500
+        #return 22500
 
 
 def round_to_strike(price):
@@ -100,7 +105,7 @@ def resolve_option_tokens(df, atm_strike):
             return None
         resolved[leg] = row.iloc[0]["SEM_SMST_SECURITY_ID"]
         resolved["LOT_SIZE"] = int(row.iloc[0]["SEM_LOT_UNITS"])
-        #print("resolved----->",resolved)
+        print("resolved----->",resolved)
     return resolved
 
 '''
