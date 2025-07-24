@@ -16,7 +16,7 @@ TARGET_LOSS = 100
 BUY_OFFSET = 10                    # Buy legs further OTM
 SELL_OFFSET = 9                    # Sell legs closer to ATM
 STRIKE_INTERVAL = 50
-MTM_POLL_INTERVAL = 0.05           # 50ms MTM polling
+MTM_POLL_INTERVAL = 0.025           # 50ms MTM polling
 ENTRY_TIMEOUT = 0.8                # Max allowed entry delay (seconds)
 
 # === CONSTANTS === #
