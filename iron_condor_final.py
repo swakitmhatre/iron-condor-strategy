@@ -64,7 +64,7 @@ def fetch_nifty_spot():
     try:
         res = requests.get(url, headers=HEADERS,json=payload, timeout=0.5)
         #return float(res.json().get("last_price", 22500))
-        print("spot value----->",float(res.json().get("last_price", 22500)))
+        print("spot value org----->",float(res.json().get("last_price", 22500)))
     except:
         #return 22500
         print("spot value----->",22500)
