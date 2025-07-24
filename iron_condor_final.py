@@ -37,7 +37,7 @@ def log(message):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     with open(LOG_FILE, "a") as f:
         f.write(f"[{timestamp}] {message}\n")
-    print(f"[{timestamp}] {message}")
+    #print(f"[{timestamp}] {message}")
 
 
 def get_next_thursday():
