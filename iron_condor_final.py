@@ -62,7 +62,7 @@ def fetch_nifty_spot():
     "IDX_I":[13]
     }
     try:
-        res = requests.get(url, headers=HEADERS,json=payload, timeout=0.5)
+        res = requests.post(url, headers=HEADERS,json=payload, timeout=0.5)
         #return float(res.json().get("last_price", 22500))
         print("spot value org----->",float(res.json().get("last_price", 22500)))
     except:
