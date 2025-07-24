@@ -41,13 +41,13 @@ def log(message):
 
 def get_next_thursday():
     today = datetime.today()
-    print("today--->",today)
+    #print("today--->",today)
     offset = (3 - today.weekday()) % 7
-    print("offset---->",offset)
+    #print("offset---->",offset)
     offset = offset if offset > 0 else 7
-    print("final offset---->",offset)
+    #print("final offset---->",offset)
     next_expiry = today + timedelta(days=offset)
-    print("next_expiry----->",next_expiry)
+    #print("next_expiry----->",next_expiry)
     return next_expiry.strftime("%d%b%y").upper()
 
 
@@ -88,18 +88,18 @@ def resolve_option_tokens(df, atm_strike):
         #print("converted----->",converted)
         ts="NIFTY "+converted+" "+str(strike)+" "
         ts = f"{ts}{'PUT' if 'PE' in leg else 'CALL'}"
-        print("FINAL token symbol---->",ts)
-        print("column names--->",df.columns)
+        #print("FINAL token symbol---->",ts)
+        #print("column names--->",df.columns)
         
         row = df[df["SEM_CUSTOM_SYMBOL"] == ts]
-        print("row----->",row["SEM_SMST_SECURITY_ID"])
-        print("row id----->",row.iloc[0]["SEM_SMST_SECURITY_ID"])
+        #print("row----->",row["SEM_SMST_SECURITY_ID"])
+        #print("row id----->",row.iloc[0]["SEM_SMST_SECURITY_ID"])
         if row.empty:
             log(f"[ERROR] Token not found for {ts}")
             return None
         resolved[leg] = row.iloc[0]["SEM_SMST_SECURITY_ID"]
         resolved["LOT_SIZE"] = int(row.iloc[0]["SEM_LOT_UNITS"])
-        print("resolved----->",resolved)
+        #print("resolved----->",resolved)
     return resolved
 
 '''
