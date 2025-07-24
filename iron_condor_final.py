@@ -8,11 +8,11 @@ import json
 # === CONFIGURATION === #
 ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzU0OTI0MTYyLCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwMDkyMjIyNiJ9.YcY7_aIOuhDBQ9VD3yyfz9eIMnDcD3o3aEgwfR38q4ZRJ2Vkdl44103dIZIdibk0kilRUeA451LH9mBHQjra4A"
 CLIENT_ID = "1100922226"
-ACCOUNT_ID = "your_account_id"
+ACCOUNT_ID = "1100922226"
 
 NUM_CONDORS = 1                     # Number of Iron Condors
-TARGET_PCT = 0.25                   # Target profit (% of total margin)
-BUY_OFFSET = 11                    # Buy legs further OTM
+TARGET_PCT = 0.05                   # Target profit (% of total margin)
+BUY_OFFSET = 10                    # Buy legs further OTM
 SELL_OFFSET = 9                    # Sell legs closer to ATM
 STRIKE_INTERVAL = 50
 MTM_POLL_INTERVAL = 0.05           # 50ms MTM polling
@@ -221,9 +221,11 @@ def place_order(security_id, side, qty):
 
 def get_mtm():
     try:
-        res = requests.get(f"{BASE}/positions", headers=HEADERS, timeout=0.5)
+        res = requests.get("https://api.dhan.co/v2/positions", headers=HEADERS, timeout=0.5)
         positions = res.json()
-        return sum(float(p.get("pnl", 0)) for p in positions if p["account_id"] == ACCOUNT_ID)
+        print("positions------>",positions)
+        #return sum(float(p.get("pnl", 0)) for p in positions if p["account_id"] == ACCOUNT_ID)
+        return sum(float(p.get("unrealizedProfit", 0)) for p in positions if p["dhanClientId"] == ACCOUNT_ID)
     except Exception as e:
         log(f"[ERROR] MTM fetch failed: {e}")
         return 0
@@ -286,7 +288,7 @@ def main():
             place_order(tokens["CE_SELL"], "BUY", qty)
 
             # Small delay to ensure broker processes sell exits first
-            time.sleep(0.1)
+            time.sleep(0.01)
 
             # Exit Buy Legs
             place_order(tokens["PE_BUY"], "SELL", qty)
