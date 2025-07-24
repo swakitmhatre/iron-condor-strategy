@@ -41,9 +41,13 @@ def log(message):
 
 def get_next_thursday():
     today = datetime.today()
+    print("today--->",today)
     offset = (3 - today.weekday()) % 7
+    print("offset---->",offset)
     offset = offset if offset > 0 else 7
+    print("final offset---->",offset)
     next_expiry = today + timedelta(days=offset)
+    print("next_expiry----->",next_expiry)
     return next_expiry.strftime("%d%b%y").upper()
 
 
