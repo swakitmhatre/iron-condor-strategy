@@ -93,7 +93,7 @@ def resolve_option_tokens(df, atm_strike):
         
         row = df[df["SEM_CUSTOM_SYMBOL"] == ts]
         print("row----->",row["SEM_SMST_SECURITY_ID"])
-        print("row----->",row)
+        print("row id----->",row.iloc[0]["SEM_SMST_SECURITY_ID"])
         if row.empty:
             log(f"[ERROR] Token not found for {ts}")
             return None
