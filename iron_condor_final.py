@@ -232,7 +232,7 @@ def get_mtm():
     try:
         res = requests.get("https://api.dhan.co/v2/positions", headers=HEADERS, timeout=0.5)
         positions = res.json()
-        print("positions------>",positions)
+        #print("positions------>",positions)
         #return sum(float(p.get("pnl", 0)) for p in positions if p["account_id"] == ACCOUNT_ID)
         return sum(float(p.get("unrealizedProfit", 0)) for p in positions if p["dhanClientId"] == ACCOUNT_ID)
     except Exception as e:
