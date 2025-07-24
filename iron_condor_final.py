@@ -88,7 +88,7 @@ def resolve_option_tokens(df, atm_strike):
         #print("converted----->",converted)
         ts="NIFTY "+converted+" "+str(strike)+" "
         ts = f"{ts}{'PUT' if 'PE' in leg else 'CALL'}"
-        #print("FINAL token symbol---->",ts)
+        print("FINAL token symbol---->",ts)
         #print("column names--->",df.columns)
         
         row = df[df["SEM_CUSTOM_SYMBOL"] == ts]
