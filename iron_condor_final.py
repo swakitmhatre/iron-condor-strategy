@@ -58,8 +58,7 @@ def fetch_symbol_master():
 
 def fetch_nifty_spot():
     url = "https://api.dhan.co/v2/marketfeed/ltp"
-    payload=
-    {  
+    payload={  
     "IDX_I":[13]
     }
     try:
