@@ -11,7 +11,7 @@ CLIENT_ID = "1100922226"
 ACCOUNT_ID = "1100922226"
 
 NUM_CONDORS = 1                     # Number of Iron Condors
-TARGET_PCT = 0.05                   # Target profit (% of total margin)
+TARGET_PCT = 0.01                   # Target profit (% of total margin)
 BUY_OFFSET = 10                    # Buy legs further OTM
 SELL_OFFSET = 9                    # Sell legs closer to ATM
 STRIKE_INTERVAL = 50
