@@ -186,6 +186,12 @@ def get_margin_requirement(resolved):
     
 
 def place_order(security_id, side, qty):
+    headers = {
+                  "access-token": ACCESS_TOKEN,
+                  "client-id": CLIENT_ID,
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                      }
     payload = {
         "account_id": ACCOUNT_ID,
         "exchange_segment": "NSEFO",
@@ -197,7 +203,7 @@ def place_order(security_id, side, qty):
         "validity": "DAY"
     }
     start = time.perf_counter()
-    res = requests.post(f"{BASE}/orders", headers=HEADERS, json=payload)
+    res = requests.post("https://api.dhan.co/v2/orders", headers=HEADERS, json=payload)
     delay = round((time.perf_counter() - start) * 1000, 2)
     log(f"ORDER | {side} | {security_id} | qty={qty} | delay={delay}ms | code={res.status_code}")
     return delay
