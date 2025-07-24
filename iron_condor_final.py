@@ -193,16 +193,20 @@ def place_order(security_id, side, qty):
                   "Accept": "application/json",
                       }
     payload = {
-        "account_id": ACCOUNT_ID,
-        "exchange_segment": "NSEFO",
-        "product_type": "INTRADAY",
-        "order_type": "MARKET",
-        "transaction_type": side,
-        "security_id": security_id,
-        "quantity": qty,
-        "validity": "DAY"
+       
+        "dhanClientId": "1100922226",
+        "transactionType": str(side),
+        "exchangeSegment": "NSE_FNO",
+        "productType": "INTRADAY",
+        "orderType": "MARKET",
+        "validity": "DAY",
+        "securityId": "49292",
+        "quantity": 75,
+        "price": 0,
+        "triggerPrice": 0
     }
     start = time.perf_counter()
+    print("order string",json.dumps(payload, indent=2))
     res = requests.post("https://api.dhan.co/v2/orders", headers=headers, json=payload)
     delay = round((time.perf_counter() - start) * 1000, 2)
     log(f"ORDER | {side} | {security_id} | qty={qty} | delay={delay}ms | code={res.status_code}")
