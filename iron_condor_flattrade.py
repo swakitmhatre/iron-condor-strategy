@@ -51,7 +51,7 @@ def generate_token():
     if 'token' in data:
         token_data = {
             "access_token": data['token'],
-            "expiry": time.time() + 3600  # 1 hour expiry
+            "expiry": time.time() + 36000  # 1 hour expiry
         }
         save_token(token_data)
         return token_data
