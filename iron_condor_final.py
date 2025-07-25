@@ -1,200 +1,214 @@
 import requests
+import json
 import time
 import datetime
+import pytz
 import os
-import json
-import pandas as pd
-from pathlib import Path
+import pyotp
+import csv
+from pprint import pprint
 
-# === CONFIG ===
-USER_ID = "FT053224"  # Replace with your Flattrade user ID
-VC = "FA12345"       # Get from Flattrade (eg. "FA12345")
-IMEI = "abc123"      # Unique string. You can generate a static one.
-APP_KEY = "5a98658739d3414e85d55c51dc7b2646"
-SECRET_KEY="2025.1d7850e257bb4858858073f31e5f7a9718f9062892b4aec5"
-MARGIN_PER_LOT = 100000  # ₹1L approx per NIFTY Iron Condor
-LOT_SIZE = 1
+# ====== CONFIGURATION ======
+API_KEY = "5a98658739d3414e85d55c51dc7b2646"
+API_SECRET = "2025.1d7850e257bb4858858073f31e5f7a9718f9062892b4aec5"
+CLIENT_CODE = "FT053224"
+VC = "your_virtual_code"
+IMEI = "your_imei_number"
+TOTP_SECRET = input("Enter TOTP secret (shown in authenticator app): ").strip()
+
+LOT_MULTIPLIER = 1
 TOKEN_FILE = "token.txt"
-SYMBOL_MASTER_CSV = "NFO_symbols.csv"
+SYMBOL_MASTER_FILE = "symbol_master.csv"
 UNDERLYING = "NIFTY"
+MARGIN_PER_LOT = 85000  # Example; update with actual margin from broker
 
-# === Logging ===
+# ====== LOGGER ======
 def log(msg):
-    print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}")
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{timestamp}] {msg}")
+    with open("strategy_log.txt", "a") as f:
+        f.write(f"[{timestamp}] {msg}\n")
 
-# === Token Handling ===
+# ====== TOKEN HANDLER ======
 def save_token(token):
     with open(TOKEN_FILE, "w") as f:
         json.dump({"token": token, "timestamp": time.time()}, f)
 
 def load_token():
-    if not Path(TOKEN_FILE).exists():
-        return None
-    with open(TOKEN_FILE, "r") as f:
-        data = json.load(f)
-    if time.time() - data["timestamp"] > 23 * 3600:  # 23 hrs validity
-        return None
-    return data["token"]
+    if os.path.exists(TOKEN_FILE):
+        with open(TOKEN_FILE, "r") as f:
+            data = json.load(f)
+            if time.time() - data.get("timestamp", 0) < 23 * 3600:
+                return data["token"]
+    return None
 
-def generate_token():
-    totp = input("Enter your Flattrade TOTP: ")
-    url = "https://auth.flattrade.in/tradeplusLogin/authenticate"
+def get_new_token():
+    otp = pyotp.TOTP(TOTP_SECRET).now()
     payload = {
-        "user": USER_ID,
-        "password": totp,
+        "apkversion": "1.0.0",
+        "uid": CLIENT_CODE,
+        "pwd": API_SECRET,
+        "factor2": otp,
         "vc": VC,
-        "app_key": APP_KEY,
+        "appkey": API_KEY,
         "imei": IMEI
     }
+    headers = {"Content-Type": "application/json"}
     try:
-        res = requests.post(url, json=payload)
-        res.raise_for_status()
-        token = res.json().get("susertoken")
-        if not token:
-            raise Exception("Token generation failed.")
-        save_token(token)
-        return token
+        res = requests.post("https://authapi.flattrade.in/trade/apitoken", json=payload, headers=headers)
+        res_data = res.json()
+        if res_data.get("stat") == "Ok":
+            token = res_data["susertoken"]
+            save_token(token)
+            return token
+        else:
+            log(f"Token generation failed: {res_data}")
     except Exception as e:
-        log(f"Token generation error: {e}")
-        exit(1)
+        log(f"Token request exception: {e}")
+    return None
 
 def get_token():
     token = load_token()
     if token:
+        log("Using cached token.")
         return token
-    log("Token expired or missing. Generating new token.")
-    return generate_token()
+    log("Token expired or missing. Generating new token...")
+    return get_new_token()
 
-# === Symbol Master Download ===
+# ====== SYMBOL MASTER HANDLER ======
 def download_symbol_master():
-    url = "https://api.flattrade.in/symbol_master/NFO_symbols.csv"
     try:
-        res = requests.get(url)
-        res.raise_for_status()
-        with open(SYMBOL_MASTER_CSV, "wb") as f:
-            f.write(res.content)
+        url = "https://api.flattrade.in/api/market/symbol-master-csv"
+        r = requests.get(url)
+        with open(SYMBOL_MASTER_FILE, "wb") as f:
+            f.write(r.content)
         log("Symbol master downloaded.")
     except Exception as e:
-        log(f"Failed to download symbol master: {e}")
-        exit(1)
+        log(f"Error downloading symbol master: {e}")
 
-# === ATM Strike Discovery ===
-def get_strike_symbols():
-    if not Path(SYMBOL_MASTER_CSV).exists():
-        download_symbol_master()
+def get_option_symbol(strike, option_type, expiry):
+    with open(SYMBOL_MASTER_FILE, newline="") as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            if (
+                row["TradingSymbol"].startswith("NFO:NIFTY") and
+                row["Expiry"].startswith(expiry) and
+                row["StrikePrice"] == str(strike) and
+                row["OptionType"] == option_type
+            ):
+                return row["TradingSymbol"]
+    return None
 
-    df = pd.read_csv(SYMBOL_MASTER_CSV)
-    df = df[df['TradingSymbol'].str.startswith(UNDERLYING)]
-    df = df[df['SymbolName'] == UNDERLYING]
-    df = df[df['OptionType'].isin(['CE', 'PE'])]
-
-    spot_price = get_live_price(get_token())
-    atm_strike = round(spot_price / 50) * 50
-
-    buy_ce_strike = atm_strike + 9 * 50
-    buy_pe_strike = atm_strike - 9 * 50
-    sell_ce_strike = atm_strike + 11 * 50
-    sell_pe_strike = atm_strike - 11 * 50
-
-    expiry = sorted(df['Expiry'].unique())[1]  # next week
-    legs = {
-        'BUY_CE': get_trading_symbol(df, buy_ce_strike, 'CE', expiry),
-        'BUY_PE': get_trading_symbol(df, buy_pe_strike, 'PE', expiry),
-        'SELL_CE': get_trading_symbol(df, sell_ce_strike, 'CE', expiry),
-        'SELL_PE': get_trading_symbol(df, sell_pe_strike, 'PE', expiry),
-    }
-
-    log(f"Selected strikes: {legs}")
-    return legs
-
-def get_trading_symbol(df, strike, opt_type, expiry):
-    row = df[(df['StrikePrice'] == strike) &
-             (df['OptionType'] == opt_type) &
-             (df['Expiry'] == expiry)]
-    if row.empty:
-        raise Exception(f"Symbol not found for {strike} {opt_type}")
-    return row.iloc[0]['TradingSymbol']
-
-# === Order Execution ===
-def place_order(token, symbol, side, qty):
-    url = "https://api.flattrade.in/trade/1.0.0/place_order"
+# ====== PRICE & PNL ======
+def get_ltp(token, symbol):
+    url = "https://api.flattrade.in/market/quote"
     headers = {"Authorization": f"Bearer {token}"}
+    params = {"symbols": symbol}
+    try:
+        res = requests.get(url, headers=headers, params=params)
+        data = res.json()[0]
+        return float(data["last_price"])
+    except Exception as e:
+        log(f"Failed to get LTP for {symbol}: {e}")
+        return 0.0
+
+def get_atm_strike(token):
+    url = "https://api.flattrade.in/market/quote"
+    headers = {"Authorization": f"Bearer {token}"}
+    params = {"symbols": "NSE:NIFTY50"}
+    try:
+        res = requests.get(url, headers=headers, params=params)
+        price = float(res.json()[0]["last_price"])
+        return round(price / 50) * 50
+    except Exception as e:
+        log(f"ATM fetch failed: {e}")
+        return 0
+
+def get_pnl(token):
+    url = "https://api.flattrade.in/trade/pnl"
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        res = requests.get(url, headers=headers)
+        data = res.json()
+        return float(data.get("total_pnl", 0))
+    except Exception as e:
+        log(f"PNL fetch error: {e}")
+        return 0
+
+# ====== ORDER EXECUTION ======
+def place_order(token, symbol, side, qty):
+    url = "https://api.flattrade.in/trade/placeorder"
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     payload = {
         "exchange": "NFO",
         "symbol": symbol,
-        "action": side,
+        "qty": qty,
+        "type": "MKT",
+        "side": side,
         "product": "M",
-        "quantity": qty,
-        "price": 0,
-        "trigger_price": 0,
-        "disclosed_quantity": 0,
-        "validity": "DAY",
-        "order_type": "MKT"
+        "validity": "DAY"
     }
     try:
-        res = requests.post(url, json=payload, headers=headers)
-        res.raise_for_status()
-        log(f"Order placed: {side} {symbol}")
+        res = requests.post(url, headers=headers, json=payload)
+        data = res.json()
+        if data.get("stat") == "Ok":
+            log(f"Order placed: {side} {symbol} x{qty}")
+        else:
+            log(f"Order failed: {data}")
     except Exception as e:
-        log(f"Order failed for {symbol}: {e}")
+        log(f"Order exception: {e}")
 
-# === Live Price ===
-def get_live_price(token):
-    url = f"https://api.flattrade.in/order/1.0.0/quotes?symbols=NSE_INDEX|Nifty+50"
-    headers = {"Authorization": f"Bearer {token}"}
-    try:
-        res = requests.get(url, headers=headers)
-        res.raise_for_status()
-        return float(res.json()[0]['last_price'])
-    except Exception as e:
-        log(f"Price fetch failed: {e}")
-        return 0
-
-# === MTM PnL Check ===
-def get_mtm(token):
-    url = "https://api.flattrade.in/order/1.0.0/daywise_pnl"
-    headers = {"Authorization": f"Bearer {token}"}
-    try:
-        res = requests.get(url, headers=headers)
-        res.raise_for_status()
-        return float(res.json()['total_pnl'])
-    except Exception as e:
-        log(f"MTM fetch failed: {e}")
-        return 0
-
-# === Strategy Execution ===
+# ====== STRATEGY RUNNER ======
 def run_strategy():
+    download_symbol_master()
     token = get_token()
-    legs = get_strike_symbols()
-    qty = LOT_SIZE * 50
-    margin = MARGIN_PER_LOT * LOT_SIZE
-    mtm_target = 0.0025 * margin
+    if not token:
+        log("Aborting. Token fetch failed.")
+        return
 
-    log("Entering BUY legs first...")
-    place_order(token, legs['BUY_CE'], "BUY", qty)
-    place_order(token, legs['BUY_PE'], "BUY", qty)
-    log("Waiting 2s before SELL legs...")
-    time.sleep(2)
+    atm = get_atm_strike(token)
+    expiry = (datetime.date.today() + datetime.timedelta(days=(7 - datetime.date.today().weekday()) + 1)).strftime("%Y-%m-%d")
 
-    log("Entering SELL legs...")
-    place_order(token, legs['SELL_CE'], "SELL", qty)
-    place_order(token, legs['SELL_PE'], "SELL", qty)
+    buy_ce_strike = atm + 450
+    buy_pe_strike = atm - 450
+    sell_ce_strike = atm + 550
+    sell_pe_strike = atm - 550
+
+    buy_ce = get_option_symbol(buy_ce_strike, "CE", expiry)
+    buy_pe = get_option_symbol(buy_pe_strike, "PE", expiry)
+    sell_ce = get_option_symbol(sell_ce_strike, "CE", expiry)
+    sell_pe = get_option_symbol(sell_pe_strike, "PE", expiry)
+
+    qty = 50 * LOT_MULTIPLIER
+
+    log("Placing BUY legs first...")
+    place_order(token, buy_ce, "BUY", qty)
+    place_order(token, buy_pe, "BUY", qty)
+    log("Condition met. Placing SELL legs...")
+    place_order(token, sell_ce, "SELL", qty)
+    place_order(token, sell_pe, "SELL", qty)
+
+    log("Iron Condor Entry Completed.")
+
     entry_time = datetime.datetime.now()
-    log(f"Entry complete at {entry_time.strftime('%H:%M:%S')}")
+    mtm_target = MARGIN_PER_LOT * 0.0025 * LOT_MULTIPLIER
+    log(f"MTM Target: {mtm_target}")
 
-    log("Monitoring MTM...")
+    # ===== MONITORING =====
     while True:
-        mtm = get_mtm(token)
-        log(f"MTM: ₹{mtm:.2f}")
-        if mtm >= mtm_target:
-            log(f"MTM target hit: {mtm:.2f} >= {mtm_target:.2f}")
-            log("Exiting SELL legs...")
-            place_order(token, legs['SELL_CE'], "BUY", qty)
-            place_order(token, legs['SELL_PE'], "BUY", qty)
-            log("Exit complete.")
+        pnl = get_pnl(token)
+        log(f"Live PnL: {pnl}")
+        if pnl >= mtm_target:
+            log("MTM Target hit. Exiting sell legs...")
+            place_order(token, sell_ce, "BUY", qty)
+            place_order(token, sell_pe, "BUY", qty)
+            log("Sell legs exited. Exiting buy legs...")
+            place_order(token, buy_ce, "SELL", qty)
+            place_order(token, buy_pe, "SELL", qty)
+            log("Strategy exited.")
             break
         time.sleep(10)
 
-# === Start ===
+# ====== MAIN ======
 if __name__ == "__main__":
     run_strategy()
