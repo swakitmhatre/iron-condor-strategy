@@ -6,9 +6,9 @@ from datetime import datetime, timedelta
 import pytz
 
 # CONFIGURATION
-FLATTRADE_CLIENT_CODE = "FT123456"  # Replace with your client code
+FLATTRADE_CLIENT_CODE = "FT053224"  # Replace with your client code
 FLATTRADE_API_KEY = "5a98658739d3414e85d55c51dc7b2646"
-FLATTRADE_API_SECRET = "5a98658739d3414e85d55c51dc7b2646"
+FLATTRADE_API_SECRET = "2025.1d7850e257bb4858858073f31e5f7a9718f9062892b4aec5"
 FLATTRADE_TOTP = "123456"  # Replace with your TOTP
 TOKEN_FILE = "token.txt"
 MULTIPLIER = 1  # Lot multiplier (1 lot = 50 qty for NIFTY)
