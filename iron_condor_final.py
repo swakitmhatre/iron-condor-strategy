@@ -1,214 +1,319 @@
 import requests
-import json
+import pandas as pd
 import time
-import datetime
-import pytz
-import os
-import pyotp
-import csv
-from pprint import pprint
+from datetime import datetime, timedelta
+import requests
+import json
 
-# ====== CONFIGURATION ======
-API_KEY = "5a98658739d3414e85d55c51dc7b2646"
-API_SECRET = "2025.1d7850e257bb4858858073f31e5f7a9718f9062892b4aec5"
-CLIENT_CODE = "FT053224"
-VC = "your_virtual_code"
-IMEI = "your_imei_number"
-TOTP_SECRET = input("Enter TOTP secret (shown in authenticator app): ").strip()
+# === CONFIGURATION === #
+ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzU0OTI0MTYyLCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwMDkyMjIyNiJ9.YcY7_aIOuhDBQ9VD3yyfz9eIMnDcD3o3aEgwfR38q4ZRJ2Vkdl44103dIZIdibk0kilRUeA451LH9mBHQjra4A"
+CLIENT_ID = "1100922226"
+ACCOUNT_ID = "1100922226"
 
-LOT_MULTIPLIER = 1
-TOKEN_FILE = "token.txt"
-SYMBOL_MASTER_FILE = "symbol_master.csv"
-UNDERLYING = "NIFTY"
-MARGIN_PER_LOT = 85000  # Example; update with actual margin from broker
+NUM_CONDORS = 1                     # Number of Iron Condors
+TARGET_PCT = 0.025                   # Target profit (% of total margin)
+TARGET_LOSS = 100
+BUY_OFFSET = 10                    # Buy legs further OTM
+SELL_OFFSET = 9                    # Sell legs closer to ATM
+STRIKE_INTERVAL = 50
+MTM_POLL_INTERVAL = 0.025           # 25ms MTM polling
+ENTRY_TIMEOUT = 0.8                # Max allowed entry delay (seconds)
 
-# ====== LOGGER ======
-def log(msg):
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{timestamp}] {msg}")
-    with open("strategy_log.txt", "a") as f:
-        f.write(f"[{timestamp}] {msg}\n")
+# === CONSTANTS === #
+BASE = "https://api.dhan.co"
+SYMBOL_MASTER_URL = "https://images.dhan.co/api-data/api-scrip-master.csv"
+LOG_FILE = "iron_condor_log.txt"
 
-# ====== TOKEN HANDLER ======
-def save_token(token):
-    with open(TOKEN_FILE, "w") as f:
-        json.dump({"token": token, "timestamp": time.time()}, f)
+HEADERS = {
+    "access-token": ACCESS_TOKEN,
+    "client-id": CLIENT_ID,
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+}
 
-def load_token():
-    if os.path.exists(TOKEN_FILE):
-        with open(TOKEN_FILE, "r") as f:
-            data = json.load(f)
-            if time.time() - data.get("timestamp", 0) < 23 * 3600:
-                return data["token"]
-    return None
 
-def get_new_token():
-    otp = pyotp.TOTP(TOTP_SECRET).now()
-    payload = {
-        "apkversion": "1.0.0",
-        "uid": CLIENT_CODE,
-        "pwd": API_SECRET,
-        "factor2": otp,
-        "vc": VC,
-        "appkey": API_KEY,
-        "imei": IMEI
-    }
-    headers = {"Content-Type": "application/json"}
-    try:
-        res = requests.post("https://authapi.flattrade.in/trade/apitoken", json=payload, headers=headers)
-        res_data = res.json()
-        if res_data.get("stat") == "Ok":
-            token = res_data["susertoken"]
-            save_token(token)
-            return token
-        else:
-            log(f"Token generation failed: {res_data}")
-    except Exception as e:
-        log(f"Token request exception: {e}")
-    return None
+# === UTILITY FUNCTIONS === #
 
-def get_token():
-    token = load_token()
-    if token:
-        log("Using cached token.")
-        return token
-    log("Token expired or missing. Generating new token...")
-    return get_new_token()
+def log(message):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    with open(LOG_FILE, "a") as f:
+        f.write(f"[{timestamp}] {message}\n")
+    print(f"[{timestamp}] {message}")
 
-# ====== SYMBOL MASTER HANDLER ======
-def download_symbol_master():
-    try:
-        url = "https://api.flattrade.in/api/market/symbol-master-csv"
-        r = requests.get(url)
-        with open(SYMBOL_MASTER_FILE, "wb") as f:
-            f.write(r.content)
-        log("Symbol master downloaded.")
-    except Exception as e:
-        log(f"Error downloading symbol master: {e}")
 
-def get_option_symbol(strike, option_type, expiry):
-    with open(SYMBOL_MASTER_FILE, newline="") as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            if (
-                row["TradingSymbol"].startswith("NFO:NIFTY") and
-                row["Expiry"].startswith(expiry) and
-                row["StrikePrice"] == str(strike) and
-                row["OptionType"] == option_type
-            ):
-                return row["TradingSymbol"]
-    return None
+def get_next_thursday():
+    today = datetime.today()
+    #print("today--->",today)
+    offset = (3 - today.weekday()) % 7
+    #print("offset---->",offset)
+    offset = offset if offset > 0 else 7
+    #print("final offset---->",offset)
+    next_expiry = today + timedelta(days=offset)
+    #print("next_expiry----->",next_expiry)
+    return next_expiry.strftime("%d%b%y").upper()
 
-# ====== PRICE & PNL ======
-def get_ltp(token, symbol):
-    url = "https://api.flattrade.in/market/quote"
-    headers = {"Authorization": f"Bearer {token}"}
-    params = {"symbols": symbol}
-    try:
-        res = requests.get(url, headers=headers, params=params)
-        data = res.json()[0]
-        return float(data["last_price"])
-    except Exception as e:
-        log(f"Failed to get LTP for {symbol}: {e}")
-        return 0.0
 
-def get_atm_strike(token):
-    url = "https://api.flattrade.in/market/quote"
-    headers = {"Authorization": f"Bearer {token}"}
-    params = {"symbols": "NSE:NIFTY50"}
-    try:
-        res = requests.get(url, headers=headers, params=params)
-        price = float(res.json()[0]["last_price"])
-        return round(price / 50) * 50
-    except Exception as e:
-        log(f"ATM fetch failed: {e}")
-        return 0
+def fetch_symbol_master():
+    return pd.read_csv(SYMBOL_MASTER_URL,low_memory=False)
 
-def get_pnl(token):
-    url = "https://api.flattrade.in/trade/pnl"
-    headers = {"Authorization": f"Bearer {token}"}
-    try:
-        res = requests.get(url, headers=headers)
-        data = res.json()
-        return float(data.get("total_pnl", 0))
-    except Exception as e:
-        log(f"PNL fetch error: {e}")
-        return 0
 
-# ====== ORDER EXECUTION ======
-def place_order(token, symbol, side, qty):
-    url = "https://api.flattrade.in/trade/placeorder"
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    payload = {
-        "exchange": "NFO",
-        "symbol": symbol,
-        "qty": qty,
-        "type": "MKT",
-        "side": side,
-        "product": "M",
-        "validity": "DAY"
+def fetch_nifty_spot():
+    url = "https://api.dhan.co/v2/marketfeed/ltp"
+    payload={  
+    "IDX_I":[13]
     }
     try:
-        res = requests.post(url, headers=headers, json=payload)
-        data = res.json()
-        if data.get("stat") == "Ok":
-            log(f"Order placed: {side} {symbol} x{qty}")
-        else:
-            log(f"Order failed: {data}")
-    except Exception as e:
-        log(f"Order exception: {e}")
+        res = requests.post(url, headers=HEADERS,json=payload, timeout=0.5)
+        #return float(res.json().get("last_price", 22500))
+        return float(res.json()['data']['IDX_I']['13']['last_price'])
+        #print("json---->",res.json())
+        #print("spot value org----->",float(res.json()['data']['IDX_I']['13']['last_price']))
+        
+    except:
+        return 25000
+        #print("spot value----->",22500)
 
-# ====== STRATEGY RUNNER ======
-def run_strategy():
-    download_symbol_master()
-    token = get_token()
-    if not token:
-        log("Aborting. Token fetch failed.")
+
+def round_to_strike(price):
+    return round(price / STRIKE_INTERVAL) * STRIKE_INTERVAL
+
+
+def resolve_option_tokens(df, atm_strike):
+    expiry = get_next_thursday()
+    strike_map = {
+        "PE_BUY": atm_strike - BUY_OFFSET * STRIKE_INTERVAL,
+        "PE_SELL": atm_strike - SELL_OFFSET * STRIKE_INTERVAL,
+        "CE_SELL": atm_strike + SELL_OFFSET * STRIKE_INTERVAL,
+        "CE_BUY": atm_strike + BUY_OFFSET * STRIKE_INTERVAL
+    }
+
+    resolved = {}
+    for leg, strike in strike_map.items():
+        ts = f"NIFTY{expiry}{strike}{'PE' if 'PE' in leg else 'CE'}"
+        #print("expiry---->",expiry)
+        #print("strike---->",strike)
+        #print("token symbol---->",ts)
+        s = expiry
+        converted = f"{s[:2]} {s[2:5]}"
+        #print("converted----->",converted)
+        ts="NIFTY "+converted+" "+str(strike)+" "
+        ts = f"{ts}{'PUT' if 'PE' in leg else 'CALL'}"
+        #print("FINAL token symbol---->",ts)
+        #print("column names--->",df.columns)
+        
+        row = df[df["SEM_CUSTOM_SYMBOL"] == ts]
+        #print("row----->",row["SEM_SMST_SECURITY_ID"])
+        #print("row id----->",row.iloc[0]["SEM_SMST_SECURITY_ID"])
+        if row.empty:
+            log(f"[ERROR] Token not found for {ts}")
+            return None
+        resolved[leg] = row.iloc[0]["SEM_SMST_SECURITY_ID"]
+        resolved["LOT_SIZE"] = int(row.iloc[0]["SEM_LOT_UNITS"])
+        print("resolved----->",resolved)
+    return resolved
+
+'''
+def get_margin_requirement(resolved):
+    total = 0
+    count=0
+    for key in ['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']:
+        sec_id = int(resolved[key])
+        my_actions = ["BUY", "SELL", "SELL", "BUY"]
+        print("resolved---->",resolved)
+        print("sec_id----->",sec_id)
+        try:
+            url = "https://api.dhan.co/v2/margincalculator/"  # <-- ✅ Fixed endpoint
+            headers = {
+                  "access-token": ACCESS_TOKEN,
+                  "client-id": CLIENT_ID,
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                      }
+            payload = {
+                "dhanClientId": CLIENT_ID,
+                "exchangeSegment": "NSE_FNO",
+                "securityId": str(int(resolved[key])),
+                "transactionType": my_actions[count],
+                "quantity": int(resolved["LOT_SIZE"] * NUM_CONDORS),
+                "orderType": "MARKET",
+                "productType": "INTRADAY",
+                "price": 0,
+                "triggerPrice": 0,
+            }
+            log("Sending legs to margin API:\n" + json.dumps(payload, indent=2))
+            res = requests.post(url, headers=headers, json=payload, timeout=1)
+            #res = requests.post(url, headers=headers, payload=json.dumps(payload))
+            #margin = get_margin_for_strategy(access_token, instrument, quantity, order_type)
+            count=count+1
+            print("res----->",res.json())
+            
+
+            total += float(res.json().get("totalMargin", 0))
+            
+       #except:
+            #log(f"[ERROR] Failed margin fetch for {key}")
+            #return 0
+        except requests.exceptions.Timeout:
+            print("Request timed out. Please try again later.")
+            return 0
+        except requests.exceptions.RequestException as e:
+            print(f"Request failed: {e}")
+            return 0
+    print("total margin needed---->",total)
+    return total
+'''
+def get_margin_requirement(resolved):
+    # Build your legs as individual dicts
+    legs = []
+    for i, key in enumerate(['PE_BUY', 'PE_SELL', 'CE_SELL', 'CE_BUY']):
+        leg = {
+            "dhanClientId": CLIENT_ID,
+            "exchangeSegment": "NSE_FNO",
+            "securityId": str(int(resolved[key])),
+            "transactionType": ["BUY", "SELL", "SELL", "BUY"][i],
+            "quantity": int(resolved["LOT_SIZE"] * NUM_CONDORS),
+            "orderType": "MARKET",
+            "productType": "INTRADAY",
+            "price": 0,
+            "triggerPrice": 0
+        }
+        legs.append(leg)
+
+    
+    # Convert each leg to JSON and join with commas
+    raw_payload = ",".join(json.dumps(leg) for leg in legs)
+    
+    # Optional: check what you’re sending
+    print("Raw payload:\n", raw_payload)
+    
+    # Send as raw data (not as JSON)
+    response = requests.post(
+        "https://api.dhan.co/v2/margincalculator",
+        headers={
+            "access-token": ACCESS_TOKEN,
+            "client-id": CLIENT_ID,
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        },
+        data=raw_payload  # 👈 not using json=..., we use data=...
+    )
+    
+    print("Response:", response.text)
+    
+
+def place_order(security_id, side, qty):
+    headers = {
+                  "access-token": ACCESS_TOKEN,
+                  "client-id": CLIENT_ID,
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                      }
+    payload = {
+       
+        "dhanClientId": "1100922226",
+        "transactionType": str(side),
+        "exchangeSegment": "NSE_FNO",
+        "productType": "INTRADAY",
+        "orderType": "MARKET",
+        "validity": "DAY",
+        "securityId": str(security_id),
+        "quantity": qty,
+        "price": 0,
+        "triggerPrice": 0
+    }
+    start = time.perf_counter()
+    print("order string",json.dumps(payload, indent=2))
+    res = requests.post("https://api.dhan.co/v2/orders", headers=headers, json=payload)
+    delay = round((time.perf_counter() - start) * 1000, 2)
+    log(f"ORDER | {side} | {security_id} | qty={qty} | delay={delay}ms | code={res.status_code}")
+    return delay
+
+
+def get_mtm():
+    try:
+        res = requests.get("https://api.dhan.co/v2/positions", headers=HEADERS, timeout=0.5)
+        positions = res.json()
+        #print("positions------>",positions)
+        #return sum(float(p.get("pnl", 0)) for p in positions if p["account_id"] == ACCOUNT_ID)
+        return sum(float(p.get("unrealizedProfit", 0)) for p in positions if p["dhanClientId"] == ACCOUNT_ID)
+    except Exception as e:
+        log(f"[ERROR] MTM fetch failed: {e}")
+        return 0
+
+
+# === STRATEGY EXECUTION === #
+
+def main():
+    log("🚀 Starting Iron Condor Strategy")
+
+    # Fetch spot and symbol master
+    spot_price = fetch_nifty_spot()
+    atm_strike = round_to_strike(spot_price)
+    df = fetch_symbol_master()
+    log(f"Spot = {spot_price}, ATM = {atm_strike}")
+
+    # Resolve tokens
+    tokens = resolve_option_tokens(df, atm_strike)
+    if not tokens:
+        log("❌ Exiting due to token resolution failure")
         return
 
-    atm = get_atm_strike(token)
-    expiry = (datetime.date.today() + datetime.timedelta(days=(7 - datetime.date.today().weekday()) + 1)).strftime("%Y-%m-%d")
+    qty = tokens["LOT_SIZE"] * NUM_CONDORS
+    #margin = get_margin_requirement(tokens)
+    margin=90000
+    if margin <= 0:
+        log("❌ Exiting due to margin fetch failure")
+        return
 
-    buy_ce_strike = atm + 450
-    buy_pe_strike = atm - 450
-    sell_ce_strike = atm + 550
-    sell_pe_strike = atm - 550
+    target_profit = margin * TARGET_PCT / 100
+    log(f"✅ Margin = ₹{margin:.2f}, Target Profit = ₹{target_profit:.2f}, Qty per leg = {qty}")
 
-    buy_ce = get_option_symbol(buy_ce_strike, "CE", expiry)
-    buy_pe = get_option_symbol(buy_pe_strike, "PE", expiry)
-    sell_ce = get_option_symbol(sell_ce_strike, "CE", expiry)
-    sell_pe = get_option_symbol(sell_pe_strike, "PE", expiry)
+    # === ENTRY (Buy Legs → Sell Legs) ===
+    entry_start = time.perf_counter()
+    place_order(tokens["PE_BUY"], "BUY", qty)
+    place_order(tokens["CE_BUY"], "BUY", qty)
+    place_order(tokens["PE_SELL"], "SELL", qty)
+    place_order(tokens["CE_SELL"], "SELL", qty)
+    entry_delay = round(time.perf_counter() - entry_start, 3)
 
-    qty = 50 * LOT_MULTIPLIER
+    entry_time = datetime.now()
+    log(f"✅ ENTRY COMPLETE | Time = {entry_time} | Delay = {entry_delay}s")
 
-    log("Placing BUY legs first...")
-    place_order(token, buy_ce, "BUY", qty)
-    place_order(token, buy_pe, "BUY", qty)
-    log("Condition met. Placing SELL legs...")
-    place_order(token, sell_ce, "SELL", qty)
-    place_order(token, sell_pe, "SELL", qty)
+    if entry_delay > ENTRY_TIMEOUT:
+        log("⚠️ Entry delay exceeded recommended threshold!")
 
-    log("Iron Condor Entry Completed.")
-
-    entry_time = datetime.datetime.now()
-    mtm_target = MARGIN_PER_LOT * 0.0025 * LOT_MULTIPLIER
-    log(f"MTM Target: {mtm_target}")
-
-    # ===== MONITORING =====
+    # === MTM MONITOR LOOP ===
+    condition_met_time = None
     while True:
-        pnl = get_pnl(token)
-        log(f"Live PnL: {pnl}")
-        if pnl >= mtm_target:
-            log("MTM Target hit. Exiting sell legs...")
-            place_order(token, sell_ce, "BUY", qty)
-            place_order(token, sell_pe, "BUY", qty)
-            log("Sell legs exited. Exiting buy legs...")
-            place_order(token, buy_ce, "SELL", qty)
-            place_order(token, buy_pe, "SELL", qty)
-            log("Strategy exited.")
-            break
-        time.sleep(10)
+        start = time.perf_counter()
+        mtm = get_mtm()
+        log(f"📈 MTM = ₹{mtm:.2f}")
 
-# ====== MAIN ======
+        if mtm >= target_profit or mtm <= TARGET_LOSS:
+            condition_met_time = datetime.now()
+            log(f"🎯 TARGET HIT at {condition_met_time}")
+            log(f"📈 MTM = ₹{mtm:.2f}")
+
+            # Exit Sell Legs First
+            place_order(tokens["PE_SELL"], "BUY", qty)
+            place_order(tokens["CE_SELL"], "BUY", qty)
+
+            # Small delay to ensure broker processes sell exits first
+            time.sleep(0.01)
+
+            # Exit Buy Legs
+            place_order(tokens["PE_BUY"], "SELL", qty)
+            place_order(tokens["CE_BUY"], "SELL", qty)
+            break
+
+        elapsed = time.perf_counter() - start
+        sleep_time = max(0, MTM_POLL_INTERVAL - elapsed)
+        time.sleep(sleep_time)
+
+    exit_time = datetime.now()
+    log(f"🏁 Strategy Exit Time = {exit_time}")
+    log("✅ All legs exited. Strategy complete.\n")
+
+
 if __name__ == "__main__":
-    run_strategy()
+    main()
