@@ -52,7 +52,7 @@ def get_token():
     except:
         pass
     return get_new_token()
-
+'''
 def get_new_token():
     totp_secret = decrypt_totp()
     otp = pyotp.TOTP(totp_secret).now()
@@ -97,6 +97,35 @@ def get_new_token():
     except Exception as e:
         logging.error(f"Token error: {e}")
         raise
+'''
+def get_new_token():
+    print("1. Open the following URL in your browser and log in:")
+    print(f"https://auth.flattrade.in/?app_key={API_KEY}")
+    print("\n2. After login, copy the 'request_code' from the redirect URL.")
+    request_code = input("Enter request_code: ").strip()
+
+    payload = {
+        "api_key": API_KEY,
+        "request_code": request_code,
+        "api_secret": API_SECRET
+    }
+
+    try:
+        r = requests.post("https://authapi.flattrade.in/trade/apitoken", json=payload)
+        r.raise_for_status()
+        res = r.json()
+        token = res.get("token")
+        if token:
+            with open(TOKEN_FILE, "w") as f:
+                json.dump({"token": token, "timestamp": time.time()}, f)
+            logging.info("✅ New token generated and saved.")
+            return token
+        else:
+            raise Exception(f"❌ Token generation failed: {res}")
+    except Exception as e:
+        logging.error(f"Token error: {e}")
+        raise
+        
 #incorret function argument mismatch        
 def get_live_price(jKey, uid, exch="NSE", token="22"):
     """
