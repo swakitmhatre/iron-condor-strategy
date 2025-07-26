@@ -1,18 +1,21 @@
 from cryptography.fernet import Fernet
-import getpass
+import base64
 
-# Generate a new key
+# Step 1: Input your actual 16-character base32 TOTP secret
+totp_secret = input("Enter your 16-character TOTP secret: ").strip()
+
+# Step 2: Generate encryption key
 key = Fernet.generate_key()
-with open("fernet.key", "wb") as f:
-    f.write(key)
-
 fernet = Fernet(key)
 
-# Ask user for TOTP secret securely
-totp_secret = getpass.getpass("Enter your 16-digit TOTP secret: ")
-encrypted = fernet.encrypt(totp_secret.encode())
+# Step 3: Encrypt the secret
+encrypted_secret = fernet.encrypt(totp_secret.encode())
 
-with open("totp_secret.enc", "wb") as f:
-    f.write(encrypted)
+# Step 4: Save both key and encrypted secret to files
+with open("fernet_key.key", "wb") as fk:
+    fk.write(key)
 
-print("TOTP secret encrypted and saved to 'totp_secret.enc'")
+with open("encrypted_totp.txt", "wb") as et:
+    et.write(encrypted_secret)
+
+print("✅ Encrypted TOTP secret and key saved.")
