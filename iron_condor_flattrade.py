@@ -56,7 +56,7 @@ def get_token():
 def get_new_token():
     totp_secret = decrypt_totp()
     otp = pyotp.TOTP(totp_secret).now()
-
+    print("otp------>",otp)
     # Step 1: Get request_code
     session_payload = {
         "api_key": API_KEY,
