@@ -96,15 +96,36 @@ def get_new_token():
     except Exception as e:
         logging.error(f"Token error: {e}")
         raise
-        
-def get_live_price(token):
+#incorret function argument mismatch        
+def get_live_price(jKey, uid, exch="NSE", token="22"):
+    """
+    Fetches the live price for the given token using Flattrade GetQuotes API.
+    token = instrument token (not auth token)
+    uid = client code (e.g., FZ00000)
+    jKey = session token from apitoken call
+    """
     try:
-        headers = {"Authorization": f"Bearer {token}"}
-        params = {"exchange": "NSE", "symbol": UNDERLYING}
-        r = requests.get("https://api.flattrade.in/order/last_quote", headers=headers, params=params)
-        return float(r.json()["last_price"])
+        jData = {
+            "uid": uid,
+            "exch": exch,
+            "token": token
+        }
+
+        payload = {
+            "jData": json.dumps(jData),
+            "jKey": jKey
+        }
+
+        url = "https://piconnect.flattrade.in/PiConnectTP/GetQuotes"
+        response = requests.post(url, data=payload)
+        data = response.json()
+
+        # The field may vary, but usually it's in data["lp"]
+        live_price = float(data["lp"])
+        return live_price
+
     except Exception as e:
-        logging.error(f"Price fetch failed: {e}")
+        logging.error(f"Live price fetch failed: {e}")
         raise
 
 def get_pnl(token):
