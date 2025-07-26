@@ -83,6 +83,7 @@ def get_new_token():
 
         token_resp = requests.post("https://authapi.flattrade.in/trade/apitoken", json=token_payload)
         token_data = token_resp.json()
+        print("token_data---->",token_data)
 
         token = token_data.get("token")
         if token:
