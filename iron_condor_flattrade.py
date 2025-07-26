@@ -8,10 +8,10 @@ import logging
 from cryptography.fernet import Fernet
 
 # ====== USER CONFIGURATION ======
-API_KEY = "your_api_key"
-API_SECRET = "your_api_secret"
-CLIENT_ID = "your_client_id"
-PASSWORD = "your_password"
+API_KEY = "5a98658739d3414e85d55c51dc7b2646"
+API_SECRET = "2025.1d7850e257bb4858858073f31e5f7a9718f9062892b4aec5"
+CLIENT_ID = "FT053224"
+PASSWORD = "Mona@1969"
 VC = "your_vc"           # example: "FA12345"
 IMEI = "your_imei"       # example: "abc123xyz"
 LOT_MULTIPLIER = 1
@@ -20,8 +20,8 @@ UNDERLYING = "NIFTY"
 # =================================
 
 # === ENCRYPTED TOTP SECRET AND FERNET KEY ===
-FERNET_KEY = b'your_fernet_key_here'  # keep it as bytes
-ENCRYPTED_TOTP = b'your_encrypted_totp_here'  # bytes
+FERNET_KEY = b'D6I-mS1QN6tBo0Wn2M9Vb3s_8vOd5UvF5DALsS42j8E='  # keep it as bytes
+ENCRYPTED_TOTP = b'gAAAAABohIp3EeCLFyq-otPgG0ootqf1Ygkr86sDW4dwaSxp2F3t7Y5BvuwK-ePZG-9Ye0utRiRodqPTxmZjSpzYz_YcndZs9sZ_i2iRxTtWLynMbEAyexXc1uGPJvolXtUtDFZH0gvd'  # bytes
 # Use Fernet.generate_key() once, and encrypt your 16-digit base32 TOTP using that key.
 # ============================================
 
@@ -35,7 +35,7 @@ def decrypt_totp():
 
 def download_symbol_master():
     try:
-        url = "https://api.flattrade.in/symbols/NFO.csv"
+        url = "https://flattrade.s3.ap-south-1.amazonaws.com/scripmaster/Nfo_Index_Derivatives.csv"
         r = requests.get(url)
         with open(SYMBOL_FILE, "wb") as f:
             f.write(r.content)
@@ -56,29 +56,47 @@ def get_token():
 def get_new_token():
     totp_secret = decrypt_totp()
     otp = pyotp.TOTP(totp_secret).now()
-    payload = {
+
+    # Step 1: Get request_code
+    session_payload = {
         "api_key": API_KEY,
-        "secret_key": API_SECRET,
-        "totp": otp,
-        "source": "API",
-        "vc": VC,
-        "imei": IMEI
+        "client_code": CLIENT_ID,
+        "password": PASSWORD,
+        "totp": otp
     }
+
     try:
-        r = requests.post("https://authapi.flattrade.in/trade/apitoken", json=payload)
-        res = r.json()
-        token = res.get("token")
+        session_resp = requests.post("https://authapi.flattrade.in/trade/session", json=session_payload)
+        session_data = session_resp.json()
+
+        request_code = session_data.get("request_code")
+        if not request_code:
+            raise Exception(f"Failed to get request_code: {session_data}")
+
+        # Step 2: Get token using request_code
+        token_payload = {
+            "api_key": API_KEY,
+            "request_code": request_code,
+            "vc": VC,
+            "imei": IMEI
+        }
+
+        token_resp = requests.post("https://authapi.flattrade.in/trade/apitoken", json=token_payload)
+        token_data = token_resp.json()
+
+        token = token_data.get("token")
         if token:
             with open(TOKEN_FILE, "w") as f:
                 json.dump({"token": token, "timestamp": time.time()}, f)
             logging.info("New token generated.")
             return token
         else:
-            raise Exception(f"Token generation failed: {res}")
+            raise Exception(f"Token generation failed: {token_data}")
+
     except Exception as e:
         logging.error(f"Token error: {e}")
         raise
-
+        
 def get_live_price(token):
     try:
         headers = {"Authorization": f"Bearer {token}"}
