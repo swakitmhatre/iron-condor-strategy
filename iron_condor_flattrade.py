@@ -1,177 +1,182 @@
-import requests, json, time, csv, os, pyotp, base64
-from datetime import datetime
+import base64
+import requests
+import json
+import time
+import datetime
+import pyotp
+import logging
 from cryptography.fernet import Fernet
 
-# -------------------- USER CONFIG -------------------- #
+# ====== USER CONFIGURATION ======
 API_KEY = "your_api_key"
 API_SECRET = "your_api_secret"
-CLIENT_ID = "your_client_code"
-VC = "your_virtual_code"
-IMEI = "your_device_imei"
+CLIENT_ID = "your_client_id"
+PASSWORD = "your_password"
+VC = "your_vc"           # example: "FA12345"
+IMEI = "your_imei"       # example: "abc123xyz"
 LOT_MULTIPLIER = 1
-MTM_TARGET_PERCENT = 0.25
+MTM_PERCENT = 0.0025     # 0.25%
 UNDERLYING = "NIFTY"
-SYMBOL_MASTER_URL = "https://api.flattrade.in/api/market/symbol_master"
-# ------------------------------------------------------ #
+# =================================
 
+# === ENCRYPTED TOTP SECRET AND FERNET KEY ===
+FERNET_KEY = b'your_fernet_key_here'  # keep it as bytes
+ENCRYPTED_TOTP = b'your_encrypted_totp_here'  # bytes
+# Use Fernet.generate_key() once, and encrypt your 16-digit base32 TOTP using that key.
+# ============================================
+
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s')
 TOKEN_FILE = "token.txt"
-TOTP_SECRET_FILE = "totp_secret.enc"
-FERNET_KEY_FILE = "fernet.key"
-CSV_FILE = "symbol_master.csv"
+SYMBOL_FILE = "symbol_master.csv"
+
+def decrypt_totp():
+    fernet = Fernet(FERNET_KEY)
+    return fernet.decrypt(ENCRYPTED_TOTP).decode()
 
 def download_symbol_master():
     try:
-        r = requests.get(SYMBOL_MASTER_URL)
-        if r.status_code == 200:
-            with open(CSV_FILE, "wb") as f:
-                f.write(r.content)
-            print(f"[{datetime.now()}] Symbol master downloaded.")
-        else:
-            print("Failed to download symbol master.")
+        url = "https://api.flattrade.in/symbols/NFO.csv"
+        r = requests.get(url)
+        with open(SYMBOL_FILE, "wb") as f:
+            f.write(r.content)
+        logging.info("Symbol master downloaded.")
     except Exception as e:
-        print("Symbol master error:", e)
+        logging.error(f"Failed to download symbol master: {e}")
 
-def decrypt_totp_secret():
+def get_token():
     try:
-        with open(FERNET_KEY_FILE, "rb") as f:
-            key = f.read()
-        with open(TOTP_SECRET_FILE, "rb") as f:
-            encrypted = f.read()
-        fernet = Fernet(key)
-        return fernet.decrypt(encrypted).decode()
-    except Exception as e:
-        print("TOTP decryption error:", e)
-        exit(1)
-
-def load_token():
-    if not os.path.exists(TOKEN_FILE):
-        return None
-    try:
-        with open(TOKEN_FILE) as f:
+        with open(TOKEN_FILE, "r") as f:
             data = json.load(f)
-        if time.time() - data["timestamp"] > 23 * 3600:
-            return None
-        return data["token"]
-    except Exception:
-        return None
-
-def save_token(token):
-    with open(TOKEN_FILE, "w") as f:
-        json.dump({"token": token, "timestamp": time.time()}, f)
+        if time.time() - data["timestamp"] < 23 * 3600:
+            return data["token"]
+    except:
+        pass
+    return get_new_token()
 
 def get_new_token():
-    totp_secret = decrypt_totp_secret()
+    totp_secret = decrypt_totp()
     otp = pyotp.TOTP(totp_secret).now()
     payload = {
         "api_key": API_KEY,
-        "api_secret": API_SECRET,
-        "request_code": otp
+        "secret_key": API_SECRET,
+        "totp": otp,
+        "source": "API",
+        "vc": VC,
+        "imei": IMEI
     }
     try:
-        res = requests.post("https://authapi.flattrade.in/trade/apitoken", json=payload)
-        data = res.json()
-        token = data.get("token")
+        r = requests.post("https://authapi.flattrade.in/trade/apitoken", json=payload)
+        res = r.json()
+        token = res.get("token")
         if token:
-            save_token(token)
+            with open(TOKEN_FILE, "w") as f:
+                json.dump({"token": token, "timestamp": time.time()}, f)
+            logging.info("New token generated.")
             return token
         else:
-            raise Exception(f"Token error: {data}")
+            raise Exception(f"Token generation failed: {res}")
     except Exception as e:
-        print("Token generation failed:", e)
-        exit(1)
-
-def get_token():
-    token = load_token()
-    if token:
-        return token
-    print(f"[{datetime.now()}] Token expired or missing. Generating new token...")
-    return get_new_token()
-
-def find_atm_strike():
-    with open(CSV_FILE, newline='') as csvfile:
-        reader = csv.DictReader(csvfile)
-        options = [row for row in reader if UNDERLYING in row["TradingSymbol"] and row["Segment"] == "NFO-OPT"]
-    # Filter NIFTY CE/PE for nearest expiry
-    expiry = sorted(set(o["Expiry"] for o in options))[0]
-    filtered = [o for o in options if o["Expiry"] == expiry]
-    strikes = sorted({int(o["StrikePrice"]) for o in filtered})
-    atm = min(strikes, key=lambda x: abs(x - get_live_price(get_token())))
-    return atm, expiry
+        logging.error(f"Token error: {e}")
+        raise
 
 def get_live_price(token):
-    url = f"https://api.flattrade.in/api/quote/{UNDERLYING}-EQ"
-    headers = {"Authorization": f"Bearer {token}"}
-    try:
-        res = requests.get(url, headers=headers)
-        data = res.json()
-        return float(data["last_price"])
-    except Exception as e:
-        print("Live price error:", e)
-        exit(1)
-
-def place_order(token, tsymbol, side, qty):
-    payload = {
-        "exchange": "NFO",
-        "tradingsymbol": tsymbol,
-        "transaction_type": side,
-        "order_type": "MARKET",
-        "product": "M",
-        "quantity": qty
-    }
-    headers = {"Authorization": f"Bearer {token}"}
-    try:
-        res = requests.post("https://api.flattrade.in/trade/placeorder", json=payload, headers=headers)
-        print(f"[{datetime.now()}] {side} {tsymbol} -> {res.json()}")
-    except Exception as e:
-        print("Order failed:", e)
-
-def get_mtm(token):
     try:
         headers = {"Authorization": f"Bearer {token}"}
-        res = requests.get("https://api.flattrade.in/trade/pnl", headers=headers)
-        data = res.json()
-        return float(data["data"]["mtm"])
+        params = {"exchange": "NSE", "symbol": UNDERLYING}
+        r = requests.get("https://api.flattrade.in/order/last_quote", headers=headers, params=params)
+        return float(r.json()["last_price"])
     except Exception as e:
-        print("MTM fetch error:", e)
-        return 0
+        logging.error(f"Price fetch failed: {e}")
+        raise
+
+def get_pnl(token):
+    try:
+        r = requests.get("https://api.flattrade.in/trade/pnl", headers={"Authorization": f"Bearer {token}"})
+        return float(r.json()["net_pnl"])
+    except Exception as e:
+        logging.warning(f"PNL fetch failed: {e}")
+        return 0.0
+
+def get_margin(token):
+    try:
+        r = requests.get("https://api.flattrade.in/trade/margin", headers={"Authorization": f"Bearer {token}"})
+        return float(r.json()["total_margin"])
+    except Exception as e:
+        logging.warning(f"Margin fetch failed: {e}")
+        return 150000  # fallback default
+
+def place_order(token, symbol, qty, side):
+    order = {
+        "exchange": "NFO",
+        "symbol": symbol,
+        "quantity": qty,
+        "order_type": "MARKET",
+        "product": "M",
+        "transaction_type": side,
+        "validity": "DAY"
+    }
+    try:
+        r = requests.post("https://api.flattrade.in/trade/placeOrder", headers={"Authorization": f"Bearer {token}"}, json=order)
+        res = r.json()
+        logging.info(f"{side} {symbol}: {res}")
+    except Exception as e:
+        logging.error(f"Order failed: {e}")
+
+def find_atm_strikes(price):
+    atm = round(price / 50) * 50
+    return atm - 300, atm - 100, atm + 100, atm + 300
+
+def get_symbol(expiry, strike, opt_type):
+    try:
+        with open(SYMBOL_FILE) as f:
+            for line in f:
+                if f"{UNDERLYING}{expiry}" in line and f"{strike}" in line and opt_type in line and "CE" in line or "PE" in line:
+                    return line.split(",")[0]
+    except Exception as e:
+        logging.error(f"Symbol lookup failed: {e}")
+    return None
 
 def run_strategy():
     download_symbol_master()
     token = get_token()
+    live_price = get_live_price(token)
+    margin = get_margin(token)
+    mtm_target = margin * MTM_PERCENT
+    lot_size = 50 * LOT_MULTIPLIER
 
-    atm_strike, expiry = find_atm_strike()
-    ce_sell = f"{UNDERLYING}{expiry}C{atm_strike+100}"
-    pe_sell = f"{UNDERLYING}{expiry}P{atm_strike-100}"
-    ce_buy  = f"{UNDERLYING}{expiry}C{atm_strike+300}"
-    pe_buy  = f"{UNDERLYING}{expiry}P{atm_strike-300}"
+    expiry = datetime.datetime.now().strftime("%y%b").upper()
+    strikes = find_atm_strikes(live_price)
 
-    lot_size = 50  # NIFTY lot size
-    qty = LOT_MULTIPLIER * lot_size
-    margin = qty * get_live_price(token)
-    target = margin * MTM_TARGET_PERCENT / 100
+    symbols = {
+        "buy_pe": get_symbol(expiry, strikes[0], "PE"),
+        "sell_pe": get_symbol(expiry, strikes[1], "PE"),
+        "sell_ce": get_symbol(expiry, strikes[2], "CE"),
+        "buy_ce": get_symbol(expiry, strikes[3], "CE")
+    }
 
-    # Buy legs first
-    place_order(token, ce_buy, "BUY", qty)
-    place_order(token, pe_buy, "BUY", qty)
+    logging.info(f"Selected symbols: {symbols}")
 
-    # Then sell legs
-    place_order(token, ce_sell, "SELL", qty)
-    place_order(token, pe_sell, "SELL", qty)
+    # Entry - Buy first
+    place_order(token, symbols["buy_pe"], lot_size, "BUY")
+    place_order(token, symbols["buy_ce"], lot_size, "BUY")
+    place_order(token, symbols["sell_pe"], lot_size, "SELL")
+    place_order(token, symbols["sell_ce"], lot_size, "SELL")
 
-    print(f"[{datetime.now()}] Iron Condor placed. Monitoring MTM target of ₹{target:.2f}...")
+    logging.info("Iron Condor entered. Monitoring MTM...")
 
     while True:
-        mtm = get_mtm(token)
-        print(f"[{datetime.now()}] MTM: ₹{mtm:.2f}")
-        if mtm >= target:
-            print(f"[{datetime.now()}] Target met. Exiting positions...")
-            place_order(token, ce_sell, "BUY", qty)
-            place_order(token, pe_sell, "BUY", qty)
-            place_order(token, ce_buy, "SELL", qty)
-            place_order(token, pe_buy, "SELL", qty)
+        pnl = get_pnl(token)
+        if pnl <= -mtm_target:
+            logging.info(f"MTM target hit. Exiting... PnL: {pnl}")
             break
-        time.sleep(30)
+        time.sleep(10)
 
-# Run
+    # Exit - Sell legs first
+    place_order(token, symbols["sell_pe"], lot_size, "BUY")
+    place_order(token, symbols["sell_ce"], lot_size, "BUY")
+    place_order(token, symbols["buy_pe"], lot_size, "SELL")
+    place_order(token, symbols["buy_ce"], lot_size, "SELL")
+    logging.info("All legs exited.")
+
 if __name__ == "__main__":
     run_strategy()
