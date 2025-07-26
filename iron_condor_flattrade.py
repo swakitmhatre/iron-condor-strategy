@@ -20,8 +20,8 @@ UNDERLYING = "NIFTY"
 # =================================
 
 # === ENCRYPTED TOTP SECRET AND FERNET KEY ===
-FERNET_KEY = b'D6I-mS1QN6tBo0Wn2M9Vb3s_8vOd5UvF5DALsS42j8E='  # keep it as bytes
-ENCRYPTED_TOTP = b'gAAAAABohIp3EeCLFyq-otPgG0ootqf1Ygkr86sDW4dwaSxp2F3t7Y5BvuwK-ePZG-9Ye0utRiRodqPTxmZjSpzYz_YcndZs9sZ_i2iRxTtWLynMbEAyexXc1uGPJvolXtUtDFZH0gvd'  # bytes
+FERNET_KEY = b'9dabT3qDS1z0VBJYirSKtYQs01X3ClxEOcTmLvOJCTE='  # keep it as bytes
+ENCRYPTED_TOTP = b'gAAAAABohKY2BTkTaljdVg110nPlCyBFoTrHQh9lXccZL9l5S2DNgKHyrEx4k-xhsLsV3lYb8Rcax40txOz7_g_R46UQ-wNNu5X5bStijNwauA9qztfmByC3lDqOZpDisync-ah3MfQK'  # bytes
 # Use Fernet.generate_key() once, and encrypt your 16-digit base32 TOTP using that key.
 # ============================================
 
