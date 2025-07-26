@@ -111,6 +111,7 @@ def get_new_token():
     }
 
     try:
+        print("payload---->",payload)
         r = requests.post("https://authapi.flattrade.in/trade/apitoken", json=payload)
         r.raise_for_status()
         res = r.json()
