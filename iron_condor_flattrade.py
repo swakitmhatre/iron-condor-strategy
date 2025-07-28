@@ -8,8 +8,8 @@ import logging
 from cryptography.fernet import Fernet
 
 # ====== USER CONFIGURATION ======
-API_KEY = "5a98658739d3414e85d55c51dc7b2646"
-API_SECRET = "2025.1d7850e257bb4858858073f31e5f7a9718f9062892b4aec5"
+API_KEY = "8a321b48cc3a48d2b3f4d52c4eb719be"
+API_SECRET = "2025.c633e7fdb18949f391b4677ba9132e691f2d6c6dcd1ca276"
 CLIENT_ID = "FT053224"
 PASSWORD = "Mona@1969"
 VC = "your_vc"           # example: "FA12345"
