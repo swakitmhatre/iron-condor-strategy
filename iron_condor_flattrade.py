@@ -49,6 +49,7 @@ def get_token():
         with open(TOKEN_FILE, "r") as f:
             data = json.load(f)
         if time.time() - data["timestamp"] < 23 * 3600:
+            print("saved token---->"data["token"])
             return data["token"]
     except:
         pass
@@ -132,7 +133,7 @@ def get_new_token():
         raise
         
 #incorret function argument mismatch        
-def get_live_price(jKey, uid, exch="NSE", token="22"):
+def get_live_price(jKey, uid, exch="NFO", symbol_token):
     """
     Fetches the live price for the given token using Flattrade GetQuotes API.
     token = instrument token (not auth token)
@@ -179,15 +180,19 @@ def get_margin(token):
         logging.warning(f"Margin fetch failed: {e}")
         return 150000  # fallback default
 
-def place_order(token, symbol, qty, side):
-    order = {
-        "exchange": "NFO",
-        "symbol": symbol,
-        "quantity": qty,
-        "order_type": "MARKET",
-        "product": "M",
-        "transaction_type": side,
-        "validity": "DAY"
+def place_order(jkey, symbol, qty, side):
+    order = 
+        {
+            "uid": "FT053224",
+            "actid": "FT053224",
+            "exch": "NFO",
+            "tsym": "ACC-EQ",
+            "qty": "75",
+            "prc": "0",
+            "prd": "I-MIS",
+            "trantype": SIDE,
+            "prctyp": "MKT",
+            "ret": "DAY"
     }
     try:
         r = requests.post("https://api.flattrade.in/trade/placeOrder", headers={"Authorization": f"Bearer {token}"}, json=order)
@@ -198,13 +203,13 @@ def place_order(token, symbol, qty, side):
 
 def find_atm_strikes(price):
     atm = round(price / 50) * 50
-    return atm - 300, atm - 100, atm + 100, atm + 300
+    return atm - 550, atm - 450, atm + 450, atm + 550
 
 def get_symbol(expiry, strike, opt_type):
     try:
         with open(SYMBOL_FILE) as f:
             for line in f:
-                if f"{UNDERLYING}{expiry}" in line and f"{strike}" in line and opt_type in line and "CE" in line or "PE" in line:
+                if f"{UNDERLYING}{expiry}" in line and f"{strike}" in line  and "C" in line or "P" in line:
                     return line.split(",")[0]
     except Exception as e:
         logging.error(f"Symbol lookup failed: {e}")
@@ -213,13 +218,16 @@ def get_symbol(expiry, strike, opt_type):
 def run_strategy():
     download_symbol_master()
     token = get_token()
-    live_price = get_live_price(token)
-    margin = get_margin(token)
+    #live_price = get_live_price(token)
+    #margin = get_margin(token)
+    margin = 100000
     mtm_target = margin * MTM_PERCENT
     lot_size = 50 * LOT_MULTIPLIER
 
     expiry = datetime.datetime.now().strftime("%y%b").upper()
+    print("expiry--->",expiry)
     strikes = find_atm_strikes(live_price)
+    print("strikes------>",strikes)
 
     symbols = {
         "buy_pe": get_symbol(expiry, strikes[0], "PE"),
@@ -231,10 +239,10 @@ def run_strategy():
     logging.info(f"Selected symbols: {symbols}")
 
     # Entry - Buy first
-    place_order(token, symbols["buy_pe"], lot_size, "BUY")
-    place_order(token, symbols["buy_ce"], lot_size, "BUY")
-    place_order(token, symbols["sell_pe"], lot_size, "SELL")
-    place_order(token, symbols["sell_ce"], lot_size, "SELL")
+    place_order(jkey, symbols["buy_pe"], lot_size, "BUY")
+    place_order(jkey, symbols["buy_ce"], lot_size, "BUY")
+    place_order(jkey, symbols["sell_pe"], lot_size, "SELL")
+    place_order(jkey, symbols["sell_ce"], lot_size, "SELL")
 
     logging.info("Iron Condor entered. Monitoring MTM...")
 
