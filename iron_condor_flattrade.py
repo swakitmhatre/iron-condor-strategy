@@ -5,6 +5,7 @@ import time
 import datetime
 import pyotp
 import logging
+import hashlib
 from cryptography.fernet import Fernet
 
 # ====== USER CONFIGURATION ======
@@ -98,16 +99,19 @@ def get_new_token():
         logging.error(f"Token error: {e}")
         raise
 '''
+def generate_hash(api_key, request_token, api_secret):
+    return hashlib.sha256(f"{api_key}{request_token}{api_secret}".encode()).hexdigest()
+    
 def get_new_token():
     print("1. Open the following URL in your browser and log in:")
     print(f"https://auth.flattrade.in/?app_key={API_KEY}")
     print("\n2. After login, copy the 'request_code' from the redirect URL.")
     request_code = input("Enter request_code: ").strip()
-
+    hashed_secret = generate_hash(API_KEY, request_code, API_SECRET)
     payload = {
         "api_key": API_KEY,
         "request_code": request_code,
-        "api_secret": API_SECRET
+        "api_secret": hashed_secret
     }
 
     try:
