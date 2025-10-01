@@ -133,18 +133,19 @@ def get_new_token():
         raise
         
 #incorret function argument mismatch        
-def get_live_price(jKey, uid, symbol_token,exch="NFO"):
+def get_live_price(jKey, uid, symbol_token="26000",exch="NFO"):
     """
     Fetches the live price for the given token using Flattrade GetQuotes API.
     token = instrument token (not auth token)
     uid = client code (e.g., FZ00000)
     jKey = session token from apitoken call
+    symbol token for nifty 50 is--->26000,(https://flattrade.s3.ap-south-1.amazonaws.com/scripmaster/Nfo_Equity_Derivatives.csv)
     """
     try:
         jData = {
             "uid": uid,
             "exch": exch,
-            "token": token
+            "token": symbol_token
         }
 
         payload = {
@@ -217,7 +218,8 @@ def get_symbol(expiry, strike, opt_type):
 def run_strategy():
     download_symbol_master()
     token = get_token()
-    #live_price = get_live_price(token)
+    #HERE TOKEN IS LOGIN_TOKEN I.E JKey ,NOT SYMBOL TOKEN.
+    live_price = get_live_price(token,CLIENT_ID)
     #margin = get_margin(token)
     margin = 100000
     mtm_target = margin * MTM_PERCENT
@@ -230,9 +232,13 @@ def run_strategy():
 
     symbols = {
         "buy_pe": get_symbol(expiry, strikes[0], "PE"),
+         print("buy_pe---->",buy_pe)
         "sell_pe": get_symbol(expiry, strikes[1], "PE"),
+         print("sell pe---->"sell_pe)
         "sell_ce": get_symbol(expiry, strikes[2], "CE"),
+         print("sell_ce---->",sell_ce)
         "buy_ce": get_symbol(expiry, strikes[3], "CE")
+        print("buy_ce---->",buy_ce)
     }
 
     logging.info(f"Selected symbols: {symbols}")
