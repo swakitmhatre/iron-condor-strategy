@@ -233,8 +233,8 @@ def place_order(jkey, symbol, qty, side):
             "uid": "FT053224",
             "actid": "FT053224",
             "exch": "NFO",
-            "tsym": "ACC-EQ",
-            "qty": "75",
+            "tsym": str(symbol),
+            "qty": str(qty),
             "prc": "0",
             "prd": "I-MIS",
             "trantype": SIDE,
@@ -242,7 +242,10 @@ def place_order(jkey, symbol, qty, side):
             "ret": "DAY"
     }
     try:
-        r = requests.post("https://api.flattrade.in/trade/placeOrder", headers={"Authorization": f"Bearer {token}"}, json=order)
+        jDataString=json.dumps(order)
+        payload = 'jData='+jDataString+'&jKey='+jKey;
+        #r = requests.post("https://api.flattrade.in/trade/placeOrder", headers={"Authorization": f"Bearer {token}"}, json=payload)
+        r = requests.post("https://api.flattrade.in/trade/placeOrder", json=payload)
         res = r.json()
         logging.info(f"{side} {symbol}: {res}")
     except Exception as e:
