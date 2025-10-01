@@ -168,31 +168,31 @@ def get_live_price(jKey, uid, symbol_token="26000",exch="NSE"):
         logging.error(f"Live price fetch failed: {e}")
         raise
 '''
-import requests, json
+def get_live_price(jKey, uid, scrip_code="26000"):
+    """
+    Fetch live price using Flattrade PiConnect GetQuotes API.
+    jKey = session token from /apitoken
+    uid  = client code (FTxxxxxx) [not always needed for GetQuotes]
+    scrip_code = e.g., 26000 for NIFTY index
+    """
+    import requests, json
 
-def get_live_price(jKey, uid, scrip_code="26000", exch="NFO", exch_type="D"):
-    """
-    Fetch live price using Flattrade GetQuotes API.
-    jKey = session token from apitoken call
-    uid  = client code (FTxxxxxx)
-    scrip_code = 26000 for NIFTY index
-    """
     try:
-        jData = {
-            "Exch": exch,
-            "ExchType": exch_type,
+        # jData must be a STRING (escaped JSON)
+        jData = json.dumps({
+            "Exch": "NFO",
+            "ExchType": "D",
             "ScripCode": str(scrip_code)
-        }
+        })
 
         payload = {
             "jKey": jKey,
-            "jData": json.dumps(jData)   # must be JSON string
+            "jData": jData
         }
 
         url = "https://piconnect.flattrade.in/PiConnectTP/GetQuotes"
         headers = {"Content-Type": "application/json"}
 
-        # Send as JSON
         response = requests.post(url, headers=headers, json=payload)
         data = response.json()
 
@@ -201,13 +201,12 @@ def get_live_price(jKey, uid, scrip_code="26000", exch="NFO", exch_type="D"):
         if data.get("stat") == "Ok" and "lp" in data:
             return float(data["lp"])
         else:
-            raise Exception(data.get("emsg", "Unknown error"))
+            print(f"[ERROR] Live price fetch failed: {data.get('emsg','Unknown error')}")
+            return None
 
     except Exception as e:
-        print(f"[ERROR] Live price fetch failed: {e}")
+        print(f"[ERROR] Exception while fetching live price: {e}")
         return None
-
-
 
 def get_pnl(token):
     try:
