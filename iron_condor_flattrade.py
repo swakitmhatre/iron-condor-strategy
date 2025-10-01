@@ -147,14 +147,19 @@ def get_live_price(jKey, uid, symbol_token="26000",exch="NSE"):
             "exch": exch,
             "token": str(symbol_token)
         }
-
+        '''
         payload = {
             "jData": json.dumps(jData),
             "jKey": jKey
         }
+        '''
+        jDataString=json.dumps(jData)
+        payload = `jData=${jDataString}&jKey=${jKey}`;
+        
+        headers = {"Content-Type": "application/json"}
         print("GetQuotes payload---->",payload)
         url = "https://piconnect.flattrade.in/PiConnectTP/GetQuotes"
-        response = requests.post(url, data=payload)
+        response = requests.post(url,heders,data=payload)
         data = response.json()
 
         print("ltp json data--->",data)
