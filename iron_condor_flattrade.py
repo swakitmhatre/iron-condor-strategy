@@ -228,7 +228,7 @@ def get_margin(token):
         logging.warning(f"Margin fetch failed: {e}")
         return 150000  # fallback default
 
-def place_order(jkey, symbol, qty, side):
+def place_order(jkey, symbol, qty, SIDE):
     order = {
             "uid": "FT053224",
             "actid": "FT053224",
