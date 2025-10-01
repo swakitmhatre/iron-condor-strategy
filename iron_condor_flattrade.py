@@ -287,7 +287,7 @@ def run_strategy():
     logging.info(f"Selected symbols: {symbols}")
 
     # Entry - Buy first
-    jKey=token
+    jkey=token
     place_order(jkey, symbols["buy_pe"], lot_size, "BUY")
     place_order(jkey, symbols["buy_ce"], lot_size, "BUY")
     place_order(jkey, symbols["sell_pe"], lot_size, "SELL")
