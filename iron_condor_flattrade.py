@@ -170,18 +170,14 @@ def get_live_price(jKey, uid, symbol_token="26000",exch="NSE"):
 '''
 import requests, json
 
-def get_live_price(jKey, uid, scrip_code="26000", exch="NSE", exch_type="D"):
+def get_live_price(jKey, uid, scrip_code="26000", exch="NFO", exch_type="D"):
     """
     Fetch live price using Flattrade GetQuotes API.
     jKey = session token from apitoken call
     uid  = client code (FTxxxxxx)
-    scrip_code = e.g. 26000 for NIFTY 50
-    exch = NSE / BSE
-    exch_type = C (cash), D (derivatives), U (currency)
+    scrip_code = 26000 for NIFTY index
     """
-
     try:
-        # jData MUST be a stringified JSON
         jData = {
             "Exch": exch,
             "ExchType": exch_type,
@@ -190,26 +186,27 @@ def get_live_price(jKey, uid, scrip_code="26000", exch="NSE", exch_type="D"):
 
         payload = {
             "jKey": jKey,
-            "jData": json.dumps(jData)   # <-- proper json string
+            "jData": json.dumps(jData)   # must be JSON string
         }
 
         url = "https://piconnect.flattrade.in/PiConnectTP/GetQuotes"
         headers = {"Content-Type": "application/json"}
 
-        response = requests.post(url, headers=headers, data=json.dumps(payload))
+        # Send as JSON
+        response = requests.post(url, headers=headers, json=payload)
         data = response.json()
 
         print("ltp json data--->", data)
 
-        if data.get("stat") == "Ok":
-            live_price = float(data["lp"])
-            return live_price
+        if data.get("stat") == "Ok" and "lp" in data:
+            return float(data["lp"])
         else:
-            raise Exception(f"Live price fetch failed: {data.get('emsg')}")
+            raise Exception(data.get("emsg", "Unknown error"))
 
     except Exception as e:
-        print(f"[ERROR] {e}")
+        print(f"[ERROR] Live price fetch failed: {e}")
         return None
+
 
 
 def get_pnl(token):
