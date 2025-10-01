@@ -133,7 +133,6 @@ def get_new_token():
         raise
         
 #incorret function argument mismatch     
-'''
 def get_live_price(jKey, uid, symbol_token="26000",exch="NSE"):
     """
     Fetches the live price for the given token using Flattrade GetQuotes API.
@@ -146,7 +145,7 @@ def get_live_price(jKey, uid, symbol_token="26000",exch="NSE"):
         jData = {
             "uid": uid,
             "exch": exch,
-            "token": symbol_token
+            "token": str(symbol_token)
         }
 
         payload = {
@@ -207,7 +206,7 @@ def get_live_price(jKey, uid, scrip_code="26000"):
     except Exception as e:
         print(f"[ERROR] Exception while fetching live price: {e}")
         return None
-
+'''
 def get_pnl(token):
     try:
         r = requests.get("https://api.flattrade.in/trade/pnl", headers={"Authorization": f"Bearer {token}"})
