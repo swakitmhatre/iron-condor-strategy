@@ -181,8 +181,7 @@ def get_margin(token):
         return 150000  # fallback default
 
 def place_order(jkey, symbol, qty, side):
-    order = 
-        {
+    order = {
             "uid": "FT053224",
             "actid": "FT053224",
             "exch": "NFO",
