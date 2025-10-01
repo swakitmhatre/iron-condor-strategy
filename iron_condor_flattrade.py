@@ -157,6 +157,8 @@ def get_live_price(jKey, uid, symbol_token="26000",exch="NFO"):
         response = requests.post(url, data=payload)
         data = response.json()
 
+        print("ltp json data--->",data)
+
         # The field may vary, but usually it's in data["lp"]
         live_price = float(data["lp"])
         return live_price
