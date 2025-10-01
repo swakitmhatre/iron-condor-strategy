@@ -149,7 +149,7 @@ def get_live_price(jKey, uid, symbol_token="26000",exch="NSE"):
         }
 
         payload = {
-            "jData": json.dumps(jData),
+            #"jData": jData,
             "jKey": jKey
         }
         print("GetQuotes payload---->",payload)
