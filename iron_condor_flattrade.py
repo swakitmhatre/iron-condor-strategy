@@ -232,13 +232,9 @@ def run_strategy():
 
     symbols = {
         "buy_pe": get_symbol(expiry, strikes[0], "PE"),
-         print("buy_pe---->",buy_pe)
         "sell_pe": get_symbol(expiry, strikes[1], "PE"),
-         print("sell pe---->"sell_pe)
         "sell_ce": get_symbol(expiry, strikes[2], "CE"),
-         print("sell_ce---->",sell_ce)
         "buy_ce": get_symbol(expiry, strikes[3], "CE")
-        print("buy_ce---->",buy_ce)
     }
 
     logging.info(f"Selected symbols: {symbols}")
