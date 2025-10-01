@@ -133,7 +133,7 @@ def get_new_token():
         raise
         
 #incorret function argument mismatch        
-def get_live_price(jKey, uid, exch="NFO", symbol_token):
+def get_live_price(jKey, uid, symbol_token,exch="NFO"):
     """
     Fetches the live price for the given token using Flattrade GetQuotes API.
     token = instrument token (not auth token)
