@@ -133,7 +133,7 @@ def get_new_token():
         raise
         
 #incorret function argument mismatch        
-def get_live_price(jKey, uid, symbol_token="26000",exch="NFO"):
+def get_live_price(jKey, uid, symbol_token="26000",exch="NSE"):
     """
     Fetches the live price for the given token using Flattrade GetQuotes API.
     token = instrument token (not auth token)
@@ -152,6 +152,22 @@ def get_live_price(jKey, uid, symbol_token="26000",exch="NFO"):
             "jData": json.dumps(jData),
             "jKey": jKey
         }
+        '''
+        #--------------------------------------
+        jData = {
+            "Exch": exch,
+            "ExchType": exch_type,
+            "ScripCode": str(symbol_token)
+        }
+
+        payload = {
+            "jKey": jKey,
+            "jData": json.dumps(jData)   # <-- proper json string
+        }
+
+        #------------------------------------------
+        '''
+        
 
         url = "https://piconnect.flattrade.in/PiConnectTP/GetQuotes"
         response = requests.post(url, data=payload)
