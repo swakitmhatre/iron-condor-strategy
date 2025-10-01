@@ -152,7 +152,7 @@ def get_live_price(jKey, uid, symbol_token="26000",exch="NSE"):
             "jData": json.dumps(jData),
             "jKey": jKey
         }
-       
+       prin(GetQuotes payload---->payload)
         url = "https://piconnect.flattrade.in/PiConnectTP/GetQuotes"
         response = requests.post(url, data=payload)
         data = response.json()
