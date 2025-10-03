@@ -260,12 +260,13 @@ def find_atm_strikes(price):
 def get_symbol(expiry, strike, opt_type):
     try:
         from datetime import datetime
+        year = datetime.now().year   # e.g. 2025
+        last_two = str(year)[-2:]
+        trading_symbol=UNDERLYING+expiry+str(strike)+str(last_two)+opt_type
+        print("UNDERLYING----->",trading_symbol)
         with open(SYMBOL_FILE) as f:
             for line in f:
-                year = datetime.now().year   # e.g. 2025
-                last_two = str(year)[-2:]
-                trading_symbol=UNDERLYING+expiry+str(strike)+str(last_two)+opt_type
-                print("UNDERLYING----->",trading_symbol)
+               
                 #if f"{UNDERLYING}{expiry}" in line and f"{strike}" in line  and "C" in line or "P" in line:
                 if f"{trading_symbol}" in line:
                     print("option--->",line)
