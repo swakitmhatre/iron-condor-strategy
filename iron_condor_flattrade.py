@@ -7,6 +7,7 @@ import pyotp
 import logging
 import hashlib
 from cryptography.fernet import Fernet
+from datetime import datetime, timedelta
 
 # ====== USER CONFIGURATION ======
 API_KEY = "8a321b48cc3a48d2b3f4d52c4eb719be"
@@ -275,6 +276,8 @@ def get_symbol(expiry, strike, opt_type):
         logging.error(f"Symbol lookup failed: {e}")
     return None
 
+
+
 def run_strategy():
     download_symbol_master()
     token = get_token()
@@ -285,7 +288,7 @@ def run_strategy():
     mtm_target = margin * MTM_PERCENT
     lot_size = 75 * LOT_MULTIPLIER
 
-    expiry = datetime.datetime.now().strftime("%y%b").upper()
+    expiry = datetime.datetime.now().strftime("%y%b%d").upper()
     print("expiry--->",expiry)
     strikes = find_atm_strikes(live_price)
     print("strikes------>",strikes)
