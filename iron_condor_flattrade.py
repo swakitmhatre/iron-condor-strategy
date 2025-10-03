@@ -236,26 +236,37 @@ def run_strategy():
 
     # Entry - Buy first
     jkey=token
+    entry_start = time.perf_counter()
     place_order(jkey, symbols["buy_pe"], lot_size, "B")
     place_order(jkey, symbols["buy_ce"], lot_size, "B")
     place_order(jkey, symbols["sell_pe"], lot_size, "S")
     place_order(jkey, symbols["sell_ce"], lot_size, "S")
 
+    entry_delay = round(time.perf_counter() - entry_start, 3)
+    entry_time = datetime.now()
+    logging.info(f"✅ ENTRY COMPLETE | Time = {entry_time} | Delay = {entry_delay}s")
     logging.info("Iron Condor entered. Monitoring MTM...")
+    
 
     while True:
         pnl = get_pnl(token)
+        logging.info(f"📈 MTM = ₹{pnl:.2f}")
         if pnl <= -mtm_target OR pnl >= mtm_target :
+            condition_met_time = datetime.now()
+            logging.info(f"🎯 TARGET HIT at {condition_met_time}")
+            # Exit - Sell legs first
+            place_order(jkey, symbols["sell_pe"], lot_size, "B")
+            place_order(jkey, symbols["sell_ce"], lot_size, "B")
+            time.sleep(0.01)
+            place_order(jkey, symbols["buy_pe"], lot_size, "S")
+            place_order(jkey, symbols["buy_ce"], lot_size, "S")
+            exit_time = datetime.now()
+            logging.info(f"🏁 Strategy Exit Time = {exit_time}")
+            logging.info("✅ All legs exited. Strategy complete.\n")
             logging.info(f"MTM target hit. Exiting... PnL: {pnl}")
             break
-        time.sleep(0.01)
+        time.sleep(0.025)
 
-    # Exit - Sell legs first
-    place_order(jkey, symbols["sell_pe"], lot_size, "B")
-    place_order(jkey, symbols["sell_ce"], lot_size, "B")
-    place_order(jkey, symbols["buy_pe"], lot_size, "S")
-    place_order(jkey, symbols["buy_ce"], lot_size, "S")
-    logging.info("All legs exited.")
-
+    
 if __name__ == "__main__":
     run_strategy()
