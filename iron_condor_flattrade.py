@@ -256,7 +256,7 @@ def place_order(jkey, symbol, qty, SIDE):
             "qty": str(qty),
             "prc": "0",
             "prd": "I-MIS",
-            "trantype": "BUY",
+            "trantype": SIDE,
             "prctyp": "MKT",
             "ret": "DAY"
         }
