@@ -238,7 +238,7 @@ def place_order(jkey, symbol, qty, SIDE):
             "tsym": str(symbol),
             "qty": str(qty),
             "prc": "0",
-            "prd": "I-MIS",
+            "prd": "IMIS",
             "trantype": SIDE,
             "prctyp": "MKT",
             "ret": "DAY"
@@ -255,7 +255,7 @@ def place_order(jkey, symbol, qty, SIDE):
             "tsym": str(symbol),
             "qty": str(qty),
             "prc": "0",
-            "prd": "I-MIS",
+            "prd": "IMIS",
             "trantype": SIDE,
             "prctyp": "MKT",
             "ret": "DAY"
