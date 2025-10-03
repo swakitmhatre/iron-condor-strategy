@@ -259,6 +259,7 @@ def find_atm_strikes(price):
 
 def get_symbol(expiry, strike, opt_type):
     try:
+        from datetime import datetime
         with open(SYMBOL_FILE) as f:
             for line in f:
                 year = datetime.now().year   # e.g. 2025
