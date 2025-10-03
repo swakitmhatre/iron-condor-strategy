@@ -246,7 +246,7 @@ def place_order(jkey, symbol, qty, SIDE):
         payload = 'jData='+jDataString+'&jKey='+jkey;
         print("order paylod---->",payload)
         #r = requests.post("https://api.flattrade.in/trade/placeOrder", headers={"Authorization": f"Bearer {token}"}, json=payload)
-        r = requests.post("https://api.flattrade.in/trade/placeOrder", json=payload)
+        r = requests.post("https://api.flattrade.in/trade/placeOrder", data=payload)
         res = r.json()
         logging.info(f"{side} {symbol}: {res}")
     except Exception as e:
