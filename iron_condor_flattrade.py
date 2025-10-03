@@ -255,7 +255,7 @@ def place_order(jkey, symbol, qty, SIDE):
                 "exch": "NFO",
                 "tsym": str(symbol),
                 "qty": "75",
-                "prc": "0",
+                "prc": str(qty),
                 "prd": "I-MIS",
                 "trantype": "BUY",
                 "prctyp": "MKT",
@@ -263,7 +263,7 @@ def place_order(jkey, symbol, qty, SIDE):
             }),
             "jKey": jkey  # session token from apitoken
             }
-            print("order paylod---->",payload)
+        print("order paylod---->",payload)
 
         #r = requests.post("https://api.flattrade.in/trade/placeOrder", headers={"Authorization": f"Bearer {token}"}, json=payload)
         r = requests.post("https://api.flattrade.in/trade/placeOrder", data=payload)
