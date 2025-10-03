@@ -294,7 +294,7 @@ def get_next_weekly_expiry():
     # Next week's Tuesday = this week's Tuesday + 7 days
     next_tuesday = this_tuesday + timedelta(days=7)
 
-    expiry_str = next_tuesday.strftime("%y%b%d").upper()  # format like 25OCT14
+    expiry_str = next_tuesday.strftime("%d%b%y").upper()  # format like 25OCT14
     return next_tuesday, expiry_str
 
 def run_strategy():
