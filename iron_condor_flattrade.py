@@ -7,7 +7,7 @@ import pyotp
 import logging
 import hashlib
 from cryptography.fernet import Fernet
-#from datetime import datetime, timedelta
+from datetime import datetime, timedelta
 
 # ====== USER CONFIGURATION ======
 API_KEY = "8a321b48cc3a48d2b3f4d52c4eb719be"
@@ -276,7 +276,26 @@ def get_symbol(expiry, strike, opt_type):
         logging.error(f"Symbol lookup failed: {e}")
     return None
 
+from datetime import datetime, timedelta
 
+def get_next_weekly_expiry():
+    today = datetime.now().date()
+    weekday = today.weekday()  # Monday=0, Tuesday=1, ..., Sunday=6
+
+    # Tuesday = weekday=1
+    days_to_tuesday = (1 - weekday) % 7
+    if days_to_tuesday == 0:
+        # today is Tuesday, so skip to *next* Tuesday
+        days_to_tuesday = 7
+
+    # Get this week's Tuesday
+    this_tuesday = today + timedelta(days=days_to_tuesday)
+
+    # Next week's Tuesday = this week's Tuesday + 7 days
+    next_tuesday = this_tuesday + timedelta(days=7)
+
+    expiry_str = next_tuesday.strftime("%y%b%d").upper()  # format like 25OCT14
+    return next_tuesday, expiry_str
 
 def run_strategy():
     download_symbol_master()
@@ -288,8 +307,9 @@ def run_strategy():
     mtm_target = margin * MTM_PERCENT
     lot_size = 75 * LOT_MULTIPLIER
 
-    expiry = datetime.datetime.now().strftime("%y%b%d").upper()
-    print("expiry--->",expiry)
+    #expiry = datetime.datetime.now().strftime("%y%b%d").upper()
+    expiry_date, expiry_symbol = get_next_weekly_expiry()
+    print("expiry--->",expiry_symbol)
     strikes = find_atm_strikes(live_price)
     print("strikes------>",strikes)
 
