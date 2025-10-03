@@ -215,8 +215,17 @@ def get_live_price(jKey, uid, scrip_code="26000"):
 '''
 def get_pnl(token):
     try:
-        r = requests.get("https://api.flattrade.in/trade/pnl", headers={"Authorization": f"Bearer {token}"})
-        return float(r.json()["net_pnl"])
+        jData_dict = {
+            "uid": "FT053224",
+            "actid": "FT053224",
+        }
+        payload = f"jData={json.dumps(jData_dict)}&jKey={jkey}"
+
+        headers = {
+            "Content-Type": "application/json"
+        }
+        r = requests.get("https://piconnect.flattrade.in/PiConnectTP/Limits", data=payload,headers=headers)
+        return float(r.json()["uzpnl_d_i"])
     except Exception as e:
         logging.warning(f"PNL fetch failed: {e}")
         return 0.0
@@ -351,16 +360,16 @@ def run_strategy():
 
     while True:
         pnl = get_pnl(token)
-        if pnl <= -mtm_target:
+        if pnl <= -mtm_target OR pnl >= mtm_target :
             logging.info(f"MTM target hit. Exiting... PnL: {pnl}")
             break
-        time.sleep(10)
+        time.sleep(0.1)
 
     # Exit - Sell legs first
-    place_order(token, symbols["sell_pe"], lot_size, "BUY")
-    place_order(token, symbols["sell_ce"], lot_size, "BUY")
-    place_order(token, symbols["buy_pe"], lot_size, "SELL")
-    place_order(token, symbols["buy_ce"], lot_size, "SELL")
+    place_order(jkey, symbols["sell_pe"], lot_size, "B")
+    place_order(jkey, symbols["sell_ce"], lot_size, "B")
+    place_order(jkey, symbols["buy_pe"], lot_size, "S")
+    place_order(jkey, symbols["buy_ce"], lot_size, "S")
     logging.info("All legs exited.")
 
 if __name__ == "__main__":
