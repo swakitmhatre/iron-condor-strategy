@@ -271,7 +271,7 @@ def place_order(jkey, symbol, qty, SIDE):
         r = requests.post("https://piconnect.flattrade.in/PiConnectTP/PlaceOrder", data=payload,headers=headers)
         print("Order API raw response:", r.text)
         res = r.json()
-        logging.info(f"{side} {symbol}: {res}")
+        logging.info(f"{SIDE} {symbol}: {res}")
     except Exception as e:
         logging.error(f"Order failed: {e}")
 
@@ -342,10 +342,10 @@ def run_strategy():
 
     # Entry - Buy first
     jkey=token
-    place_order(jkey, symbols["buy_pe"], lot_size, "BUY")
-    place_order(jkey, symbols["buy_ce"], lot_size, "BUY")
-    place_order(jkey, symbols["sell_pe"], lot_size, "SELL")
-    place_order(jkey, symbols["sell_ce"], lot_size, "SELL")
+    place_order(jkey, symbols["buy_pe"], lot_size, "B")
+    place_order(jkey, symbols["buy_ce"], lot_size, "B")
+    place_order(jkey, symbols["sell_pe"], lot_size, "S")
+    place_order(jkey, symbols["sell_ce"], lot_size, "S")
 
     logging.info("Iron Condor entered. Monitoring MTM...")
 
