@@ -308,8 +308,8 @@ def run_strategy():
     lot_size = 75 * LOT_MULTIPLIER
 
     #expiry = datetime.datetime.now().strftime("%y%b%d").upper()
-    expiry_date, expiry_symbol = get_next_weekly_expiry()
-    print("expiry--->",expiry_symbol)
+    expiry_date, expiry = get_next_weekly_expiry()
+    print("expiry--->",expiry)
     strikes = find_atm_strikes(live_price)
     print("strikes------>",strikes)
 
