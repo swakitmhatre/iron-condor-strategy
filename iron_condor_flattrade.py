@@ -261,7 +261,7 @@ def get_symbol(expiry, strike, opt_type):
     try:
         with open(SYMBOL_FILE) as f:
             for line in f:
-                print("UNDERLYING----->",UNDERLYING)
+                print("UNDERLYING----->",UNDERLYING,expiry,strike,"C")
                 if f"{UNDERLYING}{expiry}" in line and f"{strike}" in line  and "C" in line or "P" in line:
                     print("option--->",line)
                     return line.split(",")[4]
