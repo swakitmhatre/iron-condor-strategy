@@ -13,9 +13,7 @@ from datetime import datetime, timedelta
 API_KEY = "8a321b48cc3a48d2b3f4d52c4eb719be"
 API_SECRET = "2025.c633e7fdb18949f391b4677ba9132e691f2d6c6dcd1ca276"
 CLIENT_ID = "FT053224"
-PASSWORD = "Mona@1969"
-VC = "your_vc"           # example: "FA12345"
-IMEI = "your_imei"       # example: "abc123xyz"
+PASSWORD = "Swakit@123"
 LOT_MULTIPLIER = 1
 MTM_PERCENT = 0.0025     # 0.25%
 UNDERLYING = "NIFTY"
@@ -55,52 +53,7 @@ def get_token():
     except:
         pass
     return get_new_token()
-'''
-def get_new_token():
-    totp_secret = decrypt_totp()
-    otp = pyotp.TOTP(totp_secret).now()
-    print("otp------>",otp)
-    # Step 1: Get request_code
-    session_payload = {
-        "api_key": API_KEY,
-        "client_code": CLIENT_ID,
-        "password": PASSWORD,
-        "totp": otp
-    }
 
-    try:
-        session_resp = requests.post("https://authapi.flattrade.in/trade/session", json=session_payload)
-        session_data = session_resp.json()
-
-        request_code = session_data.get("request_code")
-        if not request_code:
-            raise Exception(f"Failed to get request_code: {session_data}")
-
-        # Step 2: Get token using request_code
-        token_payload = {
-            "api_key": API_KEY,
-            "request_code": request_code,
-            "vc": VC,
-            "imei": IMEI
-        }
-
-        token_resp = requests.post("https://authapi.flattrade.in/trade/apitoken", json=token_payload)
-        token_data = token_resp.json()
-        print("token_data---->",token_data)
-
-        token = token_data.get("token")
-        if token:
-            with open(TOKEN_FILE, "w") as f:
-                json.dump({"token": token, "timestamp": time.time()}, f)
-            logging.info("New token generated.")
-            return token
-        else:
-            raise Exception(f"Token generation failed: {token_data}")
-
-    except Exception as e:
-        logging.error(f"Token error: {e}")
-        raise
-'''
 def generate_hash(api_key, request_token, api_secret):
     return hashlib.sha256(f"{api_key}{request_token}{api_secret}".encode()).hexdigest()
     
@@ -117,7 +70,7 @@ def get_new_token():
     }
 
     try:
-        print("payload---->",payload)
+        #print("payload---->",payload)
         r = requests.post("https://authapi.flattrade.in/trade/apitoken", json=payload)
         r.raise_for_status()
         res = r.json()
@@ -148,23 +101,15 @@ def get_live_price(jKey, uid, symbol_token="26000",exch="NSE"):
             "exch": exch,
             "token": str(symbol_token)
         }
-        '''
-        payload = {
-            "jData": json.dumps(jData),
-            "jKey": jKey
-        }
-        '''
         jDataString=json.dumps(jData)
         payload = 'jData='+jDataString+'&jKey='+jKey;
         
         headers = {"Content-Type": "application/json"}
-        print("GetQuotes payload---->",payload)
+        #print("GetQuotes payload---->",payload)
         url = "https://piconnect.flattrade.in/PiConnectTP/GetQuotes"
         response = requests.post(url,data=payload)
         data = response.json()
-
         print("ltp json data--->",data)
-
         # The field may vary, but usually it's in data["lp"]
         live_price = float(data["lp"])
         return live_price
@@ -172,47 +117,7 @@ def get_live_price(jKey, uid, symbol_token="26000",exch="NSE"):
     except Exception as e:
         logging.error(f"Live price fetch failed: {e}")
         raise
-'''
-def get_live_price(jKey, uid, scrip_code="26000"):
-    """
-    Fetch live price using Flattrade PiConnect GetQuotes API.
-    jKey = session token from /apitoken
-    uid  = client code (FTxxxxxx) [not always needed for GetQuotes]
-    scrip_code = e.g., 26000 for NIFTY index
-    """
-    import requests, json
 
-    try:
-        # jData must be a STRING (escaped JSON)
-        jData = json.dumps({
-            "Exch": "NFO",
-            "ExchType": "D",
-            "ScripCode": str(scrip_code)
-        })
-
-        payload = {
-            "jKey": jKey,
-            "jData": jData
-        }
-
-        url = "https://piconnect.flattrade.in/PiConnectTP/GetQuotes"
-        headers = {"Content-Type": "application/json"}
-
-        response = requests.post(url, headers=headers, json=payload)
-        data = response.json()
-
-        print("ltp json data--->", data)
-
-        if data.get("stat") == "Ok" and "lp" in data:
-            return float(data["lp"])
-        else:
-            print(f"[ERROR] Live price fetch failed: {data.get('emsg','Unknown error')}")
-            return None
-
-    except Exception as e:
-        print(f"[ERROR] Exception while fetching live price: {e}")
-        return None
-'''
 def get_pnl(token):
     try:
         jData_dict = {
@@ -239,23 +144,6 @@ def get_margin(token):
         return 150000  # fallback default
 
 def place_order(jkey, symbol, qty, SIDE):
-    '''
-    order = {
-            "uid": "FT053224",
-            "actid": "FT053224",
-            "exch": "NFO",
-            "tsym": str(symbol),
-            "qty": str(qty),
-            "prc": "0",
-            "prd": "IMIS",
-            "trantype": SIDE,
-            "prctyp": "MKT",
-            "ret": "DAY"
-    }
-    jDataString=json.dumps(order)
-    payload = 'jData='+jDataString+'&jKey='+jkey;
-    print("order paylod---->",payload)
-    '''
     try:
         jData_dict = {
             "uid": "FT053224",
@@ -291,20 +179,17 @@ def find_atm_strikes(price):
 def get_symbol(expiry, strike, opt_type):
     try:
         trading_symbol=UNDERLYING+expiry+opt_type+str(strike)
-        print("UNDERLYING----->",trading_symbol)
+        #Print("UNDERLYING----->",trading_symbol)
         with open(SYMBOL_FILE) as f:
             for line in f:
-               
                 #if f"{UNDERLYING}{expiry}" in line and f"{strike}" in line  and "C" in line or "P" in line:
                 if f"{trading_symbol}" in line:
-                    print("option--->",line)
+                    #print("option--->",line)
                     return line.split(",")[4]
     except Exception as e:
         logging.error(f"Symbol lookup failed: {e}")
     return None
-
-from datetime import datetime, timedelta
-
+    
 def get_next_weekly_expiry():
     today = datetime.now().date()
     weekday = today.weekday()  # Monday=0, Tuesday=1, ..., Sunday=6
@@ -363,7 +248,7 @@ def run_strategy():
         if pnl <= -mtm_target OR pnl >= mtm_target :
             logging.info(f"MTM target hit. Exiting... PnL: {pnl}")
             break
-        time.sleep(0.1)
+        time.sleep(0.01)
 
     # Exit - Sell legs first
     place_order(jkey, symbols["sell_pe"], lot_size, "B")
