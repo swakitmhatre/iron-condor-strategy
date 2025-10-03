@@ -261,7 +261,9 @@ def get_symbol(expiry, strike, opt_type):
     try:
         with open(SYMBOL_FILE) as f:
             for line in f:
-                print("UNDERLYING----->",UNDERLYING,expiry,strike,"C")
+                year = datetime.now().year   # e.g. 2025
+                last_two = str(year)[-2:]
+                print("UNDERLYING----->",str(UNDERLYING+expiry+strike+last_two+opt_type))
                 if f"{UNDERLYING}{expiry}" in line and f"{strike}" in line  and "C" in line or "P" in line:
                     print("option--->",line)
                     return line.split(",")[4]
@@ -285,10 +287,10 @@ def run_strategy():
     print("strikes------>",strikes)
 
     symbols = {
-        "buy_pe": get_symbol(expiry, strikes[0], "PE"),
-        "sell_pe": get_symbol(expiry, strikes[1], "PE"),
-        "sell_ce": get_symbol(expiry, strikes[2], "CE"),
-        "buy_ce": get_symbol(expiry, strikes[3], "CE")
+        "buy_pe": get_symbol(expiry, strikes[0], "P"),
+        "sell_pe": get_symbol(expiry, strikes[1], "P"),
+        "sell_ce": get_symbol(expiry, strikes[2], "C"),
+        "buy_ce": get_symbol(expiry, strikes[3], "C")
     }
 
     logging.info(f"Selected symbols: {symbols}")
