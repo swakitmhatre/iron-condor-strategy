@@ -274,7 +274,7 @@ def run_strategy():
     #margin = get_margin(token)
     margin = 100000
     mtm_target = margin * MTM_PERCENT
-    lot_size = 50 * LOT_MULTIPLIER
+    lot_size = 75 * LOT_MULTIPLIER
 
     expiry = datetime.datetime.now().strftime("%y%b").upper()
     print("expiry--->",expiry)
