@@ -260,7 +260,7 @@ def find_atm_strikes(price):
 
 def get_symbol(expiry, strike, opt_type):
     try:
-        trading_symbol=UNDERLYING+expiry+str(strike)+opt_type+str(last_two)
+        trading_symbol=UNDERLYING+expiry+opt_type+str(strike)
         print("UNDERLYING----->",trading_symbol)
         with open(SYMBOL_FILE) as f:
             for line in f:
