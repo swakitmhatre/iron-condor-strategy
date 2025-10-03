@@ -248,25 +248,27 @@ def place_order(jkey, symbol, qty, SIDE):
     print("order paylod---->",payload)
     '''
     try:
-        payload = {
-            "jData": json.dumps({
-                "uid": "FT053224",
-                "actid": "FT053224",
-                "exch": "NFO",
-                "tsym": str(symbol),
-                "qty": "75",
-                "prc": str(qty),
-                "prd": "I-MIS",
-                "trantype": "BUY",
-                "prctyp": "MKT",
-                "ret": "DAY"
-            }),
-            "jKey": jkey  # session token from apitoken
-            }
+        jData_dict = {
+            "uid": "FT053224",
+            "actid": "FT053224",
+            "exch": "NFO",
+            "tsym": str(symbol),
+            "qty": str(qty),
+            "prc": "0",
+            "prd": "I-MIS",
+            "trantype": "BUY",
+            "prctyp": "MKT",
+            "ret": "DAY"
+        }
+        payload = f"jData={json.dumps(jData_dict)}&jKey={jkey}"
+
+        headers = {
+            "Content-Type": "application/json"
+        }
         print("order paylod---->",payload)
 
         #r = requests.post("https://api.flattrade.in/trade/placeOrder", headers={"Authorization": f"Bearer {token}"}, json=payload)
-        r = requests.post("https://api.flattrade.in/trade/placeOrder", data=payload)
+        r = requests.post("https://api.flattrade.in/trade/placeOrder", data=payload,headers=headers)
         print("Order API raw response:", r.text)
         res = r.json()
         logging.info(f"{side} {symbol}: {res}")
