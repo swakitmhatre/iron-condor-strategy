@@ -246,7 +246,8 @@ def place_order(jkey, symbol, qty, SIDE):
         payload = 'jData='+jDataString+'&jKey='+jkey;
         print("order paylod---->",payload)
         #r = requests.post("https://api.flattrade.in/trade/placeOrder", headers={"Authorization": f"Bearer {token}"}, json=payload)
-        r = requests.post("https://api.flattrade.in/trade/placeOrder", data=payload)
+        r = requests.post("https://api.flattrade.in/trade/placeOrder",header="Content-Type: application/json", data=payload)
+        print("Order API raw response:", r.text)
         res = r.json()
         logging.info(f"{side} {symbol}: {res}")
     except Exception as e:
@@ -261,7 +262,7 @@ def get_symbol(expiry, strike, opt_type):
         with open(SYMBOL_FILE) as f:
             for line in f:
                 if f"{UNDERLYING}{expiry}" in line and f"{strike}" in line  and "C" in line or "P" in line:
-                    return line.split(",")[1]
+                    return line.split(",")[4]
     except Exception as e:
         logging.error(f"Symbol lookup failed: {e}")
     return None
