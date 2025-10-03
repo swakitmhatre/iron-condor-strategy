@@ -263,6 +263,7 @@ def place_order(jkey, symbol, qty, SIDE):
             }),
             "jKey": jkey  # session token from apitoken
             }
+            print("order paylod---->",payload)
 
         #r = requests.post("https://api.flattrade.in/trade/placeOrder", headers={"Authorization": f"Bearer {token}"}, json=payload)
         r = requests.post("https://api.flattrade.in/trade/placeOrder", data=payload)
