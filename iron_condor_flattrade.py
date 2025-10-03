@@ -262,6 +262,7 @@ def get_symbol(expiry, strike, opt_type):
         with open(SYMBOL_FILE) as f:
             for line in f:
                 if f"{UNDERLYING}{expiry}" in line and f"{strike}" in line  and "C" in line or "P" in line:
+                    print("option--->",line)
                     return line.split(",")[4]
     except Exception as e:
         logging.error(f"Symbol lookup failed: {e}")
