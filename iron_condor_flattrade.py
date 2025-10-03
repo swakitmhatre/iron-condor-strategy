@@ -230,6 +230,7 @@ def get_margin(token):
         return 150000  # fallback default
 
 def place_order(jkey, symbol, qty, SIDE):
+    '''
     order = {
             "uid": "FT053224",
             "actid": "FT053224",
@@ -246,6 +247,22 @@ def place_order(jkey, symbol, qty, SIDE):
         jDataString=json.dumps(order)
         payload = 'jData='+jDataString+'&jKey='+jkey;
         print("order paylod---->",payload)
+    '''
+        payload = {
+            "jData": json.dumps({
+                "uid": "FT053224",
+                "actid": "FT053224",
+                "exch": "NFO",
+                "tsym": str(symbol),
+                "qty": str(qty),
+                "prc": "0",
+                "prd": "I-MIS",
+                "trantype": "BUY",
+                "prctyp": "MKT",
+                "ret": "DAY"
+            }),
+            "jKey": jkey  # session token from apitoken
+        }
         #r = requests.post("https://api.flattrade.in/trade/placeOrder", headers={"Authorization": f"Bearer {token}"}, json=payload)
         r = requests.post("https://api.flattrade.in/trade/placeOrder", data=payload)
         print("Order API raw response:", r.text)
