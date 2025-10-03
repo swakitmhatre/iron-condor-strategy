@@ -253,7 +253,7 @@ def place_order(jkey, symbol, qty, SIDE):
                 "uid": "FT053224",
                 "actid": "FT053224",
                 "exch": "NFO",
-                "tsym": "NIFTY14OCT25P24250",
+                "tsym": str(symbol),
                 "qty": "75",
                 "prc": "0",
                 "prd": "I-MIS",
