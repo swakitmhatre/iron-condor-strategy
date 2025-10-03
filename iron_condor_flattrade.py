@@ -246,7 +246,7 @@ def place_order(jkey, symbol, qty, SIDE):
         payload = 'jData='+jDataString+'&jKey='+jkey;
         print("order paylod---->",payload)
         #r = requests.post("https://api.flattrade.in/trade/placeOrder", headers={"Authorization": f"Bearer {token}"}, json=payload)
-        r = requests.post("https://api.flattrade.in/trade/placeOrder",header="Content-Type: application/json", data=payload)
+        r = requests.post("https://api.flattrade.in/trade/placeOrder", data=payload)
         print("Order API raw response:", r.text)
         res = r.json()
         logging.info(f"{side} {symbol}: {res}")
