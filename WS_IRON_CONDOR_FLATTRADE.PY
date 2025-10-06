@@ -164,7 +164,7 @@ def start_ws():
     url = "wss://piconnect.flattrade.in/PiConnectWSTp/"
     ws = websocket.WebSocketApp(
         url,
-        header=[f"jKey: {JKEY}"],
+        header=[f"Authorization: {JKEY}"],
         on_message=on_message,
         on_close=lambda ws, code, msg: logging.warning(f"WebSocket closed: {msg}"),
         on_error=lambda ws, err: logging.error(f"WebSocket error: {err}")
@@ -172,27 +172,27 @@ def start_ws():
 
     def on_open(ws):
         logging.info("WebSocket connected ✅")
+        time.sleep(1.5)  # Give connection a moment to stabilize
 
-    for leg in IRON_CONDOR_LEGS:
-        #token = get_token_number(leg["tsym"])
-        token = leg["tsym"]
-        if token:
-            sub_msg = {"t": "t", "k": f"NFO|{token}"}
-            ws.send(json.dumps(sub_msg))
-            logging.info(f"Subscribed: {leg['tsym']} ({token})")
-        else:
-            logging.warning(f"Skipping {leg['tsym']} - token not found")
+        for leg in IRON_CONDOR_LEGS:
+            token = get_token_number(leg["tsym"])
+            if token:
+                sub_msg = {"t": "t", "k": f"NFO|{token}"}
+                ws.send(json.dumps(sub_msg))
+                logging.info(f"Subscribed: {leg['tsym']} ({token})")
+            else:
+                logging.warning(f"Skipping {leg['tsym']} - token not found")
 
-    # Keepalive ping every 20s
-    def ping_loop():
-        while True:
-            try:
-                ws.send('{"t":"h"}')
-                time.sleep(20)
-            except Exception:
-                break
+        # Keepalive ping
+        def ping_loop():
+            while True:
+                try:
+                    ws.send('{"t":"h"}')
+                    time.sleep(20)
+                except Exception:
+                    break
 
-    threading.Thread(target=ping_loop, daemon=True).start()
+        threading.Thread(target=ping_loop, daemon=True).start()
 
     ws.on_open = on_open
 
@@ -201,7 +201,7 @@ def start_ws():
             ws.run_forever(ping_interval=30, ping_timeout=10)
         except Exception as e:
             logging.error(f"WebSocket crashed, reconnecting... {e}")
-        time.sleep(5)  # Wait before reconnect
+            time.sleep(5)
 
 
 if __name__ == "__main__":
