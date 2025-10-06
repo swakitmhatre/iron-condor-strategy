@@ -9,7 +9,7 @@ import hashlib
 from cryptography.fernet import Fernet
 from datetime import datetime, timedelta
 
-import websocketcket
+import websocket
 import requests
 import logging
 
