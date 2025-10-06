@@ -151,7 +151,7 @@ def on_message(ws, message):
 
 def start_ws():
     JKEY = get_token()
-    url = "wss://piconnect.flattrade.in/PiConnectWS/"
+    url = "wss://piconnect.flattrade.in/PiConnectWSTp/"
     ws = websocket.WebSocketApp(
         url,
         header=[f"jKey: {JKEY}"],
