@@ -156,6 +156,7 @@ def start_ws():
     
     while True:
         try:
+            print("forever")
             ws.run_forever(ping_interval=30, ping_timeout=10)
         except Exception as e:
             logging.error(f"WebSocket crashed, reconnecting: {e}")
