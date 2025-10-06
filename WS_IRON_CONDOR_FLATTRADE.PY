@@ -9,6 +9,11 @@ import hashlib
 from cryptography.fernet import Fernet
 from datetime import datetime, timedelta
 
+import websocketcket
+import requests
+import logging
+
+
 # ====== USER CONFIGURATION ======
 API_KEY = "8a321b48cc3a48d2b3f4d52c4eb719be"
 API_SECRET = "2025.c633e7fdb18949f391b4677ba9132e691f2d6c6dcd1ca276"
