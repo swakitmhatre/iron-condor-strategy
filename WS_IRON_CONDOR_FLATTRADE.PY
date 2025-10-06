@@ -174,7 +174,8 @@ def start_ws():
         logging.info("WebSocket connected ✅")
 
     for leg in IRON_CONDOR_LEGS:
-        token = get_token_number(leg["tsym"])
+        #token = get_token_number(leg["tsym"])
+        token = leg["tsym"]
         if token:
             sub_msg = {"t": "t", "k": f"NFO|{token}"}
             ws.send(json.dumps(sub_msg))
