@@ -1,124 +1,86 @@
-import base64
 import requests
 import json
 import time
-import datetime
-import pyotp
 import logging
 import hashlib
-from cryptography.fernet import Fernet
-from datetime import datetime, timedelta
-
-import websocket
-import requests
-import logging
 import threading
-
+import websocket
 
 # ====== USER CONFIGURATION ======
 API_KEY = "8a321b48cc3a48d2b3f4d52c4eb719be"
 API_SECRET = "2025.c633e7fdb18949f391b4677ba9132e691f2d6c6dcd1ca276"
 UID = "FT053224"
-ACT_ID="FT053224"
-PASSWORD = "Swakit@123"
-LOT_MULTIPLIER = 1
-MTM_PERCENT = 0.0025     # 0.25%
-UNDERLYING = "NIFTY"
+ACT_ID = "FT053224"
 BASE_URL = "https://piconnect.flattrade.in/PiConnectTP/"
 
-LOT_SIZE = 75  # NIFTY lot size
+LOT_SIZE = 75
 TARGET_PROFIT = 10
-STOP_LOSS     = -10
+STOP_LOSS = -10
 
-# Example Iron Condor legs with entry price (fetched when order is placed)
+# Iron Condor legs: tsym is token from Flattrade symbol master
 IRON_CONDOR_LEGS = [
     {"tsym": "42632", "side": "B", "entry": 15.95},
     {"tsym": "42705", "side": "B", "entry": 10.0},
     {"tsym": "42644", "side": "S", "entry": 21.45},
     {"tsym": "42695", "side": "S", "entry": 18.0},
 ]
-#42632=NIFTY14OCT25P24350
-#42705=NIFTY14OCT25C25450
-#42644=NIFTY14OCT25P24450
-#42695=NIFTY14OCT25C25350
-# ===========================================================
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 TOKEN_FILE = "token.txt"
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 
-#==============token generation process code=================
-def get_token():
-    try:
-        with open(TOKEN_FILE, "r") as f:
-            data = json.load(f)
-        if time.time() - data["timestamp"] < 23 * 3600:
-            print("saved token---->",data["token"])
-            return data["token"]
-    except:
-        pass
-    return get_new_token()
-
+# ====== TOKEN MANAGEMENT ======
 def generate_hash(api_key, request_token, api_secret):
     return hashlib.sha256(f"{api_key}{request_token}{api_secret}".encode()).hexdigest()
 
 def get_new_token():
     print("1. Open the following URL in your browser and log in:")
     print(f"https://auth.flattrade.in/?app_key={API_KEY}")
-    print("\n2. After login, copy the 'request_code' from the redirect URL.")
-    request_code = input("Enter request_code: ").strip()
+    request_code = input("2. Enter request_code from redirect URL: ").strip()
     hashed_secret = generate_hash(API_KEY, request_code, API_SECRET)
-    payload = {
-        "api_key": API_KEY,
-        "request_code": request_code,
-        "api_secret": hashed_secret
-    }
+    payload = {"api_key": API_KEY, "request_code": request_code, "api_secret": hashed_secret}
+    r = requests.post("https://authapi.flattrade.in/trade/apitoken", json=payload)
+    r.raise_for_status()
+    token = r.json().get("token")
+    if token:
+        with open(TOKEN_FILE, "w") as f:
+            json.dump({"token": token, "timestamp": time.time()}, f)
+        logging.info("✅ New token generated and saved.")
+        return token
+    raise Exception(f"Token generation failed: {r.text}")
+
+def get_token():
     try:
-        #print("payload---->",payload)
-        r = requests.post("https://authapi.flattrade.in/trade/apitoken", json=payload)
-        r.raise_for_status()
-        res = r.json()
-        token = res.get("token")
-        if token:
-            with open(TOKEN_FILE, "w") as f:
-                json.dump({"token": token, "timestamp": time.time()}, f)
-            logging.info("✅ New token generated and saved.")
-            return token
-        else:
-            raise Exception(f"❌ Token generation failed: {res}")
-    except Exception as e:
-        logging.error(f"Token error: {e}")
-        raise
+        with open(TOKEN_FILE, "r") as f:
+            data = json.load(f)
+        if time.time() - data["timestamp"] < 23 * 3600:
+            logging.info("Using saved token")
+            return data["token"]
+    except:
+        pass
+    return get_new_token()
 
-#==========token generation process code ends here========
-
-# Store LTPs
+# ====== MTM CALCULATION ======
 ltp_map = {}
 
 def calc_mtm():
-    """Calculate MTM from LTPs vs entry price"""
     pnl = 0
     for leg in IRON_CONDOR_LEGS:
         tsym = leg["tsym"]
         if tsym not in ltp_map:
             continue
         entry = leg["entry"]
-        ltp   = ltp_map[tsym]
-        print("tsym and ltp----->",tsym,"  ",ltp)
-        qty   = LOT_SIZE
-        if leg["side"] == "B":   # Buy leg
-            pnl += (ltp - entry) * qty
-        else:  # Sell leg
-            pnl += (entry - ltp) * qty
+        ltp = ltp_map[tsym]
+        qty = LOT_SIZE
+        pnl += (ltp - entry) * qty if leg["side"] == "B" else (entry - ltp) * qty
     return pnl
 
-
-def exit_iron_condor():
-    """Exit all 4 legs of iron condor"""
+# ====== EXIT FUNCTION ======
+def exit_iron_condor(JKEY):
     for leg in IRON_CONDOR_LEGS:
         trantype = "S" if leg["side"] == "B" else "B"
         payload = {
             "uid": UID,
-            "actid": ACTID,
+            "actid": ACT_ID,
             "exch": "NFO",
             "tsym": leg["tsym"],
             "qty": str(LOT_SIZE),
@@ -133,31 +95,25 @@ def exit_iron_condor():
         logging.info(f"Exit {trantype} {leg['tsym']}: {r.text}")
     logging.info("Iron Condor exited ✅")
 
-
+# ====== WEBSOCKET HANDLERS ======
 def on_message(ws, message):
     global ltp_map
     try:
         data = json.loads(message)
-        print("data----->",data)
-        # Flattrade tick messages contain 't' == 'tk'
+        # Tick messages have type 'tk'
         if data.get("t") == "tk":
             token = data.get("tk")
             ltp = float(data.get("lp", 0))
-            tsym = token  # or maintain mapping token→symbol if needed
-            ltp_map[tsym] = ltp
-
+            ltp_map[token] = ltp
             pnl = calc_mtm()
-            print("pnl---->",pnl)
-            logging.info(f"LTP update {tsym}: {ltp}, MTM: {pnl}")
+            logging.info(f"LTP update {token}: {ltp}, MTM: {pnl}")
 
             if pnl >= TARGET_PROFIT or pnl <= STOP_LOSS:
                 logging.info("Target/Stoploss hit. Exiting Iron Condor...")
-                # exit_iron_condor()
                 ws.close()
-
+                exit_iron_condor(ws.jKey)  # pass token
     except Exception as e:
-        logging.error(f"Error in message handler: {e}")
-
+        logging.error(f"Error in message: {e}")
 
 def start_ws():
     JKEY = get_token()
@@ -166,32 +122,28 @@ def start_ws():
         url,
         header=[f"Authorization: {JKEY}"],
         on_message=on_message,
-        on_close=lambda ws, code, msg: logging.warning(f"WebSocket closed: {msg}"),
-        on_error=lambda ws, err: logging.error(f"WebSocket error: {err}")
+        on_error=lambda ws, err: logging.error(f"WebSocket error: {err}"),
+        on_close=lambda ws, code, msg: logging.warning(f"WebSocket closed: {msg}")
     )
 
     def on_open(ws):
         logging.info("WebSocket connected ✅")
-        time.sleep(1.5)  # Give connection a moment to stabilize
-
+        ws.jKey = JKEY  # attach token to ws
+        # Subscribe to all legs
         for leg in IRON_CONDOR_LEGS:
             token = leg["tsym"]
-            if token:
-                sub_msg = {"t": "t", "k": f"NFO|{token}"}
-                ws.send(json.dumps(sub_msg))
-                logging.info(f"Subscribed: {leg['tsym']} ({token})")
-            else:
-                logging.warning(f"Skipping {leg['tsym']} - token not found")
+            sub_msg = {"t": "t", "k": f"NFO|{token}"}
+            ws.send(json.dumps(sub_msg))
+            logging.info(f"Subscribed: {token}")
 
-        # Keepalive ping
+        # Keepalive ping every 20s
         def ping_loop():
             while True:
                 try:
                     ws.send('{"t":"h"}')
                     time.sleep(20)
-                except Exception:
+                except:
                     break
-
         threading.Thread(target=ping_loop, daemon=True).start()
 
     ws.on_open = on_open
@@ -200,9 +152,8 @@ def start_ws():
         try:
             ws.run_forever(ping_interval=30, ping_timeout=10)
         except Exception as e:
-            logging.error(f"WebSocket crashed, reconnecting... {e}")
+            logging.error(f"WebSocket crashed, reconnecting: {e}")
             time.sleep(5)
-
 
 if __name__ == "__main__":
     logging.info("Starting Iron Condor MTM Tracker (WebSocket only)...")
