@@ -175,7 +175,7 @@ def start_ws():
         time.sleep(1.5)  # Give connection a moment to stabilize
 
         for leg in IRON_CONDOR_LEGS:
-            token = get_token_number(leg["tsym"])
+            token = leg["tsym"]
             if token:
                 sub_msg = {"t": "t", "k": f"NFO|{token}"}
                 ws.send(json.dumps(sub_msg))
