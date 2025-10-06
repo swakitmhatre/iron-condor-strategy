@@ -153,14 +153,14 @@ def start_ws():
         threading.Thread(target=ping_loop, daemon=True).start()
         '''
     ws.on_open = on_open
-
+    '''
     while True:
         try:
             ws.run_forever(ping_interval=30, ping_timeout=10)
         except Exception as e:
             logging.error(f"WebSocket crashed, reconnecting: {e}")
             time.sleep(5)
-
+    '''
 if __name__ == "__main__":
     logging.info("Starting Iron Condor MTM Tracker (WebSocket only)...")
     start_ws()
