@@ -118,7 +118,7 @@ def on_message(ws, message):
 
 def start_ws():
     JKEY = get_token()
-    url = "wss://piconnect.flattrade.in/PiConnectWSTp/"
+    url = "wss://piconnect.flattrade.in/PiConnectWS/"
     ws = websocket.WebSocketApp(
         url,
         header=[f"Authorization: {JKEY}"],
