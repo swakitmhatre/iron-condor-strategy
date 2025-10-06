@@ -140,11 +140,12 @@ def start_ws():
                     }
             ws.send(json.dumps(sub_msg))
             logging.info(f"Subscribed: {token}")
-
+    
         # Keepalive ping every 20s
         def ping_loop():
             while True:
                 try:
+                    print("hi")
                     ws.send('{"t":"h"}')
                     time.sleep(20)
                 except:
