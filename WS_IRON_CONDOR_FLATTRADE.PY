@@ -99,7 +99,7 @@ def calc_mtm():
             continue
         entry = leg["entry"]
         ltp   = ltp_map[tsym]
-        print("tsym and ltp"----->tsym,"  ",ltp)
+        print("tsym and ltp----->",tsym,"  ",ltp)
         qty   = LOT_SIZE
         if leg["side"] == "B":   # Buy leg
             pnl += (ltp - entry) * qty
