@@ -171,7 +171,7 @@ def start_ws():
     )
 
     def on_open(ws):
-    logging.info("WebSocket connected ✅")
+        logging.info("WebSocket connected ✅")
 
     for leg in IRON_CONDOR_LEGS:
         token = get_token_number(leg["tsym"])
