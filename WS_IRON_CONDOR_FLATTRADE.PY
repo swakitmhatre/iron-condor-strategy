@@ -151,7 +151,7 @@ def on_message(ws, message):
 
 def start_ws():
     JKEY = get_token()
-    url = "wss://piconnect.flattrade.in/PiConnectTP/Websocket"
+    url = "wss://piconnect.flattrade.in/PiConnectWS/"
     ws = websocket.WebSocketApp(
         url,
         header=[f"jKey: {JKEY}"],
@@ -165,6 +165,7 @@ def start_ws():
             sub_msg = {"uid": UID, "exch": "NFO", "tsym": leg["tsym"]}
             ws.send(json.dumps(sub_msg))
             logging.info(f"Subscribed: {leg['tsym']}")
+
 
     ws.on_open = on_open
     ws.run_forever()
