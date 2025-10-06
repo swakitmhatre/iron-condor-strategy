@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import websocket
 import requests
 import logging
+import threading
 
 
 # ====== USER CONFIGURATION ======
@@ -157,20 +158,38 @@ def start_ws():
     ws = websocket.WebSocketApp(
         url,
         header=[f"jKey: {JKEY}"],
-        on_message=on_message
+        on_message=on_message,
+        on_close=lambda ws, code, msg: logging.warning(f"WebSocket closed: {msg}"),
+        on_error=lambda ws, err: logging.error(f"WebSocket error: {err}")
     )
 
     def on_open(ws):
         logging.info("WebSocket connected ✅")
         # Subscribe to all legs
         for leg in IRON_CONDOR_LEGS:
-            sub_msg = {"uid": UID, "exch": "NFO", "tsym": leg["tsym"]}
+            sub_msg = {"uid": U_ID, "exch": "NFO", "tsym": leg["tsym"]}
             ws.send(json.dumps(sub_msg))
             logging.info(f"Subscribed: {leg['tsym']}")
 
+        # Keepalive ping every 20s
+        def ping_loop():
+            while True:
+                try:
+                    ws.send('{"t":"h"}')  # Heartbeat ping as per Flattrade doc
+                    time.sleep(20)
+                except Exception:
+                    break
+
+        threading.Thread(target=ping_loop, daemon=True).start()
 
     ws.on_open = on_open
-    ws.run_forever()
+
+    while True:
+        try:
+            ws.run_forever(ping_interval=30, ping_timeout=10)
+        except Exception as e:
+            logging.error(f"WebSocket crashed, reconnecting... {e}")
+        time.sleep(5)  # Wait before reconnect
 
 
 if __name__ == "__main__":
