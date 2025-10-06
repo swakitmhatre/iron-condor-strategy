@@ -132,7 +132,11 @@ def start_ws():
         # Subscribe to all legs
         for leg in IRON_CONDOR_LEGS:
             token = leg["tsym"]
-            sub_msg = {"t": "t", "k": f"NFO|{token}"}
+            sub_msg = {
+                        "t": "tk",            # tick subscription
+                        "k": f"NFO|{token}",  # exchange + token
+                        "uid": UID   
+                    }
             ws.send(json.dumps(sub_msg))
             logging.info(f"Subscribed: {token}")
 
