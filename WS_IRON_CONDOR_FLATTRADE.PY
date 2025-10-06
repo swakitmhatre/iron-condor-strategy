@@ -167,7 +167,7 @@ def start_ws():
         logging.info("WebSocket connected ✅")
         # Subscribe to all legs
         for leg in IRON_CONDOR_LEGS:
-            sub_msg = {"uid": U_ID, "exch": "NFO", "tsym": leg["tsym"]}
+            sub_msg = {"uid": UID, "exch": "NFO", "tsym": leg["tsym"]}
             ws.send(json.dumps(sub_msg))
             logging.info(f"Subscribed: {leg['tsym']}")
 
