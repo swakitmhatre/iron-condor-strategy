@@ -135,6 +135,7 @@ def on_message(ws, message):
     global ltp_map
     try:
         data = json.loads(message)
+        print("data----->",data)
         if "lp" in data:  # live price tick
             tsym = data["tsym"]
             ltp = float(data["lp"])
