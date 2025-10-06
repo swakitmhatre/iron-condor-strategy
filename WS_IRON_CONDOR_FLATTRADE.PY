@@ -100,6 +100,7 @@ def on_message(ws, message):
     global ltp_map
     try:
         data = json.loads(message)
+        print(data)
         # Tick messages have type 'tk'
         if data.get("t") == "tk":
             token = data.get("tk")
