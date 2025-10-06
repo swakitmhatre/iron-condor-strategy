@@ -118,7 +118,7 @@ def on_message(ws, message):
 
 def start_ws():
     JKEY = get_token()
-    url = "wss://piconnect.flattrade.in/PiConnectWS/"
+    url = "wss://piconnect.flattrade.in/PiConnectWSTp/"
     ws = websocket.WebSocketApp(
         url,
         header=[f"Authorization: {JKEY}"],
@@ -140,7 +140,7 @@ def start_ws():
                     }
             ws.send(json.dumps(sub_msg))
             logging.info(f"Subscribed: {token}")
-        '''
+      
         # Keepalive ping every 20s
         def ping_loop():
             while True:
@@ -151,7 +151,7 @@ def start_ws():
                 except:
                     break
         threading.Thread(target=ping_loop, daemon=True).start()
-        '''
+       
     ws.on_open = on_open
     
     while True:
