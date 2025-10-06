@@ -35,7 +35,7 @@ IRON_CONDOR_LEGS = [
     {"tsym": "42632", "side": "B", "entry": 15.95},
     {"tsym": "42705", "side": "B", "entry": 10.0},
     {"tsym": "42644", "side": "S", "entry": 21.45},
-    {"tsym": "NIFTY14OCT25C25350", "side": "S", "entry": 18.0},
+    {"tsym": "42695", "side": "S", "entry": 18.0},
 ]
 #42632=NIFTY14OCT25P24350
 #42705=NIFTY14OCT25C25450
