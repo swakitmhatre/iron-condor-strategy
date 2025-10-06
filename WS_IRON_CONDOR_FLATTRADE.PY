@@ -32,12 +32,15 @@ STOP_LOSS     = -10
 
 # Example Iron Condor legs with entry price (fetched when order is placed)
 IRON_CONDOR_LEGS = [
-    {"tsym": "NIFTY14OCT25P24350", "side": "B", "entry": 15.95},
-    {"tsym": "NIFTY14OCT25C25450", "side": "B", "entry": 10.0},
-    {"tsym": "NIFTY14OCT25P24450", "side": "S", "entry": 21.45},
+    {"tsym": "42632", "side": "B", "entry": 15.95},
+    {"tsym": "42705", "side": "B", "entry": 10.0},
+    {"tsym": "42644", "side": "S", "entry": 21.45},
     {"tsym": "NIFTY14OCT25C25350", "side": "S", "entry": 18.0},
 ]
-
+#42632=NIFTY14OCT25P24350
+#42705=NIFTY14OCT25C25450
+#42644=NIFTY14OCT25P24450
+#42695=NIFTY14OCT25C25350
 # ===========================================================
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
@@ -136,9 +139,11 @@ def on_message(ws, message):
     try:
         data = json.loads(message)
         print("data----->",data)
-        if "lp" in data:  # live price tick
-            tsym = data["tsym"]
-            ltp = float(data["lp"])
+        # Flattrade tick messages contain 't' == 'tk'
+        if data.get("t") == "tk":
+            token = data.get("tk")
+            ltp = float(data.get("lp", 0))
+            tsym = token  # or maintain mapping token→symbol if needed
             ltp_map[tsym] = ltp
 
             pnl = calc_mtm()
@@ -147,8 +152,9 @@ def on_message(ws, message):
 
             if pnl >= TARGET_PROFIT or pnl <= STOP_LOSS:
                 logging.info("Target/Stoploss hit. Exiting Iron Condor...")
-                #exit_iron_condor()
+                # exit_iron_condor()
                 ws.close()
+
     except Exception as e:
         logging.error(f"Error in message handler: {e}")
 
@@ -165,23 +171,27 @@ def start_ws():
     )
 
     def on_open(ws):
-        logging.info("WebSocket connected ✅")
-        # Subscribe to all legs
-        for leg in IRON_CONDOR_LEGS:
-            sub_msg = {"uid": UID, "exch": "NFO", "tsym": leg["tsym"]}
+    logging.info("WebSocket connected ✅")
+
+    for leg in IRON_CONDOR_LEGS:
+        token = get_token_number(leg["tsym"])
+        if token:
+            sub_msg = {"t": "t", "k": f"NFO|{token}"}
             ws.send(json.dumps(sub_msg))
-            logging.info(f"Subscribed: {leg['tsym']}")
+            logging.info(f"Subscribed: {leg['tsym']} ({token})")
+        else:
+            logging.warning(f"Skipping {leg['tsym']} - token not found")
 
-        # Keepalive ping every 20s
-        def ping_loop():
-            while True:
-                try:
-                    ws.send('{"t":"h"}')  # Heartbeat ping as per Flattrade doc
-                    time.sleep(20)
-                except Exception:
-                    break
+    # Keepalive ping every 20s
+    def ping_loop():
+        while True:
+            try:
+                ws.send('{"t":"h"}')
+                time.sleep(20)
+            except Exception:
+                break
 
-        threading.Thread(target=ping_loop, daemon=True).start()
+    threading.Thread(target=ping_loop, daemon=True).start()
 
     ws.on_open = on_open
 
