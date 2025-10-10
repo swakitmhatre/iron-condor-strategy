@@ -5,6 +5,7 @@ import logging
 import hashlib
 import threading
 import websocket
+import sys
 
 # ====== USER CONFIGURATION ======
 API_KEY = "8a321b48cc3a48d2b3f4d52c4eb719be"
