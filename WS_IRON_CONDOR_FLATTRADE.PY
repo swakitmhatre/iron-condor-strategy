@@ -102,7 +102,7 @@ def on_message(ws, message):
     global ltp_map
     try:
         data = json.loads(message)
-        print(data)
+        #print(data)
         # Tick messages have type 'tk'
         if data.get("t") == "tk":
             token = data.get("tk")
@@ -160,7 +160,7 @@ def start_ws():
         def ping_loop():
             while True:
                 try:
-                    print("hi")
+                    #print("hi")
                     ws.send('{"t":"h"}')
                     time.sleep(20)
                 except:
