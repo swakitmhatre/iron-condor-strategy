@@ -14,8 +14,8 @@ ACT_ID = "FT053224"
 BASE_URL = "https://piconnect.flattrade.in/PiConnectTP/"
 
 LOT_SIZE = 75
-TARGET_PROFIT = 20
-STOP_LOSS = -20
+TARGET_PROFIT = 1000
+STOP_LOSS = -1000
 
 # Iron Condor legs: tsym is token from Flattrade symbol master
 IRON_CONDOR_LEGS = [
