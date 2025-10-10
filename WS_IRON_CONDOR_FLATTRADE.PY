@@ -18,7 +18,7 @@ BASE_URL = "https://piconnect.flattrade.in/PiConnectTP/"
 LOT_SIZE = 75
 TARGET_PROFIT = 500
 STOP_LOSS = -500
-FALLBACK_AGE = 30  # ✅ if no tick for 30 s, reconnect
+FALLBACK_AGE = 30          # ✅ if no tick for 30 s, reconnect
 WATCHDOG_INTERVAL = 10     # How often to check tick freshness
 PING_INTERVAL = 20         # How often to send ping for heartbeat
 
@@ -37,7 +37,6 @@ IRON_CONDOR_LEGS = [
 
 TOKEN_FILE = "token.txt"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
-
 
 # ====== TOKEN MANAGEMENT ======
 def generate_hash(api_key, request_token, api_secret):
@@ -85,7 +84,7 @@ def calc_mtm():
         print("pnl--->",pnl)
     return pnl
 
-# ====== EXIT FUNCTION ======
+# ====== EXIT(order) FUNCTION ======
 def exit_iron_condor(JKEY):
     for leg in IRON_CONDOR_LEGS:
         trantype = "S" if leg["side"] == "B" else "B"
@@ -105,6 +104,7 @@ def exit_iron_condor(JKEY):
         r = requests.post(BASE_URL + "PlaceOrder", data=jData)
         logging.info(f"Exit {trantype} {leg['tsym']}: {r.text}")
     logging.info("Iron Condor exited ✅")
+
 #========immediate exit(thread)===========
 
 def trigger_exit(reason="Target/Stoploss hit"):
