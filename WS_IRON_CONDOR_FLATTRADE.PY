@@ -5,7 +5,7 @@ import logging
 import hashlib
 import threading
 import websocket
-global last_tick_time
+
 
 # ====== USER CONFIGURATION ======
 API_KEY = "8a321b48cc3a48d2b3f4d52c4eb719be"
@@ -62,6 +62,7 @@ def get_token():
 
 # ====== MTM CALCULATION ======
 ltp_map = {}
+last_tick_time = {}  # ✅ Initialize this dictionary globally
 
 def calc_mtm():
     pnl = 0
