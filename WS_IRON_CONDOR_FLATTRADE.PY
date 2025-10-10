@@ -70,8 +70,10 @@ def calc_mtm():
             continue
         entry = leg["entry"]
         ltp = ltp_map[tsym]
+        print("symbol,entry,ltp---->",tsym,entry,ltp)
         qty = LOT_SIZE
         pnl += (ltp - entry) * qty if leg["side"] == "B" else (entry - ltp) * qty
+        print("pnl--->",pnl)
     return pnl
 
 # ====== EXIT FUNCTION ======
@@ -112,7 +114,7 @@ def on_message(ws, message):
             if pnl >= TARGET_PROFIT or pnl <= STOP_LOSS:
                 logging.info("Target/Stoploss hit. Exiting Iron Condor...")
                 ws.close()
-                exit_iron_condor(ws.jKey)  # pass token
+                #exit_iron_condor(ws.jKey)  # pass token
     except Exception as e:
         logging.error(f"Error in message: {e}")
 
