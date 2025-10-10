@@ -17,6 +17,7 @@ BASE_URL = "https://piconnect.flattrade.in/PiConnectTP/"
 LOT_SIZE = 75
 TARGET_PROFIT = 200
 STOP_LOSS = -270
+FALLBACK_AGE = 30  # ✅ if no tick for 30 s, reconnect
 
 # Iron Condor legs: tsym is token from Flattrade symbol master
 IRON_CONDOR_LEGS = [
