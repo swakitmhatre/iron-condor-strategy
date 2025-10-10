@@ -99,24 +99,108 @@ def exit_iron_condor(JKEY):
 
 # ====== WEBSOCKET HANDLERS ======
 def on_message(ws, message):
-    global ltp_map
+    global ltp_map, last_tick_time
     try:
-        data = json.loads(message)
-        #print(data)
-        # Tick messages have type 'tk'
-        if data.get("t") == "tk":
-            token = data.get("tk")
-            ltp = float(data.get("lp", 0))
-            ltp_map[token] = ltp
-            pnl = calc_mtm()
-            logging.info(f"LTP update {token}: {ltp}, MTM: {pnl}")
+        # log every raw message (short-term; remove or lower level later)
+        logging.debug(f"RAW_WS_MSG: {message}")
 
+        data = json.loads(message)
+
+        # accept multiple tick types — handle 'tk' and 'tf' and 'tkf' etc.
+        t = data.get("t")
+        if t in ("tk", "tf", "tkf", "tfk"):   # cover variants
+            token = data.get("tk") or data.get("tk") or data.get("token") or data.get("k")
+            if not token:
+                # sometimes token is in 'k' as "NFO|42632"
+                k = data.get("k")
+                if k and "|" in k:
+                    token = k.split("|")[-1]
+
+            ltp_raw = data.get("lp") or data.get("ltp") or data.get("last_price")
+            if ltp_raw is None:
+                logging.debug(f"No lp in tick: {data}")
+                return
+
+            try:
+                ltp = float(ltp_raw)
+            except:
+                logging.debug(f"Couldn't parse lp: {ltp_raw}")
+                return
+
+            # update LTP and timestamp
+            ltp_map[token] = ltp
+            last_tick_time[token] = time.time()
+
+            # human-friendly logging
+            pnl = calc_mtm()
+            logging.info(f"LTP update {token}: {ltp:.2f}, MTM: {pnl:.2f}, last_tick_age: 0s")
+
+            # exit if threshold hit
             if pnl >= TARGET_PROFIT or pnl <= STOP_LOSS:
                 logging.info("Target/Stoploss hit. Exiting Iron Condor...")
                 ws.close()
-                #exit_iron_condor(ws.jKey)  # pass token
+                # exit_iron_condor(JKEY)   # careful: pass valid JKEY here
+
+        else:
+            # show other server messages for debugging
+            logging.debug(f"Non-tick message: {data}")
+
     except Exception as e:
         logging.error(f"Error in message: {e}")
+
+# call only rarely and as fallback; needs JKEY which your main function obtains
+def get_quote_snapshot(token, JKEY):
+    """
+    Fetch latest LTP for the token using GetQuotes endpoint as fallback.
+    Returns float or None.
+    """
+    try:
+        # Build jData: example expects uid, exch and token (string)
+        jdata = {"uid": UID, "exch": "NFO", "token": token}
+        payload = f"jData={json.dumps(jdata)}&jKey={JKEY}"
+        url = BASE_URL + "GetQuotes"
+        r = requests.post(url, data=payload, timeout=2)
+        r.raise_for_status()
+        resp = r.json()
+
+        # Inspect structure (it can vary). We try common places:
+        # e.g., resp.get('lp') or resp.get('data')[0].get('lp'), etc.
+        if isinstance(resp, dict):
+            # try few patterns
+            if 'lp' in resp:
+                return float(resp['lp'])
+            if 'data' in resp and isinstance(resp['data'], list) and resp['data']:
+                d0 = resp['data'][0]
+                if 'lp' in d0:
+                    return float(d0['lp'])
+        logging.debug(f"Snapshot unexpected format: {resp}")
+    except Exception as e:
+        logging.debug(f"Snapshot fetch failed for {token}: {e}")
+    return None
+
+def watchdog_thread(JKEY):
+    """
+    Periodically checks tokens; if token hasn't updated for FALLBACK_AGE seconds,
+    fetch a single snapshot via REST and update ltp_map so calc_mtm can continue.
+    """
+    while True:
+        now = time.time()
+        for leg in IRON_CONDOR_LEGS:
+            token = leg["tsym"]
+            last = last_tick_time.get(token, 0)
+            age = now - last
+            if age > FALLBACK_AGE:
+                logging.info(f"Watchdog: token {token} last update {age:.1f}s ago -> snapshot")
+                snapshot = get_quote_snapshot(token, JKEY)
+                if snapshot is not None:
+                    ltp_map[token] = snapshot
+                    last_tick_time[token] = time.time()
+                    pnl = calc_mtm()
+                    logging.info(f"Watchdog refreshed {token} -> {snapshot}, MTM: {pnl:.2f}")
+                else:
+                    logging.debug(f"Watchdog snapshot failed for {token}")
+        time.sleep(WATCHDOG_INTERVAL)
+
 
 def start_ws():
     JKEY = get_token()
@@ -166,6 +250,7 @@ def start_ws():
                 except:
                     break
         threading.Thread(target=ping_loop, daemon=True).start()
+        threading.Thread(target=watchdog_thread, args=(JKEY,), daemon=True).start()
        
     ws.on_open = on_open
     
