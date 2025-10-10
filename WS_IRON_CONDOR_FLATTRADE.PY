@@ -22,6 +22,10 @@ FALLBACK_AGE = 30  # ✅ if no tick for 30 s, reconnect
 WATCHDOG_INTERVAL = 10     # How often to check tick freshness
 PING_INTERVAL = 20         # How often to send ping for heartbeat
 
+exit_flag = threading.Event()
+ltp_map = {}
+last_tick_time = {}  # ✅ Initialize this dictionary globally
+watchdog_running = True
 
 # Iron Condor legs: tsym is token from Flattrade symbol master
 IRON_CONDOR_LEGS = [
@@ -33,6 +37,7 @@ IRON_CONDOR_LEGS = [
 
 TOKEN_FILE = "token.txt"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+
 
 # ====== TOKEN MANAGEMENT ======
 def generate_hash(api_key, request_token, api_secret):
@@ -66,8 +71,7 @@ def get_token():
     return get_new_token()
 
 # ====== MTM CALCULATION ======
-ltp_map = {}
-last_tick_time = {}  # ✅ Initialize this dictionary globally
+
 
 def calc_mtm():
     pnl = 0
@@ -104,8 +108,6 @@ def exit_iron_condor(JKEY):
         logging.info(f"Exit {trantype} {leg['tsym']}: {r.text}")
     logging.info("Iron Condor exited ✅")
 #========immediate exit===========
-
-exit_flag = threading.Event()
 
 def trigger_exit(reason="Target/Stoploss hit"):
     if not exit_flag.is_set():
@@ -177,6 +179,14 @@ def on_message(ws, message):
 
     except Exception as e:
         logging.error(f"Error in message: {e}")
+
+def on_error(ws, error):
+    if not exit_flag.is_set():
+        logger.error(f"WebSocket error: {error}")
+
+def on_close(ws, close_status_code, close_msg):
+    logger.info(f"WebSocket closed: {close_msg}")
+
 
 # call only rarely and as fallback; needs JKEY which your main function obtains
 def get_quote_snapshot(token, JKEY):
