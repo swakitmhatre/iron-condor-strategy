@@ -146,6 +146,9 @@ def on_message(ws, message):
                 logging.info("Target/Stoploss hit. Exiting Iron Condor...")
                 ws.close()
                 # exit_iron_condor(JKEY)   # careful: pass valid JKEY here
+                time.sleep(2)
+                logging.info("✅ Strategy stopped after target/stoploss hit.")
+                sys.exit(0)
 
         else:
             # show other server messages for debugging
@@ -264,6 +267,8 @@ def start_ws():
         try:
             print("forever")
             ws.run_forever(ping_interval=30, ping_timeout=10)
+        except SystemExit:
+            raise  # clean stop on target/stoploss
         except Exception as e:
             logging.error(f"WebSocket crashed, reconnecting: {e}")
             time.sleep(5)
