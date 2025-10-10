@@ -102,9 +102,28 @@ def exit_iron_condor(JKEY):
         r = requests.post(BASE_URL + "PlaceOrder", data=jData)
         logging.info(f"Exit {trantype} {leg['tsym']}: {r.text}")
     logging.info("Iron Condor exited ✅")
+#========immediate exit===========
+
+exit_flag = threading.Event()
+
+def trigger_exit(reason="Target/Stoploss hit"):
+    if not exit_flag.is_set():
+        logging.warning(f"{reason}. Exiting Iron Condor NOW ⚡")
+        exit_flag.set()
+
+        # Immediately close WebSocket (forces disconnection)
+        try:
+            ws.close()
+        except Exception:
+            pass
+
+        # Force immediate process termination (within 50 ms)
+        threading.Thread(target=lambda: (time.sleep(0.05), os._exit(0))).start()
 
 # ====== WEBSOCKET HANDLERS ======
 def on_message(ws, message):
+    if exit_flag.is_set():
+        return
     global ltp_map
     try:
         # log every raw message (short-term; remove or lower level later)
@@ -143,6 +162,7 @@ def on_message(ws, message):
 
             # exit if threshold hit
             if pnl >= TARGET_PROFIT or pnl <= STOP_LOSS:
+                trigger_exit()
                 logging.info("Target/Stoploss hit. Exiting Iron Condor...")
                 ws.close()
                 # exit_iron_condor(JKEY)   # careful: pass valid JKEY here
@@ -163,7 +183,10 @@ def get_quote_snapshot(token, JKEY):
     Fetch latest LTP for the token using GetQuotes endpoint as fallback.
     Returns float or None.
     """
+    
     try:
+        if exit_flag.is_set():
+            return
         # Build jData: example expects uid, exch and token (string)
         jdata = {"uid": UID, "exch": "NFO", "token": token}
         payload = f"jData={json.dumps(jdata)}&jKey={JKEY}"
@@ -187,12 +210,15 @@ def get_quote_snapshot(token, JKEY):
         logging.debug(f"Snapshot fetch failed for {token}: {e}")
     return None
 
+
 def watchdog_thread(JKEY):
     """
     Periodically checks tokens; if token hasn't updated for FALLBACK_AGE seconds,
     fetch a single snapshot via REST and update ltp_map so calc_mtm can continue.
     """
     while True:
+        if exit_flag.is_set():
+            return
         now = time.time()
         for leg in IRON_CONDOR_LEGS:
             token = leg["tsym"]
