@@ -16,8 +16,8 @@ ACT_ID = "FT053224"
 BASE_URL = "https://piconnect.flattrade.in/PiConnectTP/"
 
 LOT_SIZE = 75
-TARGET_PROFIT = 100
-STOP_LOSS = -100
+TARGET_PROFIT = 500
+STOP_LOSS = -500
 FALLBACK_AGE = 30  # ✅ if no tick for 30 s, reconnect
 WATCHDOG_INTERVAL = 10     # How often to check tick freshness
 PING_INTERVAL = 20         # How often to send ping for heartbeat
