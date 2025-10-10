@@ -18,6 +18,9 @@ LOT_SIZE = 75
 TARGET_PROFIT = 200
 STOP_LOSS = -200
 FALLBACK_AGE = 30  # ✅ if no tick for 30 s, reconnect
+WATCHDOG_INTERVAL = 10     # How often to check tick freshness
+PING_INTERVAL = 20         # How often to send ping for heartbeat
+
 
 # Iron Condor legs: tsym is token from Flattrade symbol master
 IRON_CONDOR_LEGS = [
