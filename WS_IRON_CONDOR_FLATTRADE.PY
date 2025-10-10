@@ -129,14 +129,27 @@ def start_ws():
 
     def on_open(ws):
         logging.info("WebSocket connected ✅")
-        ws.jKey = JKEY  # attach token to ws
+        logging.info("WebSocket connected ✅")
+
+        # Step 1: Send connection payload (important)
+        conn_msg = {
+            "t": "c",
+            "uid": UID,
+            "actid": ACT_ID,
+            "source": "API",
+            "susertoken": JKEY
+        }
+        ws.send(json.dumps(conn_msg))
+        logging.info("Connection payload sent")
+    
+        time.sleep(1)
         # Subscribe to all legs
         for leg in IRON_CONDOR_LEGS:
             token = leg["tsym"]
             sub_msg = {
-                        "t": "tk",            # tick subscription
+                        "t": "t",             # touchline subscription
                         "k": f"NFO|{token}",  # exchange + token
-                        "uid": UID   
+                        "uid": UID
                     }
             ws.send(json.dumps(sub_msg))
             logging.info(f"Subscribed: {token}")
