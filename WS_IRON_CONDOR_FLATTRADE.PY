@@ -71,8 +71,6 @@ def get_token():
     return get_new_token()
 
 # ====== MTM CALCULATION ======
-
-
 def calc_mtm():
     pnl = 0
     for leg in IRON_CONDOR_LEGS:
@@ -107,7 +105,7 @@ def exit_iron_condor(JKEY):
         r = requests.post(BASE_URL + "PlaceOrder", data=jData)
         logging.info(f"Exit {trantype} {leg['tsym']}: {r.text}")
     logging.info("Iron Condor exited ✅")
-#========immediate exit===========
+#========immediate exit(thread)===========
 
 def trigger_exit(reason="Target/Stoploss hit"):
     if not exit_flag.is_set():
@@ -188,7 +186,7 @@ def on_close(ws, close_status_code, close_msg):
     logger.info(f"WebSocket closed: {close_msg}")
 
 
-# call only rarely and as fallback; needs JKEY which your main function obtains
+#======== call only rarely and as fallback; needs JKEY which your main function obtains=====
 def get_quote_snapshot(token, JKEY):
     """
     Fetch latest LTP for the token using GetQuotes endpoint as fallback.
@@ -221,6 +219,7 @@ def get_quote_snapshot(token, JKEY):
         logging.debug(f"Snapshot fetch failed for {token}: {e}")
     return None
 
+#=========watchdog loop===========
 
 def watchdog_thread(JKEY):
     """
@@ -247,7 +246,7 @@ def watchdog_thread(JKEY):
                     logging.debug(f"Watchdog snapshot failed for {token}")
         time.sleep(WATCHDOG_INTERVAL)
 
-
+#======start websocket and open(ws)===================
 def start_ws():
     JKEY = get_token()
     url = "wss://piconnect.flattrade.in/PiConnectWSTp/"
