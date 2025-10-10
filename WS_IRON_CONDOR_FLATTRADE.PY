@@ -5,6 +5,7 @@ import logging
 import hashlib
 import threading
 import websocket
+global last_tick_time
 
 # ====== USER CONFIGURATION ======
 API_KEY = "8a321b48cc3a48d2b3f4d52c4eb719be"
@@ -99,7 +100,7 @@ def exit_iron_condor(JKEY):
 
 # ====== WEBSOCKET HANDLERS ======
 def on_message(ws, message):
-    global ltp_map, last_tick_time
+    global ltp_map
     try:
         # log every raw message (short-term; remove or lower level later)
         logging.debug(f"RAW_WS_MSG: {message}")
