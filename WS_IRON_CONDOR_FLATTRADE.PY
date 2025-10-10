@@ -19,10 +19,10 @@ STOP_LOSS = -10
 
 # Iron Condor legs: tsym is token from Flattrade symbol master
 IRON_CONDOR_LEGS = [
-    {"tsym": "42632", "side": "B", "entry": 15.95},
-    {"tsym": "42705", "side": "B", "entry": 10.0},
-    {"tsym": "42644", "side": "S", "entry": 21.45},
-    {"tsym": "42695", "side": "S", "entry": 18.0},
+    {"tsym": "42632", "side": "B", "entry": 3.00},
+    {"tsym": "42705", "side": "B", "entry": 35.0},
+    {"tsym": "42644", "side": "S", "entry": 3.60},
+    {"tsym": "42695", "side": "S", "entry": 77.0},
 ]
 
 TOKEN_FILE = "token.txt"
