@@ -8,15 +8,34 @@ import logging
 import hashlib
 from cryptography.fernet import Fernet
 from datetime import datetime, timedelta
+import threading
+import websocket
+import sys
+import os
 
 # ====== USER CONFIGURATION ======
 API_KEY = "8a321b48cc3a48d2b3f4d52c4eb719be"
 API_SECRET = "2025.c633e7fdb18949f391b4677ba9132e691f2d6c6dcd1ca276"
 CLIENT_ID = "FT053224"
+UID = "FT053224"
+ACT_ID = "FT053224"
+BASE_URL = "https://piconnect.flattrade.in/PiConnectTP/"
 PASSWORD = "Swakit@123"
 LOT_MULTIPLIER = 1
 MTM_PERCENT = 0.0025     # 0.25%
 UNDERLYING = "NIFTY"
+
+LOT_SIZE = 75
+TARGET_PROFIT = 250
+STOP_LOSS = -250
+FALLBACK_AGE = 30          # ✅ if no tick for 30 s, reconnect
+WATCHDOG_INTERVAL = 10     # How often to check tick freshness
+PING_INTERVAL = 20         # How often to send ping for heartbeat
+
+exit_flag = threading.Event()
+ltp_map = {}
+last_tick_time = {}  # ✅ Initialize this dictionary globally
+watchdog_running = True
 # =================================
 
 # === ENCRYPTED TOTP SECRET AND FERNET KEY ===
@@ -118,23 +137,6 @@ def get_live_price(jKey, uid, symbol_token="26000",exch="NSE"):
         logging.error(f"Live price fetch failed: {e}")
         raise
 
-def get_pnl(token):
-    try:
-        jData_dict = {
-            "uid": "FT053224",
-            "actid": "FT053224",
-        }
-        payload = f"jData={json.dumps(jData_dict)}&jKey={jkey}"
-
-        headers = {
-            "Content-Type": "application/json"
-        }
-        r = requests.get("https://piconnect.flattrade.in/PiConnectTP/Limits", data=payload,headers=headers)
-        return float(r.json()["uzpnl_d_i"])
-    except Exception as e:
-        logging.warning(f"PNL fetch failed: {e}")
-        return 0.0
-
 def get_margin(token):
     try:
         r = requests.get("https://api.flattrade.in/trade/margin", headers={"Authorization": f"Bearer {token}"})
@@ -143,7 +145,7 @@ def get_margin(token):
         logging.warning(f"Margin fetch failed: {e}")
         return 150000  # fallback default
 
-def place_order(jkey, symbol, qty, SIDE):
+def place_order(JKEY, symbol, qty, SIDE):
     try:
         jData_dict = {
             "uid": "FT053224",
@@ -157,7 +159,7 @@ def place_order(jkey, symbol, qty, SIDE):
             "prctyp": "MKT",
             "ret": "DAY"
         }
-        payload = f"jData={json.dumps(jData_dict)}&jKey={jkey}"
+        payload = f"jData={json.dumps(jData_dict)}&jKey={JKEY}"
 
         headers = {
             "Content-Type": "application/json"
@@ -211,12 +213,12 @@ def get_next_weekly_expiry():
     return next_tuesday, expiry_str
 
 #=========returns entry of placed order=======================
-def order_book(jkey):
+def order_book(JKEY):
     try:
         jData_dict = {
             "uid": "FT053224"
         }
-        payload = f"jData={json.dumps(jData_dict)}&jKey={jkey}"
+        payload = f"jData={json.dumps(jData_dict)}&jKey={JKEY}"
 
         headers = {
             "Content-Type": "application/json"
@@ -246,7 +248,7 @@ def run_strategy():
     #margin = get_margin(token)
     margin = 100000
     mtm_target = margin * MTM_PERCENT
-    lot_size = 75 * LOT_MULTIPLIER
+    LOT_SIZE = 75 * LOT_MULTIPLIER
 
     #expiry = datetime.datetime.now().strftime("%y%b%d").upper()
     expiry_date, expiry = get_next_weekly_expiry()
@@ -264,19 +266,19 @@ def run_strategy():
     logging.info(f"Selected symbols: {symbols}")
 
     # Entry - Buy first
-    jkey=token
+    JKEY=token
     entry_start = time.perf_counter()
-    place_order(jkey, symbols["buy_pe"], lot_size, "B")
-    place_order(jkey, symbols["buy_ce"], lot_size, "B")
-    place_order(jkey, symbols["sell_pe"], lot_size, "S")
-    place_order(jkey, symbols["sell_ce"], lot_size, "S")
+    place_order(JKEY, symbols["buy_pe"], LOT_SIZE, "B")
+    place_order(JKEY, symbols["buy_ce"], LOT_SIZE, "B")
+    place_order(JKEY, symbols["sell_pe"], LOT_SIZE, "S")
+    place_order(JKEY, symbols["sell_ce"], LOT_SIZE, "S")
 
     entry_delay = round(time.perf_counter() - entry_start, 3)
     entry_time = datetime.now()
     logging.info(f"✅ ENTRY COMPLETE | Time = {entry_time} | Delay = {entry_delay}s")
     logging.info("Iron Condor entered. Monitoring MTM...")
 
-    entry_price=get_order_book(jkey)
+    entry_price=get_order_book(JKEY)
     # Iron Condor legs: tsym is token from Flattrade symbol master
     IRON_CONDOR_LEGS = [
         {"tsym": symbols["buy_pe"][0], "side": "B", "entry": get_entry_price(entry_price,symbols["buy_pe"][1])},
@@ -284,28 +286,7 @@ def run_strategy():
         {"tsym": symbols["sell_pe"][0], "side": "S", "entry":get_entry_price(entry_price,symbols["buy_pe"][1])},
         {"tsym": symbols["sell_ce"][0], "side": "S", "entry": get_entry_price(entry_price,symbols["buy_pe"][1])},
     ]
-
-    '''
-    while True:
-        pnl = get_pnl(token)
-        logging.info(f"📈 MTM = ₹{pnl:.2f}")
-        if pnl <= -mtm_target OR pnl >= mtm_target :
-            condition_met_time = datetime.now()
-            logging.info(f"🎯 TARGET HIT at {condition_met_time}")
-            # Exit - Sell legs first
-            place_order(jkey, symbols["sell_pe"], lot_size, "B")
-            place_order(jkey, symbols["sell_ce"], lot_size, "B")
-            time.sleep(0.01)
-            place_order(jkey, symbols["buy_pe"], lot_size, "S")
-            place_order(jkey, symbols["buy_ce"], lot_size, "S")
-            exit_time = datetime.now()
-            logging.info(f"🏁 Strategy Exit Time = {exit_time}")
-            logging.info("✅ All legs exited. Strategy complete.\n")
-            logging.info(f"MTM target hit. Exiting... PnL: {pnl}")
-            break
-        time.sleep(0.025)
-'''
-    
+ 
 if __name__ == "__main__":
     run_strategy()
     logging.info("Starting Iron Condor MTM Tracker (WebSocket only)...")
@@ -394,13 +375,13 @@ def exit_iron_condor(JKEY):
     for leg in IRON_CONDOR_LEGS:
         trantype = "S" if leg["side"] == "B" else "B"
         payload = {
-            "uid": UID,
-            "actid": ACT_ID,
+            "uid": "FT053224",
+            "actid": "FT053224",
             "exch": "NFO",
             "tsym": leg["tsym"],
             "qty": str(LOT_SIZE),
             "prc": "0",
-            "prd": "NRML",
+            "prd": "I",
             "trantype": trantype,
             "prctyp": "MKT",
             "ret": "DAY"
@@ -408,6 +389,7 @@ def exit_iron_condor(JKEY):
         jData = "jData=" + json.dumps(payload) + "&jKey=" + JKEY
         r = requests.post(BASE_URL + "PlaceOrder", data=jData)
         logging.info(f"Exit {trantype} {leg['tsym']}: {r.text}")
+    
     logging.info("Iron Condor exited ✅")
     
 #========immediate exit(thread)===========
@@ -472,7 +454,7 @@ def on_message(ws, message):
                 trigger_exit()
                 logging.info("Target/Stoploss hit. Exiting Iron Condor...")
                 ws.close()
-                # exit_iron_condor(JKEY)   # careful: pass valid JKEY here
+                exit_iron_condor(JKEY)   # careful: pass valid JKEY here
                 time.sleep(2)
                 logging.info("✅ Strategy stopped after target/stoploss hit.")
                 sys.exit(0)
