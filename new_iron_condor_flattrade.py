@@ -246,7 +246,7 @@ def run_strategy():
     #HERE TOKEN IS LOGIN_TOKEN I.E JKey ,NOT SYMBOL TOKEN.
     live_price = get_live_price(token,CLIENT_ID)
     #margin = get_margin(token)
-    margin = 100000
+    margin = 125000
     mtm_target = margin * MTM_PERCENT
     LOT_SIZE = 75 * LOT_MULTIPLIER
 
