@@ -283,7 +283,7 @@ def run_strategy():
 
     entry_price=get_order_book(JKEY)
     # Iron Condor legs: tsym is token from Flattrade symbol master
-    IRON_CONDOR_LEGS = [
+    global IRON_CONDOR_LEGS = [
         {"tsym": symbols["buy_pe"][0], "side": "B", "entry": get_entry_price(entry_price,symbols["buy_pe"][1])},
         {"tsym": symbols["buy_ce"][0], "side": "B", "entry": get_entry_price(entry_price,symbols["buy_ce"][1])},
         {"tsym": symbols["sell_pe"][0], "side": "S", "entry":get_entry_price(entry_price,symbols["sell_pe"][1])},
