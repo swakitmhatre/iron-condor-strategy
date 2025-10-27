@@ -374,6 +374,7 @@ def calc_mtm():
 
 # ====== EXIT(order) FUNCTION ======
 def exit_iron_condor(JKEY):
+    print("in exit_iron_condor()IRON_CONDOR_LEGS---->",IRON_CONDOR_LEGS)
     for leg in IRON_CONDOR_LEGS:
         trantype = "S" if leg["side"] == "B" else "B"
         payload = {
