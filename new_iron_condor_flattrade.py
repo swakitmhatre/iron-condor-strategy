@@ -290,7 +290,7 @@ def run_strategy():
         {"tsym": symbols["sell_pe"][0], "side": "S", "entry":get_entry_price(entry_price,symbols["sell_pe"][1])},
         {"tsym": symbols["sell_ce"][0], "side": "S", "entry": get_entry_price(entry_price,symbols["sell_ce"][1])},
     ]
- 
+     print("IRON_CONDOR_LEGS----->",IRON_CONDOR_LEGS)
 
 #======start websocket and open(ws)===================
 def start_ws():
