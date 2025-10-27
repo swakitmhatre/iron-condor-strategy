@@ -466,6 +466,7 @@ def on_message(ws, message):
                 trigger_exit()
                 logging.info("Target/Stoploss hit. Exiting Iron Condor...")
                 ws.close()
+                JKEY = get_token()
                 exit_iron_condor(JKEY)   # careful: pass valid JKEY here
                 time.sleep(2)
                 logging.info("✅ Strategy stopped after target/stoploss hit.")
