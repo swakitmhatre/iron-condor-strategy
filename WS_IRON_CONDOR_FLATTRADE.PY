@@ -29,12 +29,14 @@ watchdog_running = True
 
 # Iron Condor legs: tsym is token from Flattrade symbol master
 IRON_CONDOR_LEGS = [
-    {"tsym": "42632", "side": "B", "entry": 3.00},
-    {"tsym": "42705", "side": "B", "entry": 35.0},
-    {"tsym": "42644", "side": "S", "entry": 3.60},
-    {"tsym": "42695", "side": "S", "entry": 77.0},
+    {"tsym": "47645", "side": "B", "entry": 0.306},
+    {"tsym": "47736", "side": "B", "entry": 0.3754},
+    {"tsym": "47651", "side": "S", "entry": 0.409},
+    {"tsym": "47728", "side": "S", "entry": 0.5515},
 ]
 
+[{'tsym': '47645', 'side': 'B', 'entry': 0.306}, {'tsym': '47736', 'side': 'B', 'entry': 0.37549999999999994},
+{'tsym': '47651', 'side': 'S', 'entry': 0.409}, {'tsym': '47728', 'side': 'S', 'entry': 0.5515}]
 TOKEN_FILE = "token.txt"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 
