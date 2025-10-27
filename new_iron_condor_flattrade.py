@@ -377,7 +377,7 @@ def exit_iron_condor(JKEY):
     print("in exit_iron_condor()IRON_CONDOR_LEGS---->",IRON_CONDOR_LEGS)
     for leg in IRON_CONDOR_LEGS:
         trantype = "S" if leg["side"] == "B" else "B"
-        payload = {
+        jData_dict = {
             "uid": "FT053224",
             "actid": "FT053224",
             "exch": "NFO",
@@ -389,8 +389,16 @@ def exit_iron_condor(JKEY):
             "prctyp": "MKT",
             "ret": "DAY"
         }
-        jData = "jData=" + json.dumps(payload) + "&jKey=" + JKEY
-        r = requests.post(BASE_URL + "PlaceOrder", data=jData)
+
+        payload = f"jData={json.dumps(jData_dict)}&jKey={JKEY}"
+
+        headers = {
+            "Content-Type": "application/json"
+        }
+        print("order paylod---->",payload)
+        #jData = "jData=" + json.dumps(payload) + "&jKey=" + JKEY
+        #r = requests.post(BASE_URL + "PlaceOrder", data=jData)
+        r = requests.post("https://piconnect.flattrade.in/PiConnectTP/PlaceOrder", data=payload,headers=headers)
         logging.info(f"Exit {trantype} {leg['tsym']}: {r.text}")
     
     logging.info("Iron Condor exited ✅")
