@@ -319,7 +319,7 @@ def start_ws():
         ws.send(json.dumps(conn_msg))
         logging.info("Connection payload sent")
     
-        time.sleep(1)
+        time.sleep(0.1)
         # Subscribe to all legs
         for leg in IRON_CONDOR_LEGS:
             token = leg["tsym"]
