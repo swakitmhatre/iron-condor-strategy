@@ -364,11 +364,12 @@ def calc_mtm():
         tsym = leg["tsym"]
         if tsym not in ltp_map:
             continue
-        entry = leg["entry"]
+        entry = leg["entry"] * LOT_SIZE
         ltp = ltp_map[tsym]
         print("symbol,entry,ltp---->",tsym,entry,ltp)
         qty = LOT_SIZE
-        pnl += (ltp - entry) * qty if leg["side"] == "B" else (entry - ltp) * qty
+        pnl += (ltp - entry)  if leg["side"] == "B" else (entry - ltp) 
+        #pnl += (ltp - entry) * qty if leg["side"] == "B" else (entry - ltp) * qty
         print("pnl--->",pnl)
     return pnl
 
