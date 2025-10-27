@@ -268,10 +268,10 @@ def run_strategy():
     # Entry - Buy first
     JKEY=token
     entry_start = time.perf_counter()
-    place_order(JKEY, symbols["buy_pe"][0], LOT_SIZE, "B")
-    place_order(JKEY, symbols["buy_ce"][0], LOT_SIZE, "B")
-    place_order(JKEY, symbols["sell_pe"][0], LOT_SIZE, "S")
-    place_order(JKEY, symbols["sell_ce"][0], LOT_SIZE, "S")
+    place_order(JKEY, symbols["buy_pe"][1], LOT_SIZE, "B")
+    place_order(JKEY, symbols["buy_ce"][1], LOT_SIZE, "B")
+    place_order(JKEY, symbols["sell_pe"][1], LOT_SIZE, "S")
+    place_order(JKEY, symbols["sell_ce"][1], LOT_SIZE, "S")
 
     entry_delay = round(time.perf_counter() - entry_start, 3)
     entry_time = datetime.now()
