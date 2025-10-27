@@ -259,7 +259,7 @@ def run_strategy():
     print("expiry--->",expiry)
     strikes = find_atm_strikes(live_price)
     print("strikes------>",strikes)
-
+    global symbols
     symbols = {
         "buy_pe": get_symbol(expiry, strikes[0], "P"),
         "sell_pe": get_symbol(expiry, strikes[1], "P"),
@@ -286,10 +286,10 @@ def run_strategy():
     # Iron Condor legs: tsym is token from Flattrade symbol master
     global IRON_CONDOR_LEGS
     IRON_CONDOR_LEGS = [
-        {"tsym": symbols["buy_pe"][0], "side": "B", "entry": get_entry_price(entry_price,symbols["buy_pe"][1])},
-        {"tsym": symbols["buy_ce"][0], "side": "B", "entry": get_entry_price(entry_price,symbols["buy_ce"][1])},
-        {"tsym": symbols["sell_pe"][0], "side": "S", "entry":get_entry_price(entry_price,symbols["sell_pe"][1])},
-        {"tsym": symbols["sell_ce"][0], "side": "S", "entry": get_entry_price(entry_price,symbols["sell_ce"][1])},
+        {"tsym": symbols["buy_pe"][0],"ttoken": symbols["buy_pe"][1], "side": "B", "entry": get_entry_price(entry_price,symbols["buy_pe"][1])},
+        {"tsym": symbols["buy_ce"][0],"ttoken": symbols["buy_pe"][1], "side": "B", "entry": get_entry_price(entry_price,symbols["buy_ce"][1])},
+        {"tsym": symbols["sell_pe"][0],"ttokn": symbols["buy_pe"][1], "side": "S", "entry":get_entry_price(entry_price,symbols["sell_pe"][1])},
+        {"tsym": symbols["sell_ce"][0],"ttoken": symbols["buy_pe"][1], "side": "S", "entry": get_entry_price(entry_price,symbols["sell_ce"][1])},
     ]
     print("IRON_CONDOR_LEGS initialised----->",IRON_CONDOR_LEGS)
 
@@ -375,34 +375,38 @@ def calc_mtm():
 
 # ====== EXIT(order) FUNCTION ======
 def exit_iron_condor(JKEY):
-    print("in exit_iron_condor()IRON_CONDOR_LEGS---->",IRON_CONDOR_LEGS)
-    for leg in IRON_CONDOR_LEGS:
-        trantype = "S" if leg["side"] == "B" else "B"
-        jData_dict = {
-            "uid": "FT053224",
-            "actid": "FT053224",
-            "exch": "NFO",
-            "tsym": leg["tsym"],
-            "qty": str(LOT_SIZE),
-            "prc": "0",
-            "prd": "I",
-            "trantype": trantype,
-            "prctyp": "MKT",
-            "ret": "DAY"
-        }
-
-        payload = f"jData={json.dumps(jData_dict)}&jKey={JKEY}"
-
-        headers = {
-            "Content-Type": "application/json"
-        }
-        print("order paylod---->",payload)
-        #jData = "jData=" + json.dumps(payload) + "&jKey=" + JKEY
-        #r = requests.post(BASE_URL + "PlaceOrder", data=jData)
-        r = requests.post("https://piconnect.flattrade.in/PiConnectTP/PlaceOrder", data=payload,headers=headers)
-        logging.info(f"Exit {trantype} {leg['tsym']}: {r.text}")
+    try:
+        print("in exit_iron_condor()IRON_CONDOR_LEGS---->",IRON_CONDOR_LEGS)
+        for leg in IRON_CONDOR_LEGS:
+            trantype = "S" if leg["side"] == "B" else "B"
+            jData_dict = {
+                "uid": "FT053224",
+                "actid": "FT053224",
+                "exch": "NFO",
+                "tsym": leg["ttoken"],
+                "qty": str(LOT_SIZE),
+                "prc": "0",
+                "prd": "I",
+                "trantype": trantype,
+                "prctyp": "MKT",
+                "ret": "DAY"
+            }
     
-    logging.info("Iron Condor exited ✅")
+            payload = f"jData={json.dumps(jData_dict)}&jKey={JKEY}"
+    
+            headers = {
+                "Content-Type": "application/json"
+            }
+            print("order paylod---->",payload)
+            #jData = "jData=" + json.dumps(payload) + "&jKey=" + JKEY
+            #r = requests.post(BASE_URL + "PlaceOrder", data=jData)
+            r = requests.post("https://piconnect.flattrade.in/PiConnectTP/PlaceOrder", data=payload,headers=headers)
+            logging.info(f"Exit {trantype} {leg['tsym']}: {r.text}")
+        
+        logging.info("Iron Condor exited ✅")
+        
+    except Exception as e:
+        logging.error(f"Order failed: {e}")
     
 #========immediate exit(thread)===========
 
