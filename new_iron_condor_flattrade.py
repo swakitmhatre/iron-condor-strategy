@@ -234,7 +234,7 @@ def get_order_book(JKEY):
         
 #=========get entry price from OrderBook api==================
 
-def get_price(tsym, data):
+def get_entry_price(tsym, data):
     for order in data:
         if order.get("tsym") == tsym:
             return float(order.get("prc")) / 100  # divide by 100 if price is in paise
