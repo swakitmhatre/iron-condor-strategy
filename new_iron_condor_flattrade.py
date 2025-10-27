@@ -26,8 +26,8 @@ MTM_PERCENT = 0.0025     # 0.25%
 UNDERLYING = "NIFTY"
 
 #LOT_SIZE = 75
-TARGET_PROFIT = 250
-STOP_LOSS = -250
+TARGET_PROFIT = 50
+STOP_LOSS = -50
 FALLBACK_AGE = 30          # ✅ if no tick for 30 s, reconnect
 WATCHDOG_INTERVAL = 10     # How often to check tick freshness
 PING_INTERVAL = 20         # How often to send ping for heartbeat
@@ -236,11 +236,11 @@ def get_order_book(JKEY):
 
 def get_entry_price(data,tsym):
 
-    print("data===========>>>>",data)
+    #print("data===========>>>>",data)
     for order in data:
         
         if order.get("tsym") == tsym:
-            return float(order.get("prc")) / 100  # divide by 100 if price is in paise
+            return float(order.get("avgprc")) / 100  # divide by 100 if price is in paise
     return None
 
 def run_strategy():
