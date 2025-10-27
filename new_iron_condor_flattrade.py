@@ -323,6 +323,7 @@ def start_ws():
         # Subscribe to all legs
         for leg in IRON_CONDOR_LEGS:
             token = leg["tsym"]
+            print("token---->",token)
             sub_msg = {
                         "t": "t",             # touchline subscription
                         "k": f"NFO|{token}",  # exchange + token
