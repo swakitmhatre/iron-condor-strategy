@@ -226,7 +226,7 @@ def get_order_book(JKEY):
         print("orderbook paylod---->",payload)
        
         r = requests.post("https://piconnect.flattrade.in/PiConnectTP/OrderBook", data=payload,headers=headers)
-        print("Orderbook API raw response:", r.text)
+        #print("Orderbook API raw response:", r.text)
         res = r.json()
         return res
     except Exception as e:
@@ -235,7 +235,7 @@ def get_order_book(JKEY):
 #=========get entry price from OrderBook api==================
 
 def get_entry_price(tsym, data):
-    data = json.loads(data)
+    data = data.json()
     print("data===========>>>>",data)
     for order in data:
         
