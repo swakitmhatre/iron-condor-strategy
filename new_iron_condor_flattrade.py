@@ -32,6 +32,7 @@ FALLBACK_AGE = 30          # ✅ if no tick for 30 s, reconnect
 WATCHDOG_INTERVAL = 10     # How often to check tick freshness
 PING_INTERVAL = 20         # How often to send ping for heartbeat
 
+IRON_CONDOR_LEGS=[]
 exit_flag = threading.Event()
 ltp_map = {}
 last_tick_time = {}  # ✅ Initialize this dictionary globally
@@ -283,7 +284,7 @@ def run_strategy():
 
     entry_price=get_order_book(JKEY)
     # Iron Condor legs: tsym is token from Flattrade symbol master
-    global IRON_CONDOR_LEGS = [
+    IRON_CONDOR_LEGS = [
         {"tsym": symbols["buy_pe"][0], "side": "B", "entry": get_entry_price(entry_price,symbols["buy_pe"][1])},
         {"tsym": symbols["buy_ce"][0], "side": "B", "entry": get_entry_price(entry_price,symbols["buy_ce"][1])},
         {"tsym": symbols["sell_pe"][0], "side": "S", "entry":get_entry_price(entry_price,symbols["sell_pe"][1])},
