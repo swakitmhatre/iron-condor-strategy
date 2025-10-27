@@ -234,7 +234,7 @@ def get_order_book(JKEY):
         
 #=========get entry price from OrderBook api==================
 
-def get_entry_price(tsym, data):
+def get_entry_price(data,tsym):
 
     print("data===========>>>>",data)
     for order in data:
