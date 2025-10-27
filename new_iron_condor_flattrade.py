@@ -26,11 +26,11 @@ MTM_PERCENT = 0.0025     # 0.25%
 UNDERLYING = "NIFTY"
 
 LOT_SIZE = 75
-TARGET_PROFIT = 50
-STOP_LOSS = -50
-FALLBACK_AGE = 30          # ✅ if no tick for 30 s, reconnect
-WATCHDOG_INTERVAL = 10     # How often to check tick freshness
-PING_INTERVAL = 20         # How often to send ping for heartbeat
+TARGET_PROFIT = 15
+STOP_LOSS = -15
+FALLBACK_AGE = 15          # ✅ if no tick for 30 s, reconnect
+WATCHDOG_INTERVAL = 5     # How often to check tick freshness
+PING_INTERVAL = 10         # How often to send ping for heartbeat
 
 IRON_CONDOR_LEGS=[]
 exit_flag = threading.Event()
@@ -320,7 +320,7 @@ def start_ws():
         ws.send(json.dumps(conn_msg))
         logging.info("Connection payload sent")
         print("IRON_CONDOR_LEGS---->",IRON_CONDOR_LEGS)
-        #time.sleep(0.1)
+        time.sleep(1)
         # Subscribe to all legs
         for leg in IRON_CONDOR_LEGS:
             token = leg["tsym"]
