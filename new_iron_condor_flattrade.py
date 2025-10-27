@@ -25,7 +25,7 @@ LOT_MULTIPLIER = 1
 MTM_PERCENT = 0.0025     # 0.25%
 UNDERLYING = "NIFTY"
 
-#LOT_SIZE = 75
+LOT_SIZE = 75
 TARGET_PROFIT = 50
 STOP_LOSS = -50
 FALLBACK_AGE = 30          # ✅ if no tick for 30 s, reconnect
