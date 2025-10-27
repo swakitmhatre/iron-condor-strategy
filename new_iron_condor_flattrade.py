@@ -233,38 +233,14 @@ def get_order_book(JKEY):
         logging.error(f"Order failed: {e}")
         
 #=========get entry price from OrderBook api==================
-'''
+
 def get_entry_price(tsym, data):
     data = json.loads(data)
+    print("data===========>>>>",data)
     for order in data:
-        print("order----->",order)
+        
         if order.get("tsym") == tsym:
             return float(order.get("prc")) / 100  # divide by 100 if price is in paise
-    return None
-'''
-
-def get_entry_price(tsym, data):
-    # If 'data' is a JSON string, convert it to Python list
-    if isinstance(data, str):
-        try:
-            data = json.loads(data)
-        except json.JSONDecodeError:
-            print("❌ Invalid JSON passed to get_entry_price()")
-            return None
-
-    # If 'data' is not iterable (not a list), skip
-    if not isinstance(data, list):
-        print("❌ Data must be a list of orders.")
-        return None
-
-    for order in data:
-        # ensure each order is a dict
-        if isinstance(order, dict) and order.get("tsym") == tsym:
-            try:
-                return float(order.get("prc", 0)) / 100
-            except (TypeError, ValueError):
-                return None
-
     return None
 
 def run_strategy():
@@ -314,10 +290,6 @@ def run_strategy():
         {"tsym": symbols["sell_ce"][0], "side": "S", "entry": get_entry_price(entry_price,symbols["sell_ce"][1])},
     ]
  
-if __name__ == "__main__":
-    run_strategy()
-    logging.info("Starting Iron Condor MTM Tracker (WebSocket only)...")
-    start_ws()
 
 #======start websocket and open(ws)===================
 def start_ws():
@@ -560,3 +532,8 @@ def watchdog_thread(JKEY):
                 else:
                     logging.debug(f"Watchdog snapshot failed for {token}")
         time.sleep(WATCHDOG_INTERVAL)
+
+if __name__ == "__main__":
+    run_strategy()
+    logging.info("Starting Iron Condor MTM Tracker (WebSocket only)...")
+    start_ws()
