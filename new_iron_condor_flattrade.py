@@ -233,13 +233,38 @@ def get_order_book(JKEY):
         logging.error(f"Order failed: {e}")
         
 #=========get entry price from OrderBook api==================
-
+'''
 def get_entry_price(tsym, data):
     data = json.loads(data)
     for order in data:
         print("order----->",order)
         if order.get("tsym") == tsym:
             return float(order.get("prc")) / 100  # divide by 100 if price is in paise
+    return None
+'''
+
+def get_entry_price(tsym, data):
+    # If 'data' is a JSON string, convert it to Python list
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except json.JSONDecodeError:
+            print("❌ Invalid JSON passed to get_entry_price()")
+            return None
+
+    # If 'data' is not iterable (not a list), skip
+    if not isinstance(data, list):
+        print("❌ Data must be a list of orders.")
+        return None
+
+    for order in data:
+        # ensure each order is a dict
+        if isinstance(order, dict) and order.get("tsym") == tsym:
+            try:
+                return float(order.get("prc", 0)) / 100
+            except (TypeError, ValueError):
+                return None
+
     return None
 
 def run_strategy():
