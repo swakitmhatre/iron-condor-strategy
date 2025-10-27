@@ -318,7 +318,7 @@ def start_ws():
         }
         ws.send(json.dumps(conn_msg))
         logging.info("Connection payload sent")
-    
+        print("IRON_CONDOR_LEGS---->",IRON_CONDOR_LEGS)
         #time.sleep(0.1)
         # Subscribe to all legs
         for leg in IRON_CONDOR_LEGS:
