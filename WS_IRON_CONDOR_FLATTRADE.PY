@@ -34,9 +34,6 @@ IRON_CONDOR_LEGS = [
     {"tsym": "47651", "side": "S", "entry": 0.409},
     {"tsym": "47728", "side": "S", "entry": 0.5515},
 ]
-
-[{'tsym': '47645', 'side': 'B', 'entry': 0.306}, {'tsym': '47736', 'side': 'B', 'entry': 0.37549999999999994},
-{'tsym': '47651', 'side': 'S', 'entry': 0.409}, {'tsym': '47728', 'side': 'S', 'entry': 0.5515}]
 TOKEN_FILE = "token.txt"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 
@@ -278,7 +275,8 @@ def start_ws():
         time.sleep(1)
         # Subscribe to all legs
         for leg in IRON_CONDOR_LEGS:
-            token = leg["tsym"]
+        token = leg["tsym"]
+        print("token---->",token)
             sub_msg = {
                         "t": "t",             # touchline subscription
                         "k": f"NFO|{token}",  # exchange + token
