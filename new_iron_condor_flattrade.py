@@ -145,7 +145,7 @@ def get_margin(token):
     except Exception as e:
         logging.warning(f"Margin fetch failed: {e}")
         return 150000  # fallback default
-'''
+
 def place_order(JKEY, symbol, qty, SIDE):
     try:
         jData_dict = {
@@ -172,46 +172,6 @@ def place_order(JKEY, symbol, qty, SIDE):
         print("Order API raw response:", r.text)
         res = r.json()
         logging.info(f"{SIDE} {symbol}: {res}")
-    except Exception as e:
-        logging.error(f"Order failed: {e}")
-'''
-def place_order(JKEY, symbol, qty, SIDE):
-    try:
-        jData_dict = {
-            "uid": "FT053224",
-            "actid": "FT053224",
-            "exch": "NFO",
-            "tsym": str(symbol),
-            "qty": qty,           # INTEGER
-            "prc": 0,             # INTEGER
-            "prd": "I",
-            "trantype": SIDE,
-            "prctyp": "MKT",
-            "ret": "DAY"
-        }
-
-        payload = {
-            "jData": json.dumps(jData_dict),
-            "jKey": JKEY
-        }
-
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-
-        print("EXIT ORDER PAYLOAD ->", payload)
-
-        r = requests.post(
-            "https://piconnect.flattrade.in/PiConnectTP/PlaceOrder",
-            data=payload,
-            headers=headers
-        )
-
-        print("EXIT ORDER RESPONSE ->", r.text)
-
-        res = r.json()
-        logging.info(f"ORDER RESULT: {SIDE} {symbol} -> {res}")
-
     except Exception as e:
         logging.error(f"Order failed: {e}")
 
