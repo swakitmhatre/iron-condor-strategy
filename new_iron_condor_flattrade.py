@@ -401,7 +401,10 @@ def exit_iron_condor(JKEY):
             #jData = "jData=" + json.dumps(payload) + "&jKey=" + JKEY
             #r = requests.post(BASE_URL + "PlaceOrder", data=jData)
             r = requests.post("https://piconnect.flattrade.in/PiConnectTP/PlaceOrder", data=payload,headers=headers)
+            print("Order API raw response:", r.text)
             logging.info(f"Exit {trantype} {leg['tsym']}: {r.text}")
+            #res = r.json()
+            #logging.info(f"{SIDE} {symbol}: {res}")
         
         logging.info("Iron Condor exited ✅")
         
@@ -471,7 +474,11 @@ def on_message(ws, message):
                 logging.info("Target/Stoploss hit. Exiting Iron Condor...")
                 ws.close()
                 JKEY = get_token()
-                exit_iron_condor(JKEY)   # careful: pass valid JKEY here
+                #exit_iron_condor(JKEY)   # careful: pass valid JKEY here
+                place_order(JKEY, symbols["sell_pe"][1], LOT_SIZE, "B")
+                place_order(JKEY, symbols["sell_ce"][1], LOT_SIZE, "B")
+                place_order(JKEY, symbols["buy_pe"][1], LOT_SIZE, "S")
+                place_order(JKEY, symbols["buy_ce"][1], LOT_SIZE, "S")
                 time.sleep(2)
                 logging.info("✅ Strategy stopped after target/stoploss hit.")
                 sys.exit(0)
