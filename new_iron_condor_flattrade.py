@@ -287,9 +287,9 @@ def run_strategy():
     global IRON_CONDOR_LEGS
     IRON_CONDOR_LEGS = [
         {"tsym": symbols["buy_pe"][0],"ttoken": symbols["buy_pe"][1], "side": "B", "entry": get_entry_price(entry_price,symbols["buy_pe"][1])},
-        {"tsym": symbols["buy_ce"][0],"ttoken": symbols["buy_pe"][1], "side": "B", "entry": get_entry_price(entry_price,symbols["buy_ce"][1])},
-        {"tsym": symbols["sell_pe"][0],"ttokn": symbols["buy_pe"][1], "side": "S", "entry":get_entry_price(entry_price,symbols["sell_pe"][1])},
-        {"tsym": symbols["sell_ce"][0],"ttoken": symbols["buy_pe"][1], "side": "S", "entry": get_entry_price(entry_price,symbols["sell_ce"][1])},
+        {"tsym": symbols["buy_ce"][0],"ttoken": symbols["buy_ce"][1], "side": "B", "entry": get_entry_price(entry_price,symbols["buy_ce"][1])},
+        {"tsym": symbols["sell_pe"][0],"ttokn": symbols["sell_pe"][1], "side": "S", "entry":get_entry_price(entry_price,symbols["sell_pe"][1])},
+        {"tsym": symbols["sell_ce"][0],"ttoken": symbols["sell_ce"][1], "side": "S", "entry": get_entry_price(entry_price,symbols["sell_ce"][1])},
     ]
     print("IRON_CONDOR_LEGS initialised----->",IRON_CONDOR_LEGS)
 
