@@ -500,9 +500,9 @@ def on_message(ws, message):
 
             # exit if threshold hit
             if pnl >= TARGET_PROFIT or pnl <= STOP_LOSS:
-                trigger_exit()
+                #trigger_exit()
                 logging.info("Target/Stoploss hit. Exiting Iron Condor...")
-                ws.close()
+                #ws.close()
                 JKEY = get_token()
                 exit_iron_condor(JKEY,norenordno)   # careful: pass valid JKEY here
                 #place_order(JKEY, symbols["sell_pe"][1], LOT_SIZE, "B")
