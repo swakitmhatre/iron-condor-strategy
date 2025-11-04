@@ -33,6 +33,7 @@ WATCHDOG_INTERVAL = 5     # How often to check tick freshness
 PING_INTERVAL = 10         # How often to send ping for heartbeat
 
 IRON_CONDOR_LEGS=[]
+norenordno=[]
 exit_flag = threading.Event()
 ltp_map = {}
 last_tick_time = {}  # ✅ Initialize this dictionary globally
@@ -172,6 +173,13 @@ def place_order(JKEY, symbol, qty, SIDE):
         print("Order API raw response:", r.text)
         res = r.json()
         logging.info(f"{SIDE} {symbol}: {res}")
+        
+        if res and res.get("stat") == "Ok":
+            order_id = res.get("norenordno")
+            return order_id
+            logging.info(f"Order accepted, ID={order_id}")
+        else:
+            logging.error(f"Order rejected: {res}")
     except Exception as e:
         logging.error(f"Order failed: {e}")
 
@@ -272,10 +280,11 @@ def run_strategy():
     # Entry - Buy first
     JKEY=token
     entry_start = time.perf_counter()
-    place_order(JKEY, symbols["buy_pe"][1], LOT_SIZE, "B")
-    place_order(JKEY, symbols["buy_ce"][1], LOT_SIZE, "B")
-    place_order(JKEY, symbols["sell_pe"][1], LOT_SIZE, "S")
-    place_order(JKEY, symbols["sell_ce"][1], LOT_SIZE, "S")
+    global norenordno
+    norenordno[0]=place_order(JKEY, symbols["buy_pe"][1], LOT_SIZE, "B")
+    norenordno[1]=place_order(JKEY, symbols["buy_ce"][1], LOT_SIZE, "B")
+    norenordno[2]=place_order(JKEY, symbols["sell_pe"][1], LOT_SIZE, "S")
+    norenordno[3]=place_order(JKEY, symbols["sell_ce"][1], LOT_SIZE, "S")
 
     entry_delay = round(time.perf_counter() - entry_start, 3)
     entry_time = datetime.now()
@@ -374,8 +383,9 @@ def calc_mtm():
     return pnl
 
 # ====== EXIT(order) FUNCTION ======
-def exit_iron_condor(JKEY):
+def exit_iron_condor(JKEY,norenordno):
     try:
+        '''
         print("in exit_iron_condor()IRON_CONDOR_LEGS---->",IRON_CONDOR_LEGS)
         for leg in reversed(IRON_CONDOR_LEGS):
             trantype = "S" if leg["side"] == "B" else "B"
@@ -405,6 +415,26 @@ def exit_iron_condor(JKEY):
             logging.info(f"Exit {trantype} {leg['tsym']}: {r.text}")
             #res = r.json()
             #logging.info(f"{SIDE} {symbol}: {res}")
+        
+        logging.info("Iron Condor exited ✅")
+        '''
+        print("in exit_iron_condor()")
+        for leg in reversed(norenordno):
+            jData_dict = {
+                "uid": "FT053224",
+                "prd": "H",
+                "norenordno":leg
+            }
+            payload = f"jData={json.dumps(jData_dict)}&jKey={JKEY}"
+    
+            headers = {
+                "Content-Type": "application/json"
+            }
+            print("order paylod---->",payload)
+            r = requests.post("https://piconnect.flattrade.in/PiConnectTP/ExitSNOOrder", data=payload,headers=headers)
+            print("Order API raw response:", r.text)
+            logging.info(f"Exit: {r.text}")
+            
         
         logging.info("Iron Condor exited ✅")
         
@@ -474,11 +504,11 @@ def on_message(ws, message):
                 logging.info("Target/Stoploss hit. Exiting Iron Condor...")
                 ws.close()
                 JKEY = get_token()
-                #exit_iron_condor(JKEY)   # careful: pass valid JKEY here
-                place_order(JKEY, symbols["sell_pe"][1], LOT_SIZE, "B")
-                place_order(JKEY, symbols["sell_ce"][1], LOT_SIZE, "B")
-                place_order(JKEY, symbols["buy_pe"][1], LOT_SIZE, "S")
-                place_order(JKEY, symbols["buy_ce"][1], LOT_SIZE, "S")
+                exit_iron_condor(JKEY,norenordno)   # careful: pass valid JKEY here
+                #place_order(JKEY, symbols["sell_pe"][1], LOT_SIZE, "B")
+                #place_order(JKEY, symbols["sell_ce"][1], LOT_SIZE, "B")
+                #place_order(JKEY, symbols["buy_pe"][1], LOT_SIZE, "S")
+                #place_order(JKEY, symbols["buy_ce"][1], LOT_SIZE, "S")
                 time.sleep(2)
                 logging.info("✅ Strategy stopped after target/stoploss hit.")
                 sys.exit(0)
