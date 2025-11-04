@@ -33,7 +33,7 @@ WATCHDOG_INTERVAL = 5     # How often to check tick freshness
 PING_INTERVAL = 10         # How often to send ping for heartbeat
 
 IRON_CONDOR_LEGS=[]
-norenordno=[None] * 5
+norenordno=[None] * 4
 exit_flag = threading.Event()
 ltp_map = {}
 last_tick_time = {}  # ✅ Initialize this dictionary globally
