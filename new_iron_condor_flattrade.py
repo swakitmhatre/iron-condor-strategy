@@ -504,11 +504,11 @@ def on_message(ws, message):
                 logging.info("Target/Stoploss hit. Exiting Iron Condor...")
                 #ws.close()
                 JKEY = get_token()
-                exit_iron_condor(JKEY,norenordno)   # careful: pass valid JKEY here
-                #place_order(JKEY, symbols["sell_pe"][1], LOT_SIZE, "B")
-                #place_order(JKEY, symbols["sell_ce"][1], LOT_SIZE, "B")
-                #place_order(JKEY, symbols["buy_pe"][1], LOT_SIZE, "S")
-                #place_order(JKEY, symbols["buy_ce"][1], LOT_SIZE, "S")
+                #exit_iron_condor(JKEY,norenordno)   # careful: pass valid JKEY here
+                place_order(JKEY, symbols["sell_pe"][1], LOT_SIZE, "B")
+                place_order(JKEY, symbols["sell_ce"][1], LOT_SIZE, "B")
+                place_order(JKEY, symbols["buy_pe"][1], LOT_SIZE, "S")
+                place_order(JKEY, symbols["buy_ce"][1], LOT_SIZE, "S")
                 time.sleep(2)
                 logging.info("✅ Strategy stopped after target/stoploss hit.")
                 sys.exit(0)
