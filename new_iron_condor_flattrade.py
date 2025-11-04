@@ -285,7 +285,7 @@ def run_strategy():
     norenordno[1]=place_order(JKEY, symbols["buy_ce"][1], LOT_SIZE, "B")
     norenordno[2]=place_order(JKEY, symbols["sell_pe"][1], LOT_SIZE, "S")
     norenordno[3]=place_order(JKEY, symbols["sell_ce"][1], LOT_SIZE, "S")
-
+    print("norenordno during entry----->",norenordno)
     entry_delay = round(time.perf_counter() - entry_start, 3)
     entry_time = datetime.now()
     logging.info(f"✅ ENTRY COMPLETE | Time = {entry_time} | Delay = {entry_delay}s")
@@ -418,7 +418,7 @@ def exit_iron_condor(JKEY,norenordno):
         
         logging.info("Iron Condor exited ✅")
         '''
-        print("in exit_iron_condor()")
+        print("in exit_iron_condor()--->",norenordno)
         for leg in reversed(norenordno):
             jData_dict = {
                 "uid": "FT053224",
