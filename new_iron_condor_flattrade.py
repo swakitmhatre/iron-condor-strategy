@@ -26,8 +26,8 @@ MTM_PERCENT = 0.0025     # 0.25%
 UNDERLYING = "NIFTY"
 
 LOT_SIZE = 75
-TARGET_PROFIT = 15
-STOP_LOSS = -15
+TARGET_PROFIT = 12
+STOP_LOSS = -12
 FALLBACK_AGE = 15          # ✅ if no tick for 30 s, reconnect
 WATCHDOG_INTERVAL = 5     # How often to check tick freshness
 PING_INTERVAL = 10         # How often to send ping for heartbeat
