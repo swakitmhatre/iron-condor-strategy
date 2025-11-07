@@ -501,7 +501,7 @@ def on_message(ws, message):
             # exit if threshold hit
             if pnl >= TARGET_PROFIT or pnl <= STOP_LOSS:
                 #trigger_exit()
-                logging.info("Target/Stoploss hit. Exiting Iron Condor...",pnl)
+                logging.info(f"Target/Stoploss hit. Exiting Iron Condor...,MTM:{pnl:.2f}")
                 #ws.close()
                 JKEY = get_token()
                 #exit_iron_condor(JKEY,norenordno)   # careful: pass valid JKEY here
