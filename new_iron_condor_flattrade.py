@@ -496,7 +496,7 @@ def on_message(ws, message):
 
             # human-friendly logging
             pnl = calc_mtm()
-            logging.info(f"LTP update {token}: {ltp:.2f}, MTM: {pnl:.2f}, last_tick_age: 0s")
+            logging.info(f"LTP update {token}: {ltp:.2f}, MTM: {pnl:.2f}, last_tick_age: {last_tick_time[token]:.2f}")
 
             # exit if threshold hit
             if pnl >= TARGET_PROFIT or pnl <= STOP_LOSS:
