@@ -194,7 +194,7 @@ def get_symbol(expiry, strike, opt_type):
         with open(SYMBOL_FILE) as f:
             for line in f:
                 #if f"{UNDERLYING}{expiry}" in line and f"{strike}" in line  and "C" in line or "P" in line:
-                if f"{trading_symbol}" in line:
+                if f"{trading_symbol}" in line and "FINNIFTY" not in line::
                     print("option--->",line)
                     #return line.split(",")[4]
                     return [line.split(",")[1],line.split(",")[4]]
@@ -249,7 +249,7 @@ def get_entry_price(data,tsym):
     for order in data:
         
         if order.get("tsym") == tsym:
-            return float(order.get("avgprc")) / 100  # divide by 100 if price is in paise
+            return float(order.get("prc")) / 100  # divide by 100 if price is in paise
     return None
 
 def run_strategy():
