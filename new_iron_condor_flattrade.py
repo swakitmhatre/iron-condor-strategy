@@ -245,7 +245,7 @@ def get_order_book(JKEY):
 
 def get_entry_price(data,tsym):
 
-    print("data===========>>>>",data.json()))
+    print("data===========>>>>",data.json())
     for order in data:
         
         if order.get("tsym") == tsym:
