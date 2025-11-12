@@ -370,12 +370,13 @@ def start_ws():
 def calc_mtm():
     pnl = 0
     for leg in IRON_CONDOR_LEGS:
-        tsym = leg["ttoken"]
+        tsym = leg["tsym"]
+        ttoken=leg["ttoken"]
         if tsym not in ltp_map:
             continue
         entry = leg["entry"] * LOT_SIZE
         ltp = ltp_map[tsym]
-        print("symbol,entry,ltp---->",tsym,entry,ltp)
+        print("symbol,entry,ltp---->",ttoken,entry,ltp)
         qty = LOT_SIZE
         pnl += (ltp - entry)  if leg["side"] == "B" else (entry - ltp) 
         #pnl += (ltp - entry) * qty if leg["side"] == "B" else (entry - ltp) * qty
