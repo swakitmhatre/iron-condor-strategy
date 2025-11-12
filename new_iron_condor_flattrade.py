@@ -249,7 +249,7 @@ def get_entry_price(data,tsym):
     for order in data:
         
         if order.get("tsym") == tsym:
-            return float(order.get("avgprc")) / 100  # divide by 100 if price is in paise
+            return float(order.get("rprc")) / 100  # divide by 100 if price is in paise
     return None
 
 def run_strategy():
@@ -370,7 +370,7 @@ def start_ws():
 def calc_mtm():
     pnl = 0
     for leg in IRON_CONDOR_LEGS:
-        tsym = leg["tsym"]
+        tsym = leg["ttoken"]
         if tsym not in ltp_map:
             continue
         entry = leg["entry"] * LOT_SIZE
