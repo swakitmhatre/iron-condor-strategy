@@ -195,7 +195,7 @@ def get_symbol(expiry, strike, opt_type):
             for line in f:
                 #if f"{UNDERLYING}{expiry}" in line and f"{strike}" in line  and "C" in line or "P" in line:
                 if f"{trading_symbol}" in line:
-                    #print("option--->",line)
+                    print("option--->",line)
                     #return line.split(",")[4]
                     return [line.split(",")[1],line.split(",")[4]]
     except Exception as e:
