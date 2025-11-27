@@ -243,15 +243,13 @@ def get_order_book(JKEY):
         
 #=========get entry price from OrderBook api==================
 
-def get_entry_price(data,tsym):
+def get_entry_price(data,tsym,norenordno):
 
     #print("data===========>>>>",data)
     print("norenordno===========>>>>",norenordno)
-    count=0
     for order in data:
         
-        if order.get("tsym") == tsym and order.get("norenordno") == norenordno[count]:
-            count=count+1
+        if order.get("tsym") == tsym and order.get("norenordno") == norenordno:
             return float(order.get("avgprc")) / 100  # divide by 100 if price is in paise
             
     return None
@@ -299,10 +297,10 @@ def run_strategy():
     # Iron Condor legs: tsym is token from Flattrade symbol master
     global IRON_CONDOR_LEGS
     IRON_CONDOR_LEGS = [
-        {"tsym": symbols["buy_pe"][0],"ttoken": symbols["buy_pe"][1], "side": "B", "entry": get_entry_price(entry_price,symbols["buy_pe"][1])},
-        {"tsym": symbols["buy_ce"][0],"ttoken": symbols["buy_ce"][1], "side": "B", "entry": get_entry_price(entry_price,symbols["buy_ce"][1])},
-        {"tsym": symbols["sell_pe"][0],"ttoken": symbols["sell_pe"][1], "side": "S", "entry":get_entry_price(entry_price,symbols["sell_pe"][1])},
-        {"tsym": symbols["sell_ce"][0],"ttoken": symbols["sell_ce"][1], "side": "S", "entry": get_entry_price(entry_price,symbols["sell_ce"][1])},
+        {"tsym": symbols["buy_pe"][0],"ttoken": symbols["buy_pe"][1], "side": "B", "entry": get_entry_price(entry_price,symbols["buy_pe"][1],norenordno[0])},
+        {"tsym": symbols["buy_ce"][0],"ttoken": symbols["buy_ce"][1], "side": "B", "entry": get_entry_price(entry_price,symbols["buy_ce"][1],norenordno[1])},
+        {"tsym": symbols["sell_pe"][0],"ttoken": symbols["sell_pe"][1], "side": "S", "entry":get_entry_price(entry_price,symbols["sell_pe"][1],norenordno[2])},
+        {"tsym": symbols["sell_ce"][0],"ttoken": symbols["sell_ce"][1], "side": "S", "entry": get_entry_price(entry_price,symbols["sell_ce"][1],norenordno[3])},
     ]
     print("IRON_CONDOR_LEGS initialised----->",IRON_CONDOR_LEGS)
 
