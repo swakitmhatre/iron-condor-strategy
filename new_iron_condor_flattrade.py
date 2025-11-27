@@ -370,7 +370,7 @@ def start_ws():
             time.sleep(5)
 
 # ====== MTM CALCULATION ======
-def calc_mtm():
+def calc_mtm_old():
     pnl = 0
     for leg in IRON_CONDOR_LEGS:
         tsym = leg["tsym"]
@@ -385,6 +385,24 @@ def calc_mtm():
         #pnl += (ltp - entry) * qty if leg["side"] == "B" else (entry - ltp) * qty
         print("pnl--->",pnl)
     return pnl
+
+def calc_mtm():
+    try:
+        JKEY = get_token()
+        jData_dict = {
+            "uid": "FT053224",
+            "actid": "FT053224",
+        }
+        payload = f"jData={json.dumps(jData_dict)}&jKey={JKEY}"
+
+        headers = {
+            "Content-Type": "application/json"
+        }
+        r = requests.get("https://piconnect.flattrade.in/PiConnectTP/Limits", data=payload,headers=headers)
+        return float(r.json()["uzpnl_d_i"])
+    except Exception as e:
+        logging.warning(f"PNL fetch failed: {e}")
+        return 0.0
 
 # ====== EXIT(order) FUNCTION ======
 def exit_iron_condor(JKEY,norenordno):
