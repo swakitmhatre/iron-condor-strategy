@@ -246,10 +246,12 @@ def get_order_book(JKEY):
 def get_entry_price(data,tsym):
 
     #print("data===========>>>>",data)
+    count=0
     for order in data:
         
-        if order.get("tsym") == tsym:
+        if order.get("tsym") == tsym and order.get("norenordno") == norenordno[count]:
             return float(order.get("rprc")) / 100  # divide by 100 if price is in paise
+            count=count+1
     return None
 
 def run_strategy():
