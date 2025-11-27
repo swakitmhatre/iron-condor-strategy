@@ -28,9 +28,9 @@ UNDERLYING = "NIFTY"
 LOT_SIZE = 75
 TARGET_PROFIT = 15
 STOP_LOSS = -15
-FALLBACK_AGE = 15          # ✅ if no tick for 30 s, reconnect
-WATCHDOG_INTERVAL = 15     # How often to check tick freshness
-PING_INTERVAL = 10         # How often to send ping for heartbeat
+FALLBACK_AGE = 30          # ✅ if no tick for 30 s, reconnect
+WATCHDOG_INTERVAL = 30     # How often to check tick freshness
+PING_INTERVAL = 20         # How often to send ping for heartbeat
 
 IRON_CONDOR_LEGS=[]
 norenordno=[None] * 4
