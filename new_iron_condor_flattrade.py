@@ -399,6 +399,7 @@ def calc_mtm():
             "Content-Type": "application/json"
         }
         r = requests.get("https://piconnect.flattrade.in/PiConnectTP/Limits", data=payload,headers=headers)
+        print("limits api------>",r.json())
         return float(r.json()["uzpnl_d_i"])
     except Exception as e:
         logging.warning(f"PNL fetch failed: {e}")
