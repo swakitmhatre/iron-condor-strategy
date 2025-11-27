@@ -251,8 +251,9 @@ def get_entry_price(data,tsym):
     for order in data:
         
         if order.get("tsym") == tsym and order.get("norenordno") == norenordno[count]:
-            return float(order.get("avgprc")) / 100  # divide by 100 if price is in paise
             count=count+1
+            return float(order.get("avgprc")) / 100  # divide by 100 if price is in paise
+            
     return None
 
 def run_strategy():
