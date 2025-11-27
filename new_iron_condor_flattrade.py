@@ -294,6 +294,7 @@ def run_strategy():
     logging.info("Iron Condor entered. Monitoring MTM...")
 
     entry_price=get_order_book(JKEY)
+    print("data===========>>>>",data)
     # Iron Condor legs: tsym is token from Flattrade symbol master
     global IRON_CONDOR_LEGS
     IRON_CONDOR_LEGS = [
