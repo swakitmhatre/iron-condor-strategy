@@ -246,7 +246,7 @@ def get_order_book(JKEY):
 def get_entry_price(data,tsym,norenordno):
 
     #print("data===========>>>>",data)
-    print("norenordno===========>>>>",norenordno)
+    #print("norenordno===========>>>>",norenordno)
     for order in data:
         
         if order.get("tsym") == tsym and order.get("norenordno") == norenordno:
@@ -294,7 +294,7 @@ def run_strategy():
     logging.info("Iron Condor entered. Monitoring MTM...")
 
     entry_price=get_order_book(JKEY)
-    print("order book data===========>>>>",entry_price)
+    #print("order book data===========>>>>",entry_price)
     # Iron Condor legs: tsym is token from Flattrade symbol master
     global IRON_CONDOR_LEGS
     IRON_CONDOR_LEGS = [
@@ -399,10 +399,12 @@ def calc_mtm():
             "Content-Type": "application/json"
         }
         print("Limits payload################",payload)
-        r = requests.get("https://piconnect.flattrade.in/PiConnectTP/Limits", data=payload,headers=headers)
+        #r = requests.get("https://piconnect.flattrade.in/PiConnectTP/Limits", data=payload,headers=headers)
+        r = requests.get("https://piconnect.flattrade.in/PiConnectTP/PositionBook", data=payload,headers=headers)
+        
         print("+++++++++++++limits api raw:+++++++++", r.text)
         res = r.json()  # now valid JSON
-        return float(res["uzpnl_d_i"])
+        return float(res["urmtom"])
     except Exception as e:
         logging.warning(f"PNL fetch failed: {e}")
         return 0.0
