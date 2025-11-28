@@ -30,7 +30,7 @@ TARGET_PROFIT = 15
 STOP_LOSS = -15
 FALLBACK_AGE = 30          # ✅ if no tick for 30 s, reconnect
 WATCHDOG_INTERVAL = 30     # How often to check tick freshness
-PING_INTERVAL = 20         # How often to send ping for heartbeat
+PING_INTERVAL = 10         # How often to send ping for heartbeat
 
 IRON_CONDOR_LEGS=[]
 norenordno=[None] * 4
@@ -372,7 +372,7 @@ def start_ws():
             time.sleep(5)
 
 # ====== MTM CALCULATION ======
-def calc_mtm():
+def calc_mtm_old():
     pnl = 0
     for leg in IRON_CONDOR_LEGS:
         tsym = leg["tsym"]
@@ -388,7 +388,7 @@ def calc_mtm():
         print("pnl--->",pnl)
     return pnl
 
-def calc_mtm_old():
+def calc_mtm():
     try:
         JKEY = get_token()
         jData_dict = {
@@ -401,12 +401,12 @@ def calc_mtm_old():
             "Content-Type": "application/json"
         }
         print("Limits payload################",payload)
-        #r = requests.post("https://piconnect.flattrade.in/PiConnectTP/Limits", data=payload,headers=headers)
-        r = requests.post("https://piconnect.flattrade.in/PiConnectTP/PositionBook", data=payload,headers=headers)
+        r = requests.post("https://piconnect.flattrade.in/PiConnectTP/Limits", data=payload,headers=headers)
+        #r = requests.post("https://piconnect.flattrade.in/PiConnectTP/PositionBook", data=payload,headers=headers)
         
         print("+++++++++++++limits api raw:+++++++++", r.text)
         res = r.json()  # now valid JSON
-        return float(res["urmtom"])
+        return float(res["unmtom"])
     except Exception as e:
         logging.warning(f"PNL fetch failed: {e}")
         return 0.0
