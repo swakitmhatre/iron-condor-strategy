@@ -129,8 +129,9 @@ def get_pnl(token):
         headers = {
             "Content-Type": "application/json"
         }
-        r = requests.get("https://piconnect.flattrade.in/PiConnectTP/Limits", data=payload,headers=headers)
-        return float(r.json()["uzpnl_d_i"])
+        r = requests.post("https://piconnect.flattrade.in/PiConnectTP/Limits", data=payload,headers=headers)
+        #return float(r.json()["uzpnl_d_i"])
+        return float(r.json()["urmtom"])
     except Exception as e:
         logging.warning(f"PNL fetch failed: {e}")
         return 0.0
