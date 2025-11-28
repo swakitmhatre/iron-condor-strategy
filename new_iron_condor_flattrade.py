@@ -68,7 +68,7 @@ def get_token():
     try:
         with open(TOKEN_FILE, "r") as f:
             data = json.load(f)
-        if time.time() - data["timestamp"] < 23 * 3600:
+        if time.time() - data["timestamp"] < 12 * 3600:
             print("saved token---->",data["token"])
             return data["token"]
     except:
