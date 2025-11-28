@@ -131,7 +131,7 @@ def get_pnl(jkey):
         }
         r = requests.post("https://piconnect.flattrade.in/PiConnectTP/Limits", data=payload,headers=headers)
         #return float(r.json()["uzpnl_d_i"])
-        return float(r.json()["urmtom"])
+        return float(r.json()["unmtom"])
     except Exception as e:
         logging.warning(f"PNL fetch failed: {e}")
         return 0.0
