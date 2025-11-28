@@ -118,7 +118,7 @@ def get_live_price(jKey, uid, symbol_token="26000",exch="NSE"):
         logging.error(f"Live price fetch failed: {e}")
         raise
 
-def get_pnl(token):
+def get_pnl(jkey):
     try:
         jData_dict = {
             "uid": "FT053224",
