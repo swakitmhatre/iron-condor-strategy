@@ -217,7 +217,8 @@ def run_strategy():
     live_price = get_live_price(token,CLIENT_ID)
     #margin = get_margin(token)
     margin = 100000
-    mtm_target = margin * MTM_PERCENT
+    #mtm_target = margin * MTM_PERCENT
+    mtm_target=25
     lot_size = 75 * LOT_MULTIPLIER
 
     #expiry = datetime.datetime.now().strftime("%y%b%d").upper()
