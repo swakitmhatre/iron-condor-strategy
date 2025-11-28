@@ -404,8 +404,9 @@ def calc_mtm():
         r = requests.post("https://piconnect.flattrade.in/PiConnectTP/Limits", data=payload,headers=headers)
         #r = requests.post("https://piconnect.flattrade.in/PiConnectTP/PositionBook", data=payload,headers=headers)
         
-        print("+++++++++++++limits api raw:+++++++++", r.text)
+        #print("+++++++++++++limits api raw:+++++++++", r.text)
         res = r.json()  # now valid JSON
+        print("+++++++++++++limits api raw urmtom and request time:+++++++++", float(res["urmtom"]),"++++",res["request_time"])
         return float(res["urmtom"])
     except Exception as e:
         logging.warning(f"PNL fetch failed: {e}")
