@@ -251,7 +251,7 @@ def run_strategy():
     while True:
         pnl = get_pnl(token)
         logging.info(f"📈 MTM = ₹{pnl:.2f}")
-        if pnl <= -mtm_target OR pnl >= mtm_target :
+        if pnl <= -mtm_target or pnl >= mtm_target :
             condition_met_time = datetime.now()
             logging.info(f"🎯 TARGET HIT at {condition_met_time}")
             # Exit - Sell legs first
