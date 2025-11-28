@@ -401,8 +401,8 @@ def calc_mtm():
             "Content-Type": "application/json"
         }
         print("Limits payload################",payload)
-        #r = requests.post("https://piconnect.flattrade.in/PiConnectTP/Limits", data=payload,headers=headers)
-        r = requests.post("https://piconnect.flattrade.in/PiConnectTP/PositionBook", data=payload,headers=headers)
+        r = requests.post("https://piconnect.flattrade.in/PiConnectTP/Limits", data=payload,headers=headers)
+        #r = requests.post("https://piconnect.flattrade.in/PiConnectTP/PositionBook", data=payload,headers=headers)
         
         print("+++++++++++++limits api raw:+++++++++", r.text)
         res = r.json()  # now valid JSON
