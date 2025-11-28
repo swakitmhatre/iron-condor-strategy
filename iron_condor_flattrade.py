@@ -249,7 +249,7 @@ def run_strategy():
     logging.info(f"✅ ENTRY COMPLETE | Time = {entry_time} | Delay = {entry_delay}s")
     logging.info("Iron Condor entered. Monitoring MTM...")
     
-
+    
     while True:
         pnl = get_pnl(token)
         logging.info(f"📈 MTM = ₹{pnl:.2f}")
