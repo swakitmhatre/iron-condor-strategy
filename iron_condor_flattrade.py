@@ -136,6 +136,24 @@ def get_pnl(jkey):
         logging.warning(f"PNL fetch failed: {e}")
         return 0.0
 
+def get_rpnl(jkey):
+    try:
+        jData_dict = {
+            "uid": "FT053224",
+            "actid": "FT053224",
+        }
+        payload = f"jData={json.dumps(jData_dict)}&jKey={jkey}"
+
+        headers = {
+            "Content-Type": "application/json"
+        }
+        r = requests.post("https://piconnect.flattrade.in/PiConnectTP/Limits", data=payload,headers=headers)
+        #return float(r.json()["uzpnl_d_i"])
+        return float(r.json()["rpnl"])
+    except Exception as e:
+        logging.warning(f"PNL fetch failed: {e}")
+        return 0.0
+
 def get_margin(token):
     try:
         r = requests.get("https://api.flattrade.in/trade/margin", headers={"Authorization": f"Bearer {token}"})
@@ -235,7 +253,7 @@ def run_strategy():
     }
 
     logging.info(f"Selected symbols: {symbols}")
-
+    rpnl=get_rpnl(token)
     # Entry - Buy first
     jkey=token
     entry_start = time.perf_counter()
@@ -248,14 +266,11 @@ def run_strategy():
     entry_time = datetime.now()
     logging.info(f"✅ ENTRY COMPLETE | Time = {entry_time} | Delay = {entry_delay}s")
     logging.info("Iron Condor entered. Monitoring MTM...")
-    old_pnl = get_pnl(token)
-    
+
     while True:
         pnl = get_pnl(token)
-        #new_pnl = get_pnl(token)
-        #pnl=old_pnl-new_pnl
-        #old_pnl=new_pnl
-        logging.info(f"📈 MTM = ₹{pnl:.2f}")
+        pnl= pnl-rpnl
+        logging.info(f"📈 MTM = ₹{pnl:.2f}  rpnl = ₹{rpnl:.2f}")
         if pnl <= -mtm_target or pnl >= mtm_target :
             condition_met_time = datetime.now()
             logging.info(f"🎯 TARGET HIT at {condition_met_time}")
