@@ -248,10 +248,12 @@ def run_strategy():
     entry_time = datetime.now()
     logging.info(f"✅ ENTRY COMPLETE | Time = {entry_time} | Delay = {entry_delay}s")
     logging.info("Iron Condor entered. Monitoring MTM...")
-    
+    old_pnl = get_pnl(token)
     
     while True:
-        pnl = get_pnl(token)
+        new_pnl = get_pnl(token)
+        pnl=old_pnl-new_pnl
+        old_pnl=new_pnl
         logging.info(f"📈 MTM = ₹{pnl:.2f}")
         if pnl <= -mtm_target or pnl >= mtm_target :
             condition_met_time = datetime.now()
