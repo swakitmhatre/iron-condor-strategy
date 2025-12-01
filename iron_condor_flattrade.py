@@ -148,7 +148,7 @@ def get_rpnl(jkey):
             "Content-Type": "application/json"
         }
         r = requests.post("https://piconnect.flattrade.in/PiConnectTP/Limits", data=payload,headers=headers)
-        print(r.text())
+        print("in rpnl()",r.json())
         #return float(r.json()["uzpnl_d_i"])
         return float(r.json()["rpnl"])
     except Exception as e:
