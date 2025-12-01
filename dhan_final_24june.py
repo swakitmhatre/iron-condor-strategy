@@ -277,14 +277,14 @@ def main():
 
     target_profit = margin * TARGET_PCT / 100
     log(f"✅ Margin = ₹{margin:.2f}, Target Profit = ₹{target_profit:.2f}, Qty per leg = {qty}")
-
+    realized_gain=get_realized_gain()
     # === ENTRY (Buy Legs → Sell Legs) ===
     entry_start = time.perf_counter()
     place_order(tokens["PE_BUY"], "BUY", qty)
     place_order(tokens["CE_BUY"], "BUY", qty)
     place_order(tokens["PE_SELL"], "SELL", qty)
     place_order(tokens["CE_SELL"], "SELL", qty)
-    old_mtm = get_mtm()
+    
     entry_delay = round(time.perf_counter() - entry_start, 3)
     
     entry_time = datetime.now()
@@ -297,7 +297,7 @@ def main():
     condition_met_time = None
     target_profit=25
     TARGET_LOSS=-25
-    realized_gain=get_realized_gain()
+    
     while True:
         start = time.perf_counter()
         mtm = get_mtm()
