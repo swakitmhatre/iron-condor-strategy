@@ -229,7 +229,16 @@ def place_order(security_id, side, qty):
     log(f"ORDER | {side} | {security_id} | qty={qty} | delay={delay}ms | code={res.status_code}")
     return delay
 
-
+def get_realized_gain():
+    try:
+        res = requests.get("https://api.dhan.co/v2/positions", headers=HEADERS, timeout=0.5)
+        positions = res.json()
+        #print("positions------>",positions)
+        #return sum(float(p.get("pnl", 0)) for p in positions if p["account_id"] == ACCOUNT_ID)
+        return sum(float(p.get("realizedProfit", 0)) for p in positions if p["dhanClientId"] == ACCOUNT_ID)
+    except Exception as e:
+        log(f"[ERROR] realizedProfit fetch failed: {e}")
+        return 0
 def get_mtm():
     try:
         res = requests.get("https://api.dhan.co/v2/positions", headers=HEADERS, timeout=0.5)
@@ -238,7 +247,7 @@ def get_mtm():
         #return sum(float(p.get("pnl", 0)) for p in positions if p["account_id"] == ACCOUNT_ID)
         return sum(float(p.get("unrealizedProfit", 0)) for p in positions if p["dhanClientId"] == ACCOUNT_ID)
     except Exception as e:
-        log(f"[ERROR] MTM fetch failed: {e}")
+        log(f"[ERROR] MTM(unrealizedProfit) fetch failed: {e}")
         return 0
 
 
@@ -288,11 +297,11 @@ def main():
     condition_met_time = None
     target_profit=25
     TARGET_LOSS=-25
-    new_mtm = get_mtm()
-    mtm=old_mtm-new_mtm
+    realized_gain=get_realized_gain()
     while True:
         start = time.perf_counter()
-        #mtm = get_mtm()
+        mtm = get_mtm()
+        mtm=mtm-realized_gain
         log(f"📈 MTM = ₹{mtm:.2f}")
 
         if mtm >= target_profit or mtm <= TARGET_LOSS:
