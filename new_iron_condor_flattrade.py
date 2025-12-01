@@ -372,7 +372,7 @@ def start_ws():
             time.sleep(5)
 
 # ====== MTM CALCULATION ======
-def calc_mtm_old():
+def calc_mtm():
     pnl = 0
     for leg in IRON_CONDOR_LEGS:
         tsym = leg["tsym"]
@@ -388,7 +388,7 @@ def calc_mtm_old():
         print("pnl--->",pnl)
     return pnl
 
-def calc_mtm():
+def calc_mtm_old():
     try:
         JKEY = get_token()
         jData_dict = {
