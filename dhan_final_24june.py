@@ -275,8 +275,9 @@ def main():
     place_order(tokens["CE_BUY"], "BUY", qty)
     place_order(tokens["PE_SELL"], "SELL", qty)
     place_order(tokens["CE_SELL"], "SELL", qty)
+    old_mtm = get_mtm()
     entry_delay = round(time.perf_counter() - entry_start, 3)
-
+    
     entry_time = datetime.now()
     log(f"✅ ENTRY COMPLETE | Time = {entry_time} | Delay = {entry_delay}s")
 
@@ -287,9 +288,11 @@ def main():
     condition_met_time = None
     target_profit=25
     TARGET_LOSS=-25
+    new_mtm = get_mtm()
+    mtm=old_mtm-new_mtm
     while True:
         start = time.perf_counter()
-        mtm = get_mtm()
+        #mtm = get_mtm()
         log(f"📈 MTM = ₹{mtm:.2f}")
 
         if mtm >= target_profit or mtm <= TARGET_LOSS:
@@ -308,10 +311,11 @@ def main():
             place_order(tokens["PE_BUY"], "SELL", qty)
             place_order(tokens["CE_BUY"], "SELL", qty)
             break
-
+        
         elapsed = time.perf_counter() - start
         sleep_time = max(0, MTM_POLL_INTERVAL - elapsed)
         time.sleep(sleep_time)
+        mtm = get_mtm()
 
     exit_time = datetime.now()
     log(f"🏁 Strategy Exit Time = {exit_time}")
