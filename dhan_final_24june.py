@@ -50,7 +50,8 @@ def get_next_thursday():
     #print("final offset---->",offset)
     next_expiry = today + timedelta(days=offset)
     #print("next_expiry----->",next_expiry)
-    return next_expiry.strftime("%d%b%y").upper()
+    next_tuesday = next_expiry + timedelta(days=7)
+    return next_tuesday.strftime("%d%b%y").upper()
 
 
 def fetch_symbol_master():
