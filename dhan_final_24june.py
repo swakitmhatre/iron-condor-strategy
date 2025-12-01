@@ -301,7 +301,7 @@ def main():
     while True:
         start = time.perf_counter()
         mtm = get_mtm()
-        mtm=mtm-realized_gain
+        #mtm=mtm-realized_gain
         log(f"📈 MTM = ₹{mtm:.2f}  📈 realized gain = ₹{realized_gain:.2f}")
 
         if mtm >= target_profit or mtm <= TARGET_LOSS:
