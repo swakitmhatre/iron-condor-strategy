@@ -130,8 +130,8 @@ def get_pnl(jkey):
             "Content-Type": "application/json"
         }
         r = requests.post("https://piconnect.flattrade.in/PiConnectTP/Limits", data=payload,headers=headers)
-        return float(r.json()["uzpnl_d_i"])
-        #return float(r.json()["urmtom"])
+        #return float(r.json()["uzpnl_d_i"])
+        return float(r.json()["urmtom"])
     except Exception as e:
         logging.warning(f"PNL fetch failed: {e}")
         return 0.0
@@ -251,9 +251,10 @@ def run_strategy():
     old_pnl = get_pnl(token)
     
     while True:
-        new_pnl = get_pnl(token)
-        pnl=old_pnl-new_pnl
-        old_pnl=new_pnl
+        pnl = get_pnl(token)
+        #new_pnl = get_pnl(token)
+        #pnl=old_pnl-new_pnl
+        #old_pnl=new_pnl
         logging.info(f"📈 MTM = ₹{pnl:.2f}")
         if pnl <= -mtm_target or pnl >= mtm_target :
             condition_met_time = datetime.now()
