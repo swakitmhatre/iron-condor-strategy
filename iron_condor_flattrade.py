@@ -286,7 +286,7 @@ def run_strategy():
             logging.info("✅ All legs exited. Strategy complete.\n")
             logging.info(f"MTM target hit. Exiting... PnL: {pnl}")
             break
-        time.sleep(0.025)
+        time.sleep(0.10)
 
     
 if __name__ == "__main__":
