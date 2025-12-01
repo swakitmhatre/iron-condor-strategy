@@ -295,8 +295,8 @@ def main():
 
     # === MTM MONITOR LOOP ===
     condition_met_time = None
-    target_profit=25
-    TARGET_LOSS=-25
+    target_profit=35
+    TARGET_LOSS=-35
     
     while True:
         start = time.perf_counter()
