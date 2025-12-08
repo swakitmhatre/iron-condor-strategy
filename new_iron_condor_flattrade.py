@@ -383,8 +383,8 @@ def calc_mtm():
         ltp = ltp_map[tsym]
         print("symbol,entry,ltp---->",ttoken,entry,ltp)
         qty = LOT_SIZE
-        pnl += (ltp - entry)  if leg["side"] == "B" else (entry - ltp) 
-        #pnl += (ltp - entry) * qty if leg["side"] == "B" else (entry - ltp) * qty
+        #pnl += (ltp - entry)  if leg["side"] == "B" else (entry - ltp) 
+        pnl += (ltp - entry) * qty if leg["side"] == "B" else (entry - ltp) * qty
         print("pnl--->",pnl)
     return pnl
 
