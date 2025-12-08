@@ -252,7 +252,7 @@ def get_entry_price(data,tsym,norenordno):
         if order.get("tsym") == tsym and order.get("norenordno") == norenordno:
             print(order)
             #return float(order.get("rprc"))
-            return float(order.get("rprc")) / 100  # divide by 100 if price is in paise
+            return float(order.get("rprc")) / 75  # divide by 100 if price is in paise
             
     return None
 
