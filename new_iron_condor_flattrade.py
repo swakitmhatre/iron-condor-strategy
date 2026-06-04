@@ -166,7 +166,7 @@ def place_order(JKEY, symbol, qty, SIDE):
         headers = {
             "Content-Type": "application/json"
         }
-        #print("order paylod---->",payload)
+        print("order paylod---->",payload)
         
         #r = requests.post("https://piconnect.flattrade.in/PiConnectTP/PlaceOrder", headers={"Authorization": f"Bearer {token}"}, json=payload)
         r = requests.post("https://piconnect.flattrade.in/PiConnectAPI/PlaceOrder", data=payload,headers=headers)
