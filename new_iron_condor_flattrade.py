@@ -3,7 +3,7 @@ import requests
 import json
 import time
 import datetime
-import pyotp
+#import pyotp
 import logging
 import hashlib
 from cryptography.fernet import Fernet
@@ -41,19 +41,19 @@ watchdog_running = True
 # =================================
 
 # === ENCRYPTED TOTP SECRET AND FERNET KEY ===
-FERNET_KEY = b'9dabT3qDS1z0VBJYirSKtYQs01X3ClxEOcTmLvOJCTE='  # keep it as bytes
-ENCRYPTED_TOTP = b'gAAAAABohKY2BTkTaljdVg110nPlCyBFoTrHQh9lXccZL9l5S2DNgKHyrEx4k-xhsLsV3lYb8Rcax40txOz7_g_R46UQ-wNNu5X5bStijNwauA9qztfmByC3lDqOZpDisync-ah3MfQK'  # bytes
+#FERNET_KEY = b'9dabT3qDS1z0VBJYirSKtYQs01X3ClxEOcTmLvOJCTE='  # keep it as bytes
+#ENCRYPTED_TOTP = b'gAAAAABohKY2BTkTaljdVg110nPlCyBFoTrHQh9lXccZL9l5S2DNgKHyrEx4k-xhsLsV3lYb8Rcax40txOz7_g_R46UQ-wNNu5X5bStijNwauA9qztfmByC3lDqOZpDisync-ah3MfQK'  # bytes
 # Use Fernet.generate_key() once, and encrypt your 16-digit base32 TOTP using that key.
 # ============================================
 
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s')
 TOKEN_FILE = "token.txt"
 SYMBOL_FILE = "symbol_master.csv"
-
+'''
 def decrypt_totp():
     fernet = Fernet(FERNET_KEY)
     return fernet.decrypt(ENCRYPTED_TOTP).decode()
-
+'''
 def download_symbol_master():
     try:
         url = "https://flattrade.s3.ap-south-1.amazonaws.com/scripmaster/Nfo_Index_Derivatives.csv"
