@@ -6,7 +6,7 @@ import datetime
 #import pyotp
 import logging
 import hashlib
-from cryptography.fernet import Fernet
+#from cryptography.fernet import Fernet
 from datetime import datetime, timedelta
 import threading
 import websocket
