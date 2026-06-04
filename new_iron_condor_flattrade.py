@@ -25,7 +25,7 @@ LOT_MULTIPLIER = 1
 MTM_PERCENT = 0.0025     # 0.25%
 UNDERLYING = "NIFTY"
 
-LOT_SIZE = 75
+LOT_SIZE = 65
 TARGET_PROFIT = 50
 STOP_LOSS = -50
 FALLBACK_AGE = 15          # ✅ if no tick for 30 s, reconnect
@@ -185,7 +185,7 @@ def place_order(JKEY, symbol, qty, SIDE):
 
 def find_atm_strikes(price):
     atm = round(price / 50) * 50
-    return atm - 550, atm - 450, atm + 450, atm + 550
+    return atm - 550, atm - 350, atm + 350, atm + 550
 
 def get_symbol(expiry, strike, opt_type):
     try:
