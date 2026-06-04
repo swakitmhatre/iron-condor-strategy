@@ -308,9 +308,127 @@ def start_ws():
         except Exception as e:
             logging.error(f"WebSocket crashed, reconnecting: {e}")
             time.sleep(5)
-    
+#==================ordeer placing code (6-6-2016)================================== 
+def download_symbol_master():
+    try:
+        url = "https://flattrade.s3.ap-south-1.amazonaws.com/scripmaster/Nfo_Index_Derivatives.csv"
+        r = requests.get(url)
+        with open(SYMBOL_FILE, "wb") as f:
+            f.write(r.content)
+        logging.info("Symbol master downloaded.")
+    except Exception as e:
+        logging.error(f"Failed to download symbol master: {e}")
+
+def get_live_price(jKey, uid, symbol_token="26000",exch="NSE"):
+    """
+    Fetches the live price for the given token using Flattrade GetQuotes API.
+    token = instrument token (not auth token)
+    uid = client code (e.g., FZ00000)
+    jKey = session token from apitoken call
+    symbol token for nifty 50 is--->26000,(https://flattrade.s3.ap-south-1.amazonaws.com/scripmaster/Nfo_Equity_Derivatives.csv)
+    """
+    try:
+        jData = {
+            "uid": uid,
+            "exch": exch,
+            "token": str(symbol_token)
+        }
+        jDataString=json.dumps(jData)
+        payload = 'jData='+jDataString+'&jKey='+jKey;
+        
+        headers = {"Content-Type": "application/json"}
+        #print("GetQuotes payload---->",payload)
+        url = "https://piconnect.flattrade.in/PiConnectTP/GetQuotes"
+        response = requests.post(url,data=payload)
+        data = response.json()
+        print("ltp json data--->",data)
+        # The field may vary, but usually it's in data["lp"]
+        live_price = float(data["lp"])
+        return live_price
+
+    except Exception as e:
+        logging.error(f"Live price fetch failed: {e}")
+        raise
+
+def get_symbol(expiry, strike, opt_type):
+    try:
+        trading_symbol=UNDERLYING+expiry+opt_type+str(strike)
+        #Print("UNDERLYING----->",trading_symbol)
+        with open(SYMBOL_FILE) as f:
+            for line in f:
+                #if f"{UNDERLYING}{expiry}" in line and f"{strike}" in line  and "C" in line or "P" in line:
+                if f"{trading_symbol}" in line:
+                    #print("option--->",line)
+                    return line.split(",")[4]
+    except Exception as e:
+        logging.error(f"Symbol lookup failed: {e}")
+    return None
+
+def find_atm_strikes(price):
+    atm = round(price / 50) * 50
+    return atm - 550, atm - 350, atm + 350, atm + 550
+
+def get_next_weekly_expiry():
+    today = datetime.now().date()
+    weekday = today.weekday()  # Monday=0, Tuesday=1, ..., Sunday=6
+
+    # Tuesday = weekday=1
+    days_to_tuesday = (1 - weekday) % 7
+    if days_to_tuesday == 0:
+        # today is Tuesday, so skip to *next* Tuesday
+        days_to_tuesday = 7
+
+    # Get this week's Tuesday
+    this_tuesday = today + timedelta(days=days_to_tuesday)
+
+    # Next week's Tuesday = this week's Tuesday + 7 days
+    next_tuesday = this_tuesday + timedelta(days=7)
+
+    expiry_str = next_tuesday.strftime("%d%b%y").upper()  # format like 25OCT14
+    return next_tuesday, expiry_str
+
+
+
+
 if __name__ == "__main__":
+    ##########code added on 4-6-2025
     logging.info("Starting Iron Condor MTM Tracker (WebSocket only)...")
+    download_symbol_master()
+    live_price = get_live_price(token,CLIENT_ID)
+    expiry_date, expiry = get_next_weekly_expiry()
+    print("expiry--->",expiry)
+    strikes = find_atm_strikes(live_price)
+    print("strikes------>",strikes)
+    symbols = {
+        "buy_pe": get_symbol(expiry, strikes[0], "P"),
+        "sell_pe": get_symbol(expiry, strikes[1], "P"),
+        "sell_ce": get_symbol(expiry, strikes[2], "C"),
+        "buy_ce": get_symbol(expiry, strikes[3], "C")
+    }
+
+    logging.info(f"Selected symbols: {symbols}")
+
+    # Entry - Buy first
+    jkey=token
+    entry_start = time.perf_counter()
+    place_order(jkey, symbols["buy_pe"], lot_size, "B")
+    place_order(jkey, symbols["buy_ce"], lot_size, "B")
+    place_order(jkey, symbols["sell_pe"], lot_size, "S")
+    place_order(jkey, symbols["sell_ce"], lot_size, "S")
+
+    entry_delay = round(time.perf_counter() - entry_start, 3)
+    entry_time = datetime.now()
+    logging.info(f"✅ ENTRY COMPLETE | Time = {entry_time} | Delay = {entry_delay}s")
+    logging.info("Iron Condor entered. Monitoring MTM...")
+
+    IRON_CONDOR_LEGS = [
+    {"tsym": "47645", "side": "B", "entry": 0.306},
+    {"tsym": "47736", "side": "B", "entry": 0.3754},
+    {"tsym": "47651", "side": "S", "entry": 0.409},
+    {"tsym": "47728", "side": "S", "entry": 0.5515},
+]
+    ###############################
+
     start_ws()
 
 '''
