@@ -108,7 +108,7 @@ def get_new_token():
         raise
         
 #incorret function argument mismatch     
-def get_live_price(jKey, uid, symbol_token="26000",exch="NSE"):
+def get_live_price(jKey, uid, symbol_token,exch):
     """
     Fetches the live price for the given token using Flattrade GetQuotes API.
     token = instrument token (not auth token)
@@ -147,15 +147,20 @@ def get_margin(token):
         logging.warning(f"Margin fetch failed: {e}")
         return 150000  # fallback default
 
-def place_order(JKEY, symbol, qty, SIDE):
+def place_order(JKEY, symbol, qty, SIDE,ltp):
     try:
+        if SIDE == "B":
+            limit_price = round(ltp + 0.10, 2)
+        else:
+            limit_price = max(0.05, round(ltp - 0.10, 2))
+            
         jData_dict = {
             "uid": "FT053224",
             "actid": "FT053224",
             "exch": "NFO",
             "tsym": str(symbol),
             "qty": str(qty),
-            "prc": "0",
+            "prc": str(limit_price),
             "prd": "I",
             "trantype": SIDE,
             "prctyp": "MKT",
@@ -252,7 +257,7 @@ def get_entry_price(data,tsym,norenordno):
         if order.get("tsym") == tsym and order.get("norenordno") == norenordno:
             print(order)
             #return float(order.get("rprc"))
-            return float(order.get("rprc")) / 75  # divide by 100 if price is in paise
+            return float(order.get("rprc")) / 65  # divide by 100 if price is in paise
             
     return None
 
@@ -260,7 +265,7 @@ def run_strategy():
     download_symbol_master()
     token = get_token()
     #HERE TOKEN IS LOGIN_TOKEN I.E JKey ,NOT SYMBOL TOKEN.
-    live_price = get_live_price(token,CLIENT_ID)
+    live_price = get_live_price(token,CLIENT_ID,26000,NSE)
     #margin = get_margin(token)
     margin = 125000
     mtm_target = margin * MTM_PERCENT
@@ -285,10 +290,14 @@ def run_strategy():
     JKEY=token
     entry_start = time.perf_counter()
     global norenordno
-    norenordno[0]=place_order(JKEY, symbols["buy_pe"][1], LOT_SIZE, "B")
-    norenordno[1]=place_order(JKEY, symbols["buy_ce"][1], LOT_SIZE, "B")
-    norenordno[2]=place_order(JKEY, symbols["sell_pe"][1], LOT_SIZE, "S")
-    norenordno[3]=place_order(JKEY, symbols["sell_ce"][1], LOT_SIZE, "S")
+    live_price = get_live_price(token,CLIENT_ID,symbols["buy_pe"][0],NFO)
+    norenordno[0]=place_order(JKEY, symbols["buy_pe"][1], LOT_SIZE, "B",live_price)
+    live_price = get_live_price(token,CLIENT_ID,symbols["buy_ce"][0],NFO)
+    norenordno[1]=place_order(JKEY, symbols["buy_ce"][1], LOT_SIZE, "B",live_price)
+    live_price = get_live_price(token,CLIENT_ID,symbols["sell_pe"][0],NFO)
+    norenordno[2]=place_order(JKEY, symbols["sell_pe"][1], LOT_SIZE, "S",live_price)
+    live_price = get_live_price(token,CLIENT_ID,symbols["sell_ce"][0],NFO)
+    norenordno[3]=place_order(JKEY, symbols["sell_ce"][1], LOT_SIZE, "S",live_price)
     print("norenordno during entry----->",norenordno)
     entry_delay = round(time.perf_counter() - entry_start, 3)
     entry_time = datetime.now()
