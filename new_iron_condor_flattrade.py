@@ -394,7 +394,10 @@ def calc_mtm():
         print("symbol,entry,ltp---->",ttoken,entry,ltp)
         qty = LOT_SIZE
         #pnl += (ltp - entry)  if leg["side"] == "B" else (entry - ltp) 
-        pnl += (ltp - entry) * qty if leg["side"] == "B" else (entry - ltp) * qty
+        if(ltp==0)
+            pnl+= 0
+        else
+            pnl += (ltp - entry) * qty if leg["side"] == "B" else (entry - ltp) * qty
         print("pnl--->",pnl)
     return pnl
 
