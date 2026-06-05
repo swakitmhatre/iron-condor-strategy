@@ -150,9 +150,9 @@ def get_margin(token):
 def place_order(JKEY, symbol, qty, SIDE,ltp):
     try:
         if SIDE == "B":
-            limit_price = round(ltp + 0.10, 2)
+            limit_price = round(ltp + 0.20, 2)
         else:
-            limit_price = max(0.05, round(ltp - 0.10, 2))
+            limit_price = max(0.05, round(ltp - 0.20, 2))
             
         jData_dict = {
             "uid": "FT053224",
