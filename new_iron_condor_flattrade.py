@@ -319,7 +319,7 @@ def run_strategy():
 #======start websocket and open(ws)===================
 def start_ws():
     JKEY = get_token()
-    url = "wss://piconnect.flattrade.in/PiConnectWSTp/"
+    url = "wss://piconnect.flattrade.in/PiConnectWSAPI/"
     #header=[f"Authorization: {JKEY}"],
     ws = websocket.WebSocketApp(
         url,
