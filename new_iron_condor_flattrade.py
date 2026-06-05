@@ -239,7 +239,7 @@ def get_order_book(JKEY):
         }
         print("orderbook paylod---->",payload)
        
-        r = requests.post("https://piconnect.flattrade.in/PiConnectTP/OrderBook", data=payload,headers=headers)
+        r = requests.post("https://piconnect.flattrade.in/PiConnectAPI/OrderBook", data=payload,headers=headers)
         #print("Orderbook API raw response:", r.text)
         res = r.json()
         return res
