@@ -290,13 +290,13 @@ def run_strategy():
     JKEY=token
     entry_start = time.perf_counter()
     global norenordno
-    live_price = get_live_price(token,CLIENT_ID,symbols["buy_pe"][0],NFO)
+    live_price = get_live_price(token,CLIENT_ID,symbols["buy_pe"][0],"NFO")
     norenordno[0]=place_order(JKEY, symbols["buy_pe"][1], LOT_SIZE, "B",live_price)
-    live_price = get_live_price(token,CLIENT_ID,symbols["buy_ce"][0],NFO)
+    live_price = get_live_price(token,CLIENT_ID,symbols["buy_ce"][0],"NFO")
     norenordno[1]=place_order(JKEY, symbols["buy_ce"][1], LOT_SIZE, "B",live_price)
-    live_price = get_live_price(token,CLIENT_ID,symbols["sell_pe"][0],NFO)
+    live_price = get_live_price(token,CLIENT_ID,symbols["sell_pe"][0],"NFO")
     norenordno[2]=place_order(JKEY, symbols["sell_pe"][1], LOT_SIZE, "S",live_price)
-    live_price = get_live_price(token,CLIENT_ID,symbols["sell_ce"][0],NFO)
+    live_price = get_live_price(token,CLIENT_ID,symbols["sell_ce"][0],"NFO")
     norenordno[3]=place_order(JKEY, symbols["sell_ce"][1], LOT_SIZE, "S",live_price)
     print("norenordno during entry----->",norenordno)
     entry_delay = round(time.perf_counter() - entry_start, 3)
