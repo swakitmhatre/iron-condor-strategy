@@ -256,8 +256,8 @@ def get_entry_price(data,tsym,norenordno):
         
         if order.get("tsym") == tsym and order.get("norenordno") == norenordno:
             print(order)
-            #return float(order.get("rprc"))
-            return float(order.get("rprc")) / 65  # divide by 100 if price is in paise
+            return float(order.get("rprc"))
+            #return float(order.get("rprc")) / 65  # divide by 100 if price is in paise
             
     return None
 
@@ -334,11 +334,11 @@ def start_ws():
 
         # Step 1: Send connection payload (important)
         conn_msg = {
-            "t": "c",
+            "t": "a",
             "uid": UID,
             "actid": ACT_ID,
             "source": "API",
-            "susertoken": JKEY
+            "accesstoken": JKEY
         }
         ws.send(json.dumps(conn_msg))
         logging.info("Connection payload sent")
@@ -388,7 +388,7 @@ def calc_mtm():
         ttoken=leg["ttoken"]
         if tsym not in ltp_map:
             continue
-        entry = leg["entry"] * LOT_SIZE
+        entry = leg["entry"]
         ltp = ltp_map[tsym]
         print("symbol,entry,ltp---->",ttoken,entry,ltp)
         qty = LOT_SIZE
@@ -612,6 +612,7 @@ def watchdog_thread(JKEY):
             return
         now = time.time()
         for leg in IRON_CONDOR_LEGS:
+            last_tick_time[leg["tsym"]] = time.time()
             token = leg["tsym"]
             last = last_tick_time.get(token, 0)
             age = now - last
