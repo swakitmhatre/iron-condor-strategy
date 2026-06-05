@@ -396,7 +396,7 @@ def calc_mtm():
         #pnl += (ltp - entry)  if leg["side"] == "B" else (entry - ltp) 
         if(entry==0):
             pnl+= 0
-        else
+        else:
             pnl += (ltp - entry) * qty if leg["side"] == "B" else (entry - ltp) * qty
         print("pnl--->",pnl)
     return pnl
