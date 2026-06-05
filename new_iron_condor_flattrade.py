@@ -265,7 +265,7 @@ def run_strategy():
     download_symbol_master()
     token = get_token()
     #HERE TOKEN IS LOGIN_TOKEN I.E JKey ,NOT SYMBOL TOKEN.
-    live_price = get_live_price(token,CLIENT_ID,26000,NSE)
+    live_price = get_live_price(token,CLIENT_ID,26000,"NSE")
     #margin = get_margin(token)
     margin = 125000
     mtm_target = margin * MTM_PERCENT
