@@ -320,9 +320,10 @@ def run_strategy():
 def start_ws():
     JKEY = get_token()
     url = "wss://piconnect.flattrade.in/PiConnectWSTp/"
+    #header=[f"Authorization: {JKEY}"],
     ws = websocket.WebSocketApp(
         url,
-        header=[f"Authorization: {JKEY}"],
+        
         on_message=on_message,
         on_error=lambda ws, err: logging.error(f"WebSocket error: {err}"),
         on_close=lambda ws, code, msg: logging.warning(f"WebSocket closed: {msg}")
@@ -500,6 +501,7 @@ def trigger_exit(reason="Target/Stoploss hit"):
 # ====== WEBSOCKET HANDLERS ======
 def on_message(ws, message):
     if exit_flag.is_set():
+        logging.info("exit flag in on message()")
         return
     global ltp_map
     try:
