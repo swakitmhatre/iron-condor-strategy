@@ -163,7 +163,7 @@ def place_order(JKEY, symbol, qty, SIDE,ltp):
             "prc": str(limit_price),
             "prd": "I",
             "trantype": SIDE,
-            "prctyp": "MKT",
+            "prctyp": "LMT",
             "ret": "DAY"
         }
         payload = f"jData={json.dumps(jData_dict)}&jKey={JKEY}"
