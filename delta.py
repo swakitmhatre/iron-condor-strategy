@@ -39,11 +39,12 @@ def place_delta_direct_order(side, size=CONTRACT_SIZE):
     method = "POST"
     timestamp = str(int(time.time()))
     
+    # FIXED: Delta India requires 'market_order' (not 'market') per schema validation
     payload_dict = {
         "product_id": PRODUCT_ID,
         "size": int(size),
         "side": side.lower(),
-        "order_type": "market",
+        "order_type": "market_order",
         "time_in_force": "ioc"
     }
     payload_str = json.dumps(payload_dict)
