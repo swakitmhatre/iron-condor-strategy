@@ -25,6 +25,7 @@ delta_exchange = ccxt.delta({
     'enableRateLimit': True,
     'options': {'defaultType': 'future'}
 })
+delta_exchange.set_sandbox_mode(True)
 
 # =====================================================================
 # TRANSFORMER MULTI-STEP OHLC FORECASTER MODEL
