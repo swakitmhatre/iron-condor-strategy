@@ -11,8 +11,8 @@ import websocket
 # =====================================================================
 # CONFIGURATION & CREDENTIALS
 # =====================================================================
-API_KEY = "YOUR_DELTA_INDIA_API_KEY"
-API_SECRET = "YOUR_DELTA_INDIA_API_SECRET"
+API_KEY = "SxgQK4eNLqtrF54umC4IjjbVUCnrh8"
+API_SECRET = "Ivu3wUr71sn2dmca21VPI4W0dhiqOcnxpBvrVUAsFlKHj4qybWvT2WVaNA1S"
 BASE_URL = "https://india.delta.exchange"  
 WS_URL = "wss://socket.india.delta.exchange"  
 SYMBOL = "BTCUSD"                          
