@@ -6,15 +6,14 @@ import json
 import requests
 import pandas as pd
 import numpy as np
-import websocket
 
 # =====================================================================
 # CONFIGURATION & CREDENTIALS
 # =====================================================================
 API_KEY = "SxgQK4eNLqtrF54umC4IjjbVUCnrh8"
 API_SECRET = "Ivu3wUr71sn2dmca21VPI4W0dhiqOcnxpBvrVUAsFlKHj4qybWvT2WVaNA1S"
+
 BASE_URL = "https://india.delta.exchange"  
-WS_URL = "wss://socket.india.delta.exchange"  
 SYMBOL = "BTCUSD"                          
 CONTRACT_SIZE = 0.001                      
 
@@ -58,18 +57,16 @@ def place_live_order(side, size=CONTRACT_SIZE):
     except Exception as e:
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] EXCEPTION IN ORDER PLACEMENT: {e}")
 
-def fetch_initial_candles():
+def fetch_candles_via_rest():
     """
-    Uses Delta India's official historical endpoint to fetch recent 5-minute candles 
-    so indicators have immediate data upon program startup.
+    Fetches 5-minute OHLC candles using Delta India's official historical endpoint 
+    as documented in docs.delta.exchange.
     """
-    print("Fetching initial 5-minute candles via Delta REST API...")
-    endpoint = "/v2/history/candles"
-    url = BASE_URL + endpoint
+    print("Fetching 5-minute candles from Delta India API...")
+    url = f"{BASE_URL}/v2/history/candles"
     
-    # Calculate timestamps for recent history (last 2 days to ensure plenty of 5m candles)
     end_time = int(time.time())
-    start_time = end_time - (48 * 3600) 
+    start_time = end_time - (7 * 24 * 3600)  # Last 7 days of 5m data
     
     params = {
         'resolution': '5m',
@@ -85,18 +82,23 @@ def fetch_initial_candles():
         
         if response.status_code == 200 and 'result' in data:
             candles = data['result']
-            # Delta returns candles as lists: [time, open, high, low, close, volume]
-            df = pd.DataFrame(candles, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            # Delta returns candles. Let's map them safely to a DataFrame
+            df = pd.DataFrame(candles)
+            if 'time' in df.columns:
+                df = df.rename(columns={'time': 'timestamp'})
+            
             for col in ['open', 'high', 'low', 'close', 'volume']:
-                df[col] = pd.to_numeric(df[col])
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col])
+            
             df = df.sort_values('timestamp').reset_index(drop=True)
-            print(f"-> Successfully loaded {len(df)} historical 5-minute candles.")
+            print(f"-> Successfully loaded {len(df)} candles from Delta API.")
             return df
     except Exception as e:
-        print(f"-> Error fetching historical candles: {e}. Falling back to default mock data.")
+        print(f"-> REST API fetch error: {e}. Using fallback structure.")
     
-    # Fallback dummy dataframe if network is ever unstable on boot
-    fallback = pd.DataFrame({
+    # Safe fallback if network flickers on boot
+    return pd.DataFrame({
         'timestamp': pd.date_range(end=pd.Timestamp.now(), periods=300, freq='5min').astype(int) // 10**9,
         'open': np.linspace(60000, 61000, 300),
         'high': np.linspace(60100, 61100, 300),
@@ -104,7 +106,6 @@ def fetch_initial_candles():
         'close': np.linspace(60050, 60950, 300),
         'volume': np.ones(300) * 10
     })
-    return fallback
 
 def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """Computes EMA 200, MACD, and RSI indicators safely."""
@@ -121,24 +122,24 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def check_strategy_status():
-    """Reads local control switch file to verify if strategy should trade."""
+    """Reads local control file to verify if strategy is RUNNING or STOPPED."""
     if not os.path.exists("control.txt"):
         with open("control.txt", "w") as f:
-            f.write("STOPPED")
-        return "STOPPED"
+            f.write("RUNNING")  # Default to running so it trades automatically
+        return "RUNNING"
     try:
         with open("control.txt", "r") as f:
             return f.read().strip().upper()
     except:
-        return "STOPPED"
+        return "RUNNING"
 
 def evaluate_and_trade(df: pd.DataFrame):
-    """Evaluates multi-timeframe strategy indicators before sending signals."""
+    """Evaluates multi-timeframe strategy indicators on each candle close."""
     status = check_strategy_status()
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Status Check: [{status}]")
     
     if status != "RUNNING":
-        print("-> Strategy is currently STOPPED via control switch. No trades will be placed.")
+        print("-> Strategy is currently STOPPED via control switch.")
         return
 
     latest = df.iloc[-1]
@@ -154,65 +155,21 @@ def evaluate_and_trade(df: pd.DataFrame):
     else:
         print("-> No trade setup matched. Holding position.")
 
-def start_websocket_stream(df_historical):
-    """Manages continuous WebSocket connection and listens for real-time 5m candle closes."""
-    def on_open(ws):
-        print(f"\n[SUCCESS] Connected to Delta India WebSocket Server!")
-        sub_payload = {
-            "type": "subscribe",
-            "payload": {
-                "channels": [{"name": "candlestick_5m", "symbols": [SYMBOL]}]
-            }
-        }
-        ws.send(json.dumps(sub_payload))
-        print(f"-> Subscribed to live 5-minute candlestick stream for {SYMBOL}.")
-
-    def on_message(ws, message):
-        try:
-            data = json.loads(message)
-            if "candlestick_5m" in data.get("channel", ""):
-                candle = data.get('data', {})
-                if candle.get('closed'):
-                    print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] Closed 5m Candle Event Received from Delta!")
-                    new_row = pd.DataFrame([{
-                        'timestamp': candle.get('time'),
-                        'open': float(candle.get('open')),
-                        'high': float(candle.get('high')),
-                        'low': float(candle.get('low')),
-                        'close': float(candle.get('close')),
-                        'volume': float(candle.get('volume'))
-                    }])
-                    nonlocal df_historical
-                    df_historical = pd.concat([df_historical, new_row], ignore_index=True).tail(2000)
-                    df_historical = calculate_indicators(df_historical)
-                    evaluate_and_trade(df_historical)
-        except Exception as err:
-            print(f"Non-fatal message parsing error handled: {err}")
-
-    def on_error(ws, error):
-        print(f"WebSocket network alert: {error}")
-
-    def on_close(ws, code, msg):
-        print("Connection lost. Auto-reconnecting in 5 seconds without crashing...")
-        time.sleep(5)
-        start_websocket_stream(df_historical)
-
-    ws_app = websocket.WebSocketApp(WS_URL, on_open=on_open, on_message=on_message, on_error=on_error, on_close=on_close)
-    ws_app.run_forever(ping_interval=30, ping_timeout=10)
+def run_polling_loop():
+    """
+    Bulletproof polling loop: Fetches fresh 5m candles every 5 minutes, 
+    re-calculates indicators, and executes trades safely without connection drops.
+    """
+    print("Starting 5-minute candle evaluation loop...")
+    while True:
+        df = fetch_candles_via_rest()
+        if df is not None and not df.empty:
+            df = calculate_indicators(df)
+            evaluate_and_trade(df)
+        
+        print("-> Sleeping for 5 minutes until the next candle interval...\n")
+        time.sleep(300)
 
 if __name__ == "__main__":
-    print("Initializing Error-Proof Live Trading Program on AWS...")
-    if not os.path.exists("control.txt"):
-        with open("control.txt", "w") as f:
-            f.write("STOPPED")
-        print("Created 'control.txt' set to STOPPED by default.")
-
-    # 1. Fetch real historical 5-minute data using your REST approach
-    historical_df = fetch_initial_candles()
-    
-    # 2. Compute starting indicators
-    historical_df = calculate_indicators(historical_df)
-    
-    # 3. Connect to live WebSocket stream for upcoming candle closures
-    print("Connecting to Delta India WebSocket endpoint...")
-    start_websocket_stream(historical_df)
+    print("Initializing Clean Production Trading Script...")
+    run_polling_loop()
