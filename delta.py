@@ -13,7 +13,8 @@ import torch.nn as nn
 API_KEY = "rI6AjEtDbUo2pekgWOYWXpoDnha9KP"
 API_SECRET = "hn2RYsrr9m1rIHFrqIlNEk5GIrrmJ4IRsffnPQkPoIGkmv289ixJW6aTXIjP"
 SYMBOL = 'BTC/USDT:USDT'  
-CONTRACT_SIZE = 1.0     
+#CONTRACT_SIZE = 1.0 
+CONTRACT_SIZE = 0.0001
 
 # Initialize Binance for public historical context
 binance_exchange = ccxt.binance({'enableRateLimit': True})
