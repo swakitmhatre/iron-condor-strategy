@@ -10,8 +10,8 @@ import torch.nn as nn
 # =====================================================================
 # CONFIGURATION & CREDENTIALS
 # =====================================================================
-API_KEY = "SxgQK4eNLqtrF54umC4IjjbVUCnrh8"
-API_SECRET = "Ivu3wUr71sn2dmca21VPI4W0dhiqOcnxpBvrVUAsFlKHj4qybWvT2WVaNA1S"
+API_KEY = "rI6AjEtDbUo2pekgWOYWXpoDnha9KP"
+API_SECRET = "hn2RYsrr9m1rIHFrqIlNEk5GIrrmJ4IRsffnPQkPoIGkmv289ixJW6aTXIjP"
 SYMBOL = 'BTC/USDT:USDT'  
 CONTRACT_SIZE = 1.0     
 
