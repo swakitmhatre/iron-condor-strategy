@@ -1,11 +1,11 @@
-
+cat << 'EOF' > delta.py
 import time
 import os
 import ccxt
 import pandas as pd
 
-API_KEY = "SxgQK4eNLqtrF54umC4IjjbVUCnrh8"
-API_SECRET = "Ivu3wUr71sn2dmca21VPI4W0dhiqOcnxpBvrVUAsFlKHj4qybWvT2WVaNA1S"
+API_KEY = "YOUR_DELTA_INDIA_API_KEY"
+API_SECRET = "YOUR_DELTA_INDIA_API_SECRET"
 SYMBOL = 'BTC/USDT:USDT'  
 CONTRACT_SIZE = 0.001   
 
@@ -27,15 +27,22 @@ def get_real_market_data():
     try:
         exchange.load_markets()
         
-        # 1. Grab the instant, raw live ticker price right now (changes every second!)
-        ticker = exchange.fetch_ticker(SYMBOL)
-        current_live_price = ticker['last']
+        # Pull recent public trades to get the absolute latest executed market price
+        trades = exchange.fetch_trades(SYMBOL, limit=1)
+        if trades:
+            current_live_price = trades[-1]['price']
+        else:
+            ticker = exchange.fetch_ticker(SYMBOL)
+            current_live_price = ticker['last']
         
-        # 2. Grab historical 5m candles for indicators
+        # Grab historical 5m candles for indicators
         ohlcv = exchange.fetch_ohlcv(SYMBOL, timeframe='5m', limit=300)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         
-        print(f"-> REAL-TIME TICKER PRICE: {current_live_price} | Last 5m Candle Close: {df.iloc[-1]['close']}")
+        # Force the very last row's close to match the real-time trade price so indicators update live
+        df.loc[df.index[-1], 'close'] = float(current_live_price)
+        
+        print(f"-> LIVE TRADE PRICE: {current_live_price} | Active Candle Close Updated.")
         return df
     except Exception as e:
         print(f"-> Fetch Error: {e}. Retrying next cycle...")
@@ -85,7 +92,7 @@ def evaluate_and_trade(df: pd.DataFrame):
         print("-> No trade setup matched. Holding position.")
 
 if __name__ == "__main__":
-    print("Initializing Live Volatility Ticker Engine...")
+    print("Initializing Live Trade-Feed Engine...")
     while True:
         df = get_real_market_data()
         if df is not None and not df.empty:
