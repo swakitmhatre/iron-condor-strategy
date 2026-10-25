@@ -11,8 +11,8 @@ import numpy as np
 # =====================================================================
 # CONFIGURATION & CREDENTIALS
 # =====================================================================
-API_KEY = "YOUR_DELTA_INDIA_API_KEY"
-API_SECRET = "YOUR_DELTA_INDIA_API_SECRET"
+API_KEY = "rI6AjEtDbUo2pekgWOYWXpoDnha9KP"
+API_SECRET = "hn2RYsrr9m1rIHFrqIlNEk5GIrrmJ4IRsffnPQkPoIGkmv289ixJW6aTXIjP"
 
 BASE_URL = "https://api.india.delta.exchange"
 PRODUCT_ID = 27       # Delta India Product ID for BTCUSD perpetual contract
