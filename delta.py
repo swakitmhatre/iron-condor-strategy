@@ -3,18 +3,15 @@ import time
 import os
 import ccxt
 import pandas as pd
-import numpy as np
 
 # =====================================================================
 # CONFIGURATION & CREDENTIALS
 # =====================================================================
 API_KEY = "SxgQK4eNLqtrF54umC4IjjbVUCnrh8"
 API_SECRET = "Ivu3wUr71sn2dmca21VPI4W0dhiqOcnxpBvrVUAsFlKHj4qybWvT2WVaNA1S"
-# Use Delta India's standard CCXT linear contract format
 SYMBOL = 'BTC/USDT:USDT'  
 CONTRACT_SIZE = 0.001   
 
-# Initialize CCXT client for Delta India
 exchange = ccxt.delta({
     'apiKey': API_KEY,
     'secret': API_SECRET,
@@ -29,27 +26,19 @@ def place_live_order(side, size=CONTRACT_SIZE):
     except Exception as e:
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ORDER ERROR HANDLED: {e}")
 
-def get_live_market_data_ccxt():
+def get_real_ohlcv_data():
+    """Fetches real 5-minute historical candles directly from Delta Exchange via CCXT."""
     try:
-        # Load markets first so CCXT maps the symbols correctly
         exchange.load_markets()
-        ticker = exchange.fetch_ticker(SYMBOL)
-        live_price = float(ticker['last'])
-        print(f"-> LIVE SUCCESS! Current Delta BTC Price: {live_price}")
+        # Fetch last 300 candles of 5-minute timeframe
+        ohlcv = exchange.fetch_ohlcv(SYMBOL, timeframe='5m', limit=300)
         
-        # Build rolling series anchored to the true live price
-        prices = np.linspace(live_price - 300, live_price, 300)
-        df = pd.DataFrame({
-            'timestamp': pd.date_range(end=pd.Timestamp.now(), periods=300, freq='5min').astype(int) // 10**9,
-            'open': prices - 10,
-            'high': prices + 20,
-            'low': prices - 20,
-            'close': prices,
-            'volume': np.ones(300) * 150
-        })
+        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        latest_close = df.iloc[-1]['close']
+        print(f"-> LIVE OHLC SUCCESS! Latest BTC Close: {latest_close}")
         return df
     except Exception as e:
-        print(f"-> CCXT Live Fetch Error: {e}. Retrying next cycle...")
+        print(f"-> CCXT OHLC Fetch Error: {e}. Retrying next cycle...")
         return None
 
 def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -85,27 +74,30 @@ def evaluate_and_trade(df: pd.DataFrame):
         return
 
     latest = df.iloc[-1]
-    print(f"-> Processing Live Data | Close: {latest['close']} | EMA200: {latest['ema_200']:.2f} | RSI: {latest['rsi']:.2f}")
+    rsi_val = latest['rsi'] if not pd.isna(latest['rsi']) else 50.0
+    ema_val = latest['ema_200'] if not pd.isna(latest['ema_200']) else latest['close']
     
-    is_uptrend = latest['close'] > latest['ema_200']
-    if is_uptrend and latest['rsi'] < 40:
+    print(f"-> Processing Real 5m Candle | Close: {latest['close']} | EMA200: {ema_val:.2f} | RSI: {rsi_val:.2f}")
+    
+    is_uptrend = latest['close'] > ema_val
+    if is_uptrend and rsi_val < 40:
         print(">>> Signal Triggered: Long Setup. Placing order...")
         place_live_order("buy", CONTRACT_SIZE)
-    elif not is_uptrend and latest['rsi'] > 60:
+    elif not is_uptrend and rsi_val > 60:
         print(">>> Signal Triggered: Short Setup. Placing order...")
         place_live_order("sell", CONTRACT_SIZE)
     else:
         print("-> No trade setup matched. Holding position.")
 
 def run_polling_loop():
-    print("Starting CCXT Live Market Polling Engine...")
+    print("Starting CCXT Real-OHLC Polling Engine...")
     while True:
-        df = get_live_market_data_ccxt()
+        df = get_real_ohlcv_data()
         if df is not None and not df.empty:
             df = calculate_indicators(df)
             evaluate_and_trade(df)
         
-        print("-> Sleeping for 5 minutes until the next live price check...\n")
+        print("-> Sleeping for 5 minutes until the next candle check...\n")
         time.sleep(300)
 
 if __name__ == "__main__":
