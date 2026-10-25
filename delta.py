@@ -1,5 +1,8 @@
 import time
 import os
+import hmac
+import hashlib
+import requests
 import ccxt
 import pandas as pd
 import numpy as np
@@ -7,30 +10,67 @@ import numpy as np
 # =====================================================================
 # CONFIGURATION & CREDENTIALS
 # =====================================================================
-API_KEY = "rI6AjEtDbUo2pekgWOYWXpoDnha9KP"
-API_SECRET = "hn2RYsrr9m1rIHFrqIlNEk5GIrrmJ4IRsffnPQkPoIGkmv289ixJW6aTXIjP"
+API_KEY = "YOUR_DELTA_INDIA_API_KEY"
+API_SECRET = "YOUR_DELTA_INDIA_API_SECRET"
 
-# Switch to ETH futures so whole integer lot size (1 contract) fits your $11 balance
-SYMBOL = 'ETH/USDT:USDT'  
-CONTRACT_SIZE = 1         # Whole integer lot size (1 contract)
-MIN_LEVERAGE = 2          # Set leverage to 1x for absolute minimum risk
+BASE_URL = "https://api.india.delta.exchange"
+SYMBOL = "BTCUSD"
+PRODUCT_ID = 27       # Delta India Product ID for BTCUSD perpetual contract
+CONTRACT_SIZE = 1     # Whole integer lot size (1 contract)
+LEVERAGE = 1          # Minimum leverage setting
 
-# Initialize Binance for public historical data context
+# Initialize Binance solely for public historical data ingestion
 binance_exchange = ccxt.binance({'enableRateLimit': True})
 
-# Initialize Delta India with your production credentials for live trading
-delta_exchange = ccxt.delta({
-    'apiKey': API_KEY,
-    'secret': API_SECRET,
-    'enableRateLimit': True,
-    'options': {'defaultType': 'future'},
-    'urls': {
-        'api': {
-            'public': 'https://api.india.delta.exchange',
-            'private': 'https://api.india.delta.exchange',
-        }
+# =====================================================================
+# DIRECT DELTA INDIA REST AUTHENTICATION & ORDER SIGNING
+# =====================================================================
+def generate_delta_signature(secret, method, timestamp, path, query_string='', payload=''):
+    message = method + timestamp + path + query_string + payload
+    signature = hmac.new(
+        secret.encode('utf-8'),
+        message.encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()
+    return signature
+
+def place_delta_direct_order(side, size=CONTRACT_SIZE):
+    path = "/v2/orders"
+    url = f"{BASE_URL}{path}"
+    method = "POST"
+    timestamp = str(int(time.time()))
+    
+    payload_dict = {
+        "product_id": PRODUCT_ID,
+        "size": int(size),
+        "side": side.lower(),
+        "order_type": "market",
+        "time_in_force": "ioc"
     }
-})
+    import json
+    payload_str = json.dumps(payload_dict)
+    
+    signature = generate_delta_signature(API_SECRET, method, timestamp, path, '', payload_str)
+    
+    headers = {
+        "api-key": API_KEY,
+        "signature": signature,
+        "timestamp": timestamp,
+        "Content-Type": "application/json",
+        "User-Agent": "python-requests"
+    }
+    
+    try:
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Placing direct {side.upper()} order on Delta India...")
+        response = requests.post(url, headers=headers, data=payload_str)
+        res_json = response.json()
+        
+        if res_json.get("success"):
+            print(f"-> SUCCESS! Delta Order ID: {res_json.get('result', {}).get('id')}")
+        else:
+            print(f"-> DELTA ERROR RESPONSE: {res_json}")
+    except Exception as e:
+        print(f"-> ORDER EXCEPTION: {e}")
 
 # =====================================================================
 # LIGHTWEIGHT NUMPY ATTENTION / TRANSFORMER FORECASTER
@@ -63,40 +103,19 @@ class NumpyAttentionForecaster:
 model = NumpyAttentionForecaster(feature_size=5, horizon=5)
 
 def load_initial_history():
-    print("Loading historical baseline data for ETH attention context...")
+    print("Loading historical baseline data for attention context...")
     try:
-        ohlcv = binance_exchange.fetch_ohlcv('ETH/USDT', timeframe='5m', limit=1000)
+        ohlcv = binance_exchange.fetch_ohlcv('BTC/USDT', timeframe='5m', limit=1000)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        print(f"-> Successfully loaded {len(df)} baseline candles for ETH.")
+        print(f"-> Successfully loaded {len(df)} baseline candles.")
         return df
     except Exception as e:
         print(f"-> History load error: {e}")
         return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
-def place_delta_live_order(side, size=CONTRACT_SIZE):
-    try:
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Setting leverage to {MIN_LEVERAGE}x and placing {side.upper()} order for ETH...")
-        
-        try:
-            delta_exchange.set_leverage(MIN_LEVERAGE, SYMBOL)
-        except Exception as lev_err:
-            print(f"-> Note on leverage setup: {lev_err}")
-            
-        int_amount = int(size)
-        
-        order = delta_exchange.create_order(
-            symbol=SYMBOL,
-            type='market',
-            side=side,
-            amount=int_amount
-        )
-        print(f"-> SUCCESS! Delta Order ID: {order.get('id')}")
-    except Exception as e:
-        print(f"-> DELTA ORDER ERROR HANDLED: {e}")
-
 def update_rolling_data(df: pd.DataFrame):
     try:
-        latest = binance_exchange.fetch_ohlcv('ETH/USDT', timeframe='5m', limit=2)
+        latest = binance_exchange.fetch_ohlcv('BTC/USDT', timeframe='5m', limit=2)
         new_row = pd.DataFrame(latest[-1:], columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         
         if not df.empty and new_row.iloc[0]['timestamp'] <= df.iloc[-1]['timestamp']:
@@ -164,7 +183,7 @@ def check_strategy_status():
         return "RUNNING"
 
 if __name__ == "__main__":
-    print("Initializing Live Attention Engine for ETH...")
+    print("Initializing Direct REST Engine for Delta India BTC...")
     historical_df = load_initial_history()
     
     while True:
@@ -177,9 +196,9 @@ if __name__ == "__main__":
             print(f"-> Model Signal Evaluation: {signal}")
             
             if signal == "BUY":
-                place_delta_live_order("buy", CONTRACT_SIZE)
+                place_delta_direct_order("buy", CONTRACT_SIZE)
             elif signal == "SELL":
-                place_delta_live_order("sell", CONTRACT_SIZE)
+                place_delta_direct_order("sell", CONTRACT_SIZE)
             else:
                 print("-> Model signals HOLD. No trade placed.")
         else:
