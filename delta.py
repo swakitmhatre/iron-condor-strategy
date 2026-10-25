@@ -1,4 +1,3 @@
-cat << 'EOF' > delta.py
 import time
 import os
 import hmac
@@ -11,8 +10,8 @@ import numpy as np
 # =====================================================================
 # CONFIGURATION & CREDENTIALS
 # =====================================================================
-API_KEY = "SxgQK4eNLqtrF54umC4IjjbVUCnrh8"
-API_SECRET = "Ivu3wUr71sn2dmca21VPI4W0dhiqOcnxpBvrVUAsFlKHj4qybWvT2WVaNA1S"
+API_KEY = "YOUR_DELTA_INDIA_API_KEY"
+API_SECRET = "YOUR_DELTA_INDIA_API_SECRET"
 BASE_URL = "https://india.delta.exchange"  
 SYMBOL = "BTCUSD"                          
 CONTRACT_SIZE = 0.001                      
@@ -144,4 +143,3 @@ def run_polling_loop():
 if __name__ == "__main__":
     print("Initializing Clean Production Trading Script...")
     run_polling_loop()
-EOF
