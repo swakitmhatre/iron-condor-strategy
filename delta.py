@@ -4,9 +4,6 @@ import os
 import ccxt
 import pandas as pd
 
-# =====================================================================
-# CONFIGURATION & CREDENTIALS
-# =====================================================================
 API_KEY = "SxgQK4eNLqtrF54umC4IjjbVUCnrh8"
 API_SECRET = "Ivu3wUr71sn2dmca21VPI4W0dhiqOcnxpBvrVUAsFlKHj4qybWvT2WVaNA1S"
 SYMBOL = 'BTC/USDT:USDT'  
@@ -26,28 +23,27 @@ def place_live_order(side, size=CONTRACT_SIZE):
     except Exception as e:
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ORDER ERROR HANDLED: {e}")
 
-def get_real_ohlcv_data():
-    """Fetches real 5-minute historical candles directly from Delta Exchange via CCXT."""
+def get_real_market_data():
     try:
         exchange.load_markets()
-        # Fetch last 300 candles of 5-minute timeframe
-        ohlcv = exchange.fetch_ohlcv(SYMBOL, timeframe='5m', limit=300)
         
+        # 1. Grab the instant, raw live ticker price right now (changes every second!)
+        ticker = exchange.fetch_ticker(SYMBOL)
+        current_live_price = ticker['last']
+        
+        # 2. Grab historical 5m candles for indicators
+        ohlcv = exchange.fetch_ohlcv(SYMBOL, timeframe='5m', limit=300)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        latest_close = df.iloc[-1]['close']
-        print(f"-> LIVE OHLC SUCCESS! Latest BTC Close: {latest_close}")
+        
+        print(f"-> REAL-TIME TICKER PRICE: {current_live_price} | Last 5m Candle Close: {df.iloc[-1]['close']}")
         return df
     except Exception as e:
-        print(f"-> CCXT OHLC Fetch Error: {e}. Retrying next cycle...")
+        print(f"-> Fetch Error: {e}. Retrying next cycle...")
         return None
 
 def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df['ema_200'] = df['close'].ewm(span=200, adjust=False).mean()
-    exp1 = df['close'].ewm(span=12, adjust=False).mean()
-    exp2 = df['close'].ewm(span=26, adjust=False).mean()
-    df['macd'] = exp1 - exp2
-    df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
     delta = df['close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -77,30 +73,24 @@ def evaluate_and_trade(df: pd.DataFrame):
     rsi_val = latest['rsi'] if not pd.isna(latest['rsi']) else 50.0
     ema_val = latest['ema_200'] if not pd.isna(latest['ema_200']) else latest['close']
     
-    print(f"-> Processing Real 5m Candle | Close: {latest['close']} | EMA200: {ema_val:.2f} | RSI: {rsi_val:.2f}")
+    print(f"-> Indicator Check | Close: {latest['close']} | EMA200: {ema_val:.2f} | RSI: {rsi_val:.2f}")
     
-    is_uptrend = latest['close'] > ema_val
-    if is_uptrend and rsi_val < 40:
+    if latest['close'] > ema_val and rsi_val < 40:
         print(">>> Signal Triggered: Long Setup. Placing order...")
         place_live_order("buy", CONTRACT_SIZE)
-    elif not is_uptrend and rsi_val > 60:
+    elif latest['close'] < ema_val and rsi_val > 60:
         print(">>> Signal Triggered: Short Setup. Placing order...")
         place_live_order("sell", CONTRACT_SIZE)
     else:
         print("-> No trade setup matched. Holding position.")
 
-def run_polling_loop():
-    print("Starting CCXT Real-OHLC Polling Engine...")
+if __name__ == "__main__":
+    print("Initializing Live Volatility Ticker Engine...")
     while True:
-        df = get_real_ohlcv_data()
+        df = get_real_market_data()
         if df is not None and not df.empty:
             df = calculate_indicators(df)
             evaluate_and_trade(df)
-        
-        print("-> Sleeping for 5 minutes until the next candle check...\n")
+        print("-> Sleeping for 5 minutes...\n")
         time.sleep(300)
-
-if __name__ == "__main__":
-    print("Initializing CCXT Production Trading Script...")
-    run_polling_loop()
 EOF
