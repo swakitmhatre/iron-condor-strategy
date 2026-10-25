@@ -10,10 +10,10 @@ import numpy as np
 API_KEY = "rI6AjEtDbUo2pekgWOYWXpoDnha9KP"
 API_SECRET = "hn2RYsrr9m1rIHFrqIlNEk5GIrrmJ4IRsffnPQkPoIGkmv289ixJW6aTXIjP"
 
-# Using XRP/USDT so clean integer lots (10 contracts) fit your $11 balance
-SYMBOL = 'XRP/USDT:USDT'  
-CONTRACT_SIZE = 1       # Clean integer lot size (10 contracts)
-MIN_LEVERAGE = 1          # Set leverage to 1x for absolute minimum risk
+# Switch to ETH futures so whole integer lot size (1 contract) fits your $11 balance
+SYMBOL = 'ETH/USDT:USDT'  
+CONTRACT_SIZE = 1         # Whole integer lot size (1 contract)
+MIN_LEVERAGE = 2          # Set leverage to 1x for absolute minimum risk
 
 # Initialize Binance for public historical data context
 binance_exchange = ccxt.binance({'enableRateLimit': True})
@@ -63,11 +63,11 @@ class NumpyAttentionForecaster:
 model = NumpyAttentionForecaster(feature_size=5, horizon=5)
 
 def load_initial_history():
-    print("Loading historical baseline data for attention context...")
+    print("Loading historical baseline data for ETH attention context...")
     try:
-        ohlcv = binance_exchange.fetch_ohlcv('XRP/USDT', timeframe='5m', limit=1000)
+        ohlcv = binance_exchange.fetch_ohlcv('ETH/USDT', timeframe='5m', limit=1000)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        print(f"-> Successfully loaded {len(df)} baseline candles.")
+        print(f"-> Successfully loaded {len(df)} baseline candles for ETH.")
         return df
     except Exception as e:
         print(f"-> History load error: {e}")
@@ -75,15 +75,13 @@ def load_initial_history():
 
 def place_delta_live_order(side, size=CONTRACT_SIZE):
     try:
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Setting leverage to {MIN_LEVERAGE}x and placing {side.upper()} order...")
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Setting leverage to {MIN_LEVERAGE}x and placing {side.upper()} order for ETH...")
         
-        # Enforce minimum leverage programmatically
         try:
             delta_exchange.set_leverage(MIN_LEVERAGE, SYMBOL)
         except Exception as lev_err:
             print(f"-> Note on leverage setup: {lev_err}")
             
-        # Enforce exact integer contract size (1, 10, 100...)
         int_amount = int(size)
         
         order = delta_exchange.create_order(
@@ -98,7 +96,7 @@ def place_delta_live_order(side, size=CONTRACT_SIZE):
 
 def update_rolling_data(df: pd.DataFrame):
     try:
-        latest = binance_exchange.fetch_ohlcv('XRP/USDT', timeframe='5m', limit=2)
+        latest = binance_exchange.fetch_ohlcv('ETH/USDT', timeframe='5m', limit=2)
         new_row = pd.DataFrame(latest[-1:], columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         
         if not df.empty and new_row.iloc[0]['timestamp'] <= df.iloc[-1]['timestamp']:
@@ -166,7 +164,7 @@ def check_strategy_status():
         return "RUNNING"
 
 if __name__ == "__main__":
-    print("Initializing Live Attention Engine for XRP...")
+    print("Initializing Live Attention Engine for ETH...")
     historical_df = load_initial_history()
     
     while True:
