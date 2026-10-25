@@ -1,4 +1,4 @@
-cat << 'EOF' > delta.py
+
 import time
 import os
 import hmac
