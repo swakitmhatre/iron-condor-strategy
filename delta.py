@@ -1,3 +1,4 @@
+
 import time
 import os
 import ccxt
@@ -9,42 +10,34 @@ import numpy as np
 # =====================================================================
 API_KEY = "SxgQK4eNLqtrF54umC4IjjbVUCnrh8"
 API_SECRET = "Ivu3wUr71sn2dmca21VPI4W0dhiqOcnxpBvrVUAsFlKHj4qybWvT2WVaNA1S"
-SYMBOL = 'BTC/USD:USD'  # CCXT unified symbol format for Delta India perpetuals
-CONTRACT_SIZE = 0.001   # Minimum order size (0.001 BTC)
+# Use Delta India's standard CCXT linear contract format
+SYMBOL = 'BTC/USDT:USDT'  
+CONTRACT_SIZE = 0.001   
 
-# Initialize official CCXT exchange client for Delta India
+# Initialize CCXT client for Delta India
 exchange = ccxt.delta({
     'apiKey': API_KEY,
     'secret': API_SECRET,
     'enableRateLimit': True,
-    'options': {'defaultType': 'swap'}  # Select derivatives/perpetuals
+    'options': {'defaultType': 'future'}
 })
 
 def place_live_order(side, size=CONTRACT_SIZE):
-    """Executes a market order safely using CCXT."""
     try:
-        order = exchange.create_order(
-            symbol=SYMBOL,
-            type='market',
-            side=side,
-            amount=size
-        )
+        order = exchange.create_order(symbol=SYMBOL, type='market', side=side, amount=size)
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] SUCCESS: {side.upper()} order executed! Order ID: {order.get('id')}")
     except Exception as e:
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ORDER ERROR HANDLED: {e}")
 
 def get_live_market_data_ccxt():
-    """
-    Fetches real-time live ticker price and recent candles via CCXT 
-    so your indicators reflect true live market volatility.
-    """
     try:
-        # Fetch live ticker price directly from exchange
+        # Load markets first so CCXT maps the symbols correctly
+        exchange.load_markets()
         ticker = exchange.fetch_ticker(SYMBOL)
         live_price = float(ticker['last'])
-        print(f"-> Live Delta India BTC Price via CCXT: {live_price}")
+        print(f"-> LIVE SUCCESS! Current Delta BTC Price: {live_price}")
         
-        # Build an intelligent rolling series anchored to the true live price
+        # Build rolling series anchored to the true live price
         prices = np.linspace(live_price - 300, live_price, 300)
         df = pd.DataFrame({
             'timestamp': pd.date_range(end=pd.Timestamp.now(), periods=300, freq='5min').astype(int) // 10**9,
@@ -118,3 +111,4 @@ def run_polling_loop():
 if __name__ == "__main__":
     print("Initializing CCXT Production Trading Script...")
     run_polling_loop()
+EOF
