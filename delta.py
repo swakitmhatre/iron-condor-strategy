@@ -66,7 +66,7 @@ def place_live_order(side, size=CONTRACT_SIZE):
         response = requests.post(url, data=payload_str, headers=headers, timeout=5)
         response_data = response.json()
         if response.status_code == 200 and response_data.get('success'):
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S'])} SUCCESS: {side.upper()} order executed successfully!")
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] SUCCESS: {side.upper()} order executed successfully!")
         else:
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S'])} ERROR placing order: {response_data}")
     except Exception as e:
