@@ -12,8 +12,8 @@ import json
 # =====================================================================
 # CONFIGURATION & CREDENTIALS
 # =====================================================================
-API_KEY = "YOUR_DELTA_INDIA_API_KEY"
-API_SECRET = "YOUR_DELTA_INDIA_API_SECRET"
+API_KEY = "uqDYmxICz64vZ0KiQsix3o6U5J1Nqq"
+API_SECRET = "oxk1357JTIjdiRgNXIQwGYj7NlzAnoSYzvvVzP1SAPhIsTrjdCheIHl07btE"
 BASE_URL = "https://india.delta.exchange"  # Delta India Production REST endpoint
 WS_URL = "wss://socket.india.delta.exchange"  # Delta India WebSocket stream
 SYMBOL = "BTCUSD"                          # BTC Perpetual contract symbol
