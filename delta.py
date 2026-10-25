@@ -25,6 +25,20 @@ delta_exchange = ccxt.delta({
     'enableRateLimit': True,
     'options': {'defaultType': 'future'}
 })
+
+delta_exchange = ccxt.delta({
+    'apiKey': API_KEY,
+    'secret': API_SECRET,
+    'password': '', # Leave blank '' if none was set
+    'enableRateLimit': True,
+    'options': {'defaultType': 'future'},
+    'urls': {
+        'api': {
+            'public': 'https://api.india.delta.exchange',
+            'private': 'https://api.india.delta.exchange',
+        }
+    }
+})
 delta_exchange.set_sandbox_mode(True)
 
 # =====================================================================
