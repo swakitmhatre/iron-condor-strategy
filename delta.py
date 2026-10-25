@@ -1,3 +1,4 @@
+cat << 'EOF' > delta.py
 import time
 import os
 import ccxt
@@ -9,20 +10,18 @@ import torch.nn as nn
 # =====================================================================
 # CONFIGURATION & CREDENTIALS
 # =====================================================================
-# YOUR ACTUAL DELTA INDIA API CREDENTIALS FOR TRADING
-API_KEY = "SxgQK4eNLqtrF54umC4IjjbVUCnrh8"
-API_SECRET = "Ivu3wUr71sn2dmca21VPI4W0dhiqOcnxpBvrVUAsFlKHj4qybWvT2WVaNA1S"
+API_KEY = "YOUR_DELTA_INDIA_API_KEY"
+API_SECRET = "YOUR_DELTA_INDIA_API_SECRET"
+SYMBOL = 'BTC/USDT:USDT'  
+CONTRACT_SIZE = 1.0     
 
-SYMBOL = 'BTC/USDT:USDT'  # Delta India futures contract symbol in CCXT
-CONTRACT_SIZE = 1         # Minimum contract unit size
-
-# 1. Initialize Binance (Public only - used for smooth historical context)
+# Initialize Binance for public historical context
 binance_exchange = ccxt.binance({'enableRateLimit': True})
 
-# 2. Initialize Delta India (Authenticated with your keys for secure live trading)
+# Initialize Delta India with your actual credentials for live trading
 delta_exchange = ccxt.delta({
-    'apiKey': DELTA_API_KEY,
-    'secret': DELTA_API_SECRET,
+    'apiKey': API_KEY,
+    'secret': API_SECRET,
     'enableRateLimit': True,
     'options': {'defaultType': 'future'}
 })
@@ -45,12 +44,10 @@ class OHLCTransformerForecaster(nn.Module):
         out = self.decoder(x[:, -1, :])
         return out.view(-1, self.horizon, 4)
 
-# Initialize Model in Evaluation Mode
 model = OHLCTransformerForecaster(feature_size=5, horizon=5)
 model.eval()
 
 def load_initial_history():
-    """Loads baseline history once on startup so the Transformer has context."""
     print("Loading historical baseline data for Transformer context...")
     try:
         ohlcv = binance_exchange.fetch_ohlcv('BTC/USDT', timeframe='5m', limit=1000)
@@ -62,30 +59,34 @@ def load_initial_history():
         return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
 def place_delta_live_order(side, size=CONTRACT_SIZE):
-    """
-    AUTHENTICATED ORDER PLACEMENT ON DELTA INDIA:
-    Uses your Delta API key and secret to sign and execute market orders securely.
-    """
     try:
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S']}] Attempting to place {side.upper()} order on Delta Exchange...")
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Placing {side.upper()} order on Delta Exchange...")
+        # Fetch markets to ensure lot size precision is respected
+        delta_exchange.load_markets()
+        market = delta_exchange.market(SYMBOL)
+        
+        # Format amount to market precision rules
+        amount = float(delta_exchange.amount_to_precision(SYMBOL, size))
+        
         order = delta_exchange.create_order(
             symbol=SYMBOL,
             type='market',
             side=side,
-            amount=size
+            amount=amount
         )
-        print(f"-> SUCCESS! Delta Order Executed. Order ID: {order.get('id')}")
+        print(f"-> SUCCESS! Delta Order ID: {order.get('id')}")
     except Exception as e:
         print(f"-> DELTA ORDER ERROR HANDLED: {e}")
 
 def update_rolling_data(df: pd.DataFrame):
-    """Appends the newest closed 5-minute candle in-memory efficiently."""
     try:
         latest = binance_exchange.fetch_ohlcv('BTC/USDT', timeframe='5m', limit=2)
         new_row = pd.DataFrame(latest[-1:], columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         
         if not df.empty and new_row.iloc[0]['timestamp'] <= df.iloc[-1]['timestamp']:
             df.iloc[-1, df.columns.get_loc('close')] = new_row.iloc[0]['close']
+            df.iloc[-1, df.columns.get_loc('high')] = max(df.iloc[-1]['high'], new_row.iloc[0]['high'])
+            df.iloc[-1, df.columns.get_loc('low')] = min(df.iloc[-1]['low'], new_row.iloc[0]['low'])
         else:
             df = pd.concat([df, new_row], ignore_index=True)
             if len(df) > 5000:
@@ -96,7 +97,6 @@ def update_rolling_data(df: pd.DataFrame):
         return df
 
 def run_transformer_and_indicators(df: pd.DataFrame):
-    """Calculates indicators and runs Transformer inference to output upcoming 5 candle OHLC."""
     df = df.copy()
     df['ema_200'] = df['close'].ewm(span=200, adjust=False).mean()
     delta = df['close'].diff()
@@ -110,7 +110,6 @@ def run_transformer_and_indicators(df: pd.DataFrame):
     
     print(f"-> Indicator Check | Close: {latest['close']} | EMA200: {ema_val:.2f} | RSI: {rsi_val:.2f}")
 
-    # Prepare features for Transformer input window (last 30 candles)
     feature_cols = ['open', 'high', 'low', 'close', 'volume']
     recent_data = df[feature_cols].tail(30).values
     
@@ -121,23 +120,23 @@ def run_transformer_and_indicators(df: pd.DataFrame):
     tensor_input = torch.tensor(norm_data, dtype=torch.float32).unsqueeze(0)
     
     with torch.no_grad():
-        pred_norm = model(tensor_input).squeeze(0).numpy() # Shape: (5, 4)
+        pred_norm = model(tensor_input).squeeze(0).numpy()
         
     pred_actual = (pred_norm * std[:4]) + mean[:4]
     
-    # Print out upcoming 5 candles' predicted OHLC dynamically every loop
-    print("-" * 55)
+    # PRINTING OUT THE PREDICTED OHLC FOR NEXT 5 CANDLES
+    print("-" * 65)
     print(">>> TRANSFORMER PREDICTED OHLC FOR NEXT 5 CANDLES:")
     for step in range(5):
         o, h, l, c = pred_actual[step]
         print(f"    Candle +{step+1} -> Open: {o:.2f} | High: {h:.2f} | Low: {l:.2f} | Close: {c:.2f}")
-    print("-" * 55)
+    print("-" * 65)
     
     next_predicted_close = pred_actual[-1][3]
     signal = "HOLD"
-    if next_predicted_close > latest['close'] and rsi_val < 45:
+    if next_predicted_close > latest['close'] and rsi_val < 50:
         signal = "BUY"
-    elif next_predicted_close < latest['close'] and rsi_val > 55:
+    elif next_predicted_close < latest['close'] and rsi_val > 50:
         signal = "SELL"
         
     return signal
@@ -154,7 +153,7 @@ def check_strategy_status():
         return "RUNNING"
 
 if __name__ == "__main__":
-    print("Initializing Live Delta Transformer Engine with Authentication...")
+    print("Initializing Live Transformer Multi-Step Engine...")
     historical_df = load_initial_history()
     
     while True:
@@ -166,12 +165,9 @@ if __name__ == "__main__":
             signal = run_transformer_and_indicators(historical_df)
             print(f"-> Model Signal Evaluation: {signal}")
             
-            # Execute real trades using authenticated Delta API client
             if signal == "BUY":
-                print(">>> Executing BUY order on Delta Exchange...")
                 place_delta_live_order("buy", CONTRACT_SIZE)
             elif signal == "SELL":
-                print(">>> Executing SELL order on Delta Exchange...")
                 place_delta_live_order("sell", CONTRACT_SIZE)
             else:
                 print("-> Model signals HOLD. No trade placed.")
@@ -180,3 +176,4 @@ if __name__ == "__main__":
             
         print("-> Sleeping for 5 minutes until the next candle boundary...\n")
         time.sleep(300)
+EOF
