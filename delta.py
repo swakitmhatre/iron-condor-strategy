@@ -68,9 +68,9 @@ def place_live_order(side, size=CONTRACT_SIZE):
         if response.status_code == 200 and response_data.get('success'):
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] SUCCESS: {side.upper()} order executed successfully!")
         else:
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S'])} ERROR placing order: {response_data}")
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ERROR placing order: {response_data}")
     except Exception as e:
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S'])} NETWORK EXCEPTION during order execution: {e}")
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] NETWORK EXCEPTION during order execution: {e}")
 
 # =====================================================================
 # 2. TECHNICAL INDICATOR ENGINE
