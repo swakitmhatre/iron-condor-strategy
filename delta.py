@@ -11,14 +11,14 @@ import numpy as np
 # =====================================================================
 # CONFIGURATION & CREDENTIALS
 # =====================================================================
-API_KEY = "rI6AjEtDbUo2pekgWOYWXpoDnha9KP"
-API_SECRET = "hn2RYsrr9m1rIHFrqIlNEk5GIrrmJ4IRsffnPQkPoIGkmv289ixJW6aTXIjP"
+API_KEY = "YOUR_DELTA_INDIA_API_KEY"
+API_SECRET = "YOUR_DELTA_INDIA_API_SECRET"
 
 BASE_URL = "https://api.india.delta.exchange"
-PRODUCT_ID = 27       # Delta India Product ID for BTCUSD perpetual contract
+PRODUCT_ID = 3        # Switched from BTC (27) to ETH (3) to fit your $11 balance margin requirements
 CONTRACT_SIZE = 1     # Whole integer lot size (1 contract)
 
-# Initialize Binance solely for public historical data ingestion
+# Initialize Binance for public historical data ingestion (switching to ETH/USDT)
 binance_exchange = ccxt.binance({'enableRateLimit': True})
 
 # =====================================================================
@@ -39,7 +39,6 @@ def place_delta_direct_order(side, size=CONTRACT_SIZE):
     method = "POST"
     timestamp = str(int(time.time()))
     
-    # FIXED: Delta India requires 'market_order' (not 'market') per schema validation
     payload_dict = {
         "product_id": PRODUCT_ID,
         "size": int(size),
@@ -60,7 +59,7 @@ def place_delta_direct_order(side, size=CONTRACT_SIZE):
     }
     
     try:
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Placing direct {side.upper()} order on Delta India...")
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Placing direct {side.upper()} order for ETH on Delta India...")
         response = requests.post(url, headers=headers, data=payload_str)
         res_json = response.json()
         
@@ -102,11 +101,11 @@ class NumpyAttentionForecaster:
 model = NumpyAttentionForecaster(feature_size=5, horizon=5)
 
 def load_initial_history():
-    print("Loading historical baseline data for attention context...")
+    print("Loading historical baseline data for ETH attention context...")
     try:
-        ohlcv = binance_exchange.fetch_ohlcv('BTC/USDT', timeframe='5m', limit=1000)
+        ohlcv = binance_exchange.fetch_ohlcv('ETH/USDT', timeframe='5m', limit=1000)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        print(f"-> Successfully loaded {len(df)} baseline candles.")
+        print(f"-> Successfully loaded {len(df)} ETH baseline candles.")
         return df
     except Exception as e:
         print(f"-> History load error: {e}")
@@ -114,7 +113,7 @@ def load_initial_history():
 
 def update_rolling_data(df: pd.DataFrame):
     try:
-        latest = binance_exchange.fetch_ohlcv('BTC/USDT', timeframe='5m', limit=2)
+        latest = binance_exchange.fetch_ohlcv('ETH/USDT', timeframe='5m', limit=2)
         new_row = pd.DataFrame(latest[-1:], columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         
         if not df.empty and new_row.iloc[0]['timestamp'] <= df.iloc[-1]['timestamp']:
@@ -182,7 +181,7 @@ def check_strategy_status():
         return "RUNNING"
 
 if __name__ == "__main__":
-    print("Initializing Direct REST Engine for Delta India BTC...")
+    print("Initializing Direct REST Engine for Delta India ETH...")
     historical_df = load_initial_history()
     
     while True:
