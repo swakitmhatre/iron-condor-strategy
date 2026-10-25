@@ -24,11 +24,7 @@ def generate_signature(secret, method, endpoint, payload=''):
     return hmac.new(secret.encode('utf-8'), message.encode('utf-8'), hashlib.sha256).hexdigest()
 
 def place_live_order(side, size=CONTRACT_SIZE):
-    """
-    Executes a market order on Delta India. 
-    Wrapped in robust try-except blocks so order rejections or network errors 
-    CANNOT crash or stop your AWS program.
-    """
+    """Executes a market order on Delta India with full error shielding."""
     endpoint = "/v2/orders"
     url = BASE_URL + endpoint
     timestamp = str(int(time.time()))
@@ -59,13 +55,56 @@ def place_live_order(side, size=CONTRACT_SIZE):
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] SUCCESS: {side.upper()} order executed successfully!")
         else:
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] EXCHANGE ORDER ERROR HANDLED: {res_data}")
-            print("-> Safety Shield Active: Program will NOT crash. Continuing 24/7 loop...")
-            
-    except requests.exceptions.Timeout:
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] WARNING: Order request timed out. Continuing execution safely...")
     except Exception as e:
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] CRITICAL EXCEPTION CAUGHT IN ORDER PLACEMENT: {e}")
-        print("-> Safety Shield Active: Program is keeping execution alive.")
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] EXCEPTION IN ORDER PLACEMENT: {e}")
+
+def fetch_initial_candles():
+    """
+    Uses Delta India's official historical endpoint to fetch recent 5-minute candles 
+    so indicators have immediate data upon program startup.
+    """
+    print("Fetching initial 5-minute candles via Delta REST API...")
+    endpoint = "/v2/history/candles"
+    url = BASE_URL + endpoint
+    
+    # Calculate timestamps for recent history (last 2 days to ensure plenty of 5m candles)
+    end_time = int(time.time())
+    start_time = end_time - (48 * 3600) 
+    
+    params = {
+        'resolution': '5m',
+        'symbol': SYMBOL,
+        'start': str(start_time),
+        'end': str(end_time)
+    }
+    headers = {'Accept': 'application/json'}
+    
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        data = response.json()
+        
+        if response.status_code == 200 and 'result' in data:
+            candles = data['result']
+            # Delta returns candles as lists: [time, open, high, low, close, volume]
+            df = pd.DataFrame(candles, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            for col in ['open', 'high', 'low', 'close', 'volume']:
+                df[col] = pd.to_numeric(df[col])
+            df = df.sort_values('timestamp').reset_index(drop=True)
+            print(f"-> Successfully loaded {len(df)} historical 5-minute candles.")
+            return df
+    except Exception as e:
+        print(f"-> Error fetching historical candles: {e}. Falling back to default mock data.")
+    
+    # Fallback dummy dataframe if network is ever unstable on boot
+    fallback = pd.DataFrame({
+        'timestamp': pd.date_range(end=pd.Timestamp.now(), periods=300, freq='5min').astype(int) // 10**9,
+        'open': np.linspace(60000, 61000, 300),
+        'high': np.linspace(60100, 61100, 300),
+        'low': np.linspace(59900, 60900, 300),
+        'close': np.linspace(60050, 60950, 300),
+        'volume': np.ones(300) * 10
+    })
+    return fallback
 
 def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """Computes EMA 200, MACD, and RSI indicators safely."""
@@ -116,11 +155,9 @@ def evaluate_and_trade(df: pd.DataFrame):
         print("-> No trade setup matched. Holding position.")
 
 def start_websocket_stream(df_historical):
-    """Manages continuous WebSocket connection and sends the required candle subscription payload."""
+    """Manages continuous WebSocket connection and listens for real-time 5m candle closes."""
     def on_open(ws):
         print(f"\n[SUCCESS] Connected to Delta India WebSocket Server!")
-        
-        # FIXED: Explicitly send subscription payload so Delta server streams 5m candles to us
         sub_payload = {
             "type": "subscribe",
             "payload": {
@@ -128,23 +165,22 @@ def start_websocket_stream(df_historical):
             }
         }
         ws.send(json.dumps(sub_payload))
-        print(f"-> Sent subscription request for live 5-minute candles on {SYMBOL}.")
+        print(f"-> Subscribed to live 5-minute candlestick stream for {SYMBOL}.")
 
     def on_message(ws, message):
         try:
             data = json.loads(message)
-            # Print a subtle message when heartbeats or messages arrive so you know it's active
             if "candlestick_5m" in data.get("channel", ""):
                 candle = data.get('data', {})
                 if candle.get('closed'):
                     print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] Closed 5m Candle Event Received from Delta!")
                     new_row = pd.DataFrame([{
-                        'timestamp': candle['time'],
-                        'open': float(candle['open']),
-                        'high': float(candle['high']),
-                        'low': float(candle['low']),
-                        'close': float(candle['close']),
-                        'volume': float(candle['volume'])
+                        'timestamp': candle.get('time'),
+                        'open': float(candle.get('open')),
+                        'high': float(candle.get('high')),
+                        'low': float(candle.get('low')),
+                        'close': float(candle.get('close')),
+                        'volume': float(candle.get('volume'))
                     }])
                     nonlocal df_historical
                     df_historical = pd.concat([df_historical, new_row], ignore_index=True).tail(2000)
@@ -171,15 +207,12 @@ if __name__ == "__main__":
             f.write("STOPPED")
         print("Created 'control.txt' set to STOPPED by default.")
 
-    mock_history = pd.DataFrame({
-        'timestamp': pd.date_range(end=pd.Timestamp.now(), periods=300, freq='5min'),
-        'open': np.linspace(60000, 61000, 300),
-        'high': np.linspace(60100, 61100, 300),
-        'low': np.linspace(59900, 60900, 300),
-        'close': np.linspace(60050, 60950, 300),
-        'volume': np.ones(300) * 10
-    })
-    mock_history = calculate_indicators(mock_history)
+    # 1. Fetch real historical 5-minute data using your REST approach
+    historical_df = fetch_initial_candles()
     
+    # 2. Compute starting indicators
+    historical_df = calculate_indicators(historical_df)
+    
+    # 3. Connect to live WebSocket stream for upcoming candle closures
     print("Connecting to Delta India WebSocket endpoint...")
-    start_websocket_stream(mock_history)
+    start_websocket_stream(historical_df)
