@@ -14,7 +14,6 @@ API_KEY = "YOUR_DELTA_INDIA_API_KEY"
 API_SECRET = "YOUR_DELTA_INDIA_API_SECRET"
 
 BASE_URL = "https://api.india.delta.exchange"
-SYMBOL = "BTCUSD"
 PRODUCT_ID = 27       # Delta India Product ID for BTCUSD perpetual contract
 CONTRACT_SIZE = 1     # Whole integer lot size (1 contract)
 LEVERAGE = 1          # Minimum leverage setting
@@ -23,7 +22,7 @@ LEVERAGE = 1          # Minimum leverage setting
 binance_exchange = ccxt.binance({'enableRateLimit': True})
 
 # =====================================================================
-# DIRECT DELTA INDIA REST AUTHENTICATION & ORDER SIGNING
+# DELTA INDIA REST HELPERS (SIGNATURE & BALANCE CHECK)
 # =====================================================================
 def generate_delta_signature(secret, method, timestamp, path, query_string='', payload=''):
     message = method + timestamp + path + query_string + payload
@@ -34,7 +33,41 @@ def generate_delta_signature(secret, method, timestamp, path, query_string='', p
     ).hexdigest()
     return signature
 
+def get_delta_available_balance():
+    """Fetches real-time wallet balance to prevent low-balance API rejection errors."""
+    path = "/v2/wallet/balances"
+    url = f"{BASE_URL}{path}"
+    method = "GET"
+    timestamp = str(int(time.time()))
+    
+    signature = generate_delta_signature(API_SECRET, method, timestamp, path, '', '')
+    headers = {
+        "api-key": API_KEY,
+        "signature": signature,
+        "timestamp": timestamp,
+        "Content-Type": "application/json"
+    }
+    try:
+        response = requests.get(url, headers=headers)
+        res_json = response.json()
+        if res_json.get("success"):
+            for asset in res_json.get("result", []):
+                if asset.get("asset_symbol") == "USD":
+                    return float(asset.get("available_balance", 0.0))
+        return 0.0
+    except Exception as e:
+        print(f"-> Balance fetch warning: {e}")
+        return 0.0
+
 def place_delta_direct_order(side, size=CONTRACT_SIZE):
+    # Pre-check available balance before firing order to prevent gateway error codes
+    avail_bal = get_delta_available_balance()
+    print(f"-> Wallet Check | Available USD Balance: ${avail_bal:.2f}")
+    
+    if avail_bal < 2.0:
+        print("-> ORDER BLOCKED LOCALLY: Insufficient available balance in wallet to support margin requirement.")
+        return
+
     path = "/v2/orders"
     url = f"{BASE_URL}{path}"
     method = "POST"
@@ -51,7 +84,6 @@ def place_delta_direct_order(side, size=CONTRACT_SIZE):
     payload_str = json.dumps(payload_dict)
     
     signature = generate_delta_signature(API_SECRET, method, timestamp, path, '', payload_str)
-    
     headers = {
         "api-key": API_KEY,
         "signature": signature,
