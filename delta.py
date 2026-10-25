@@ -1,3 +1,4 @@
+!pip install pandas
 import time
 import os
 import hmac
