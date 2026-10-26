@@ -8,7 +8,7 @@ import requests
 import time
 
 # ---------------------------------------------------------
-# 1. FETCH BINANCE CANDLES (Adjusted for 2500 rows)
+# 1. FETCH BINANCE CANDLES & COMPUTE INDICATORS
 # ---------------------------------------------------------
 def fetch_binance_candles(symbol="BTCUSDT", interval="5m", total_needed=2500):
     print(f"Fetching {total_needed} historical {interval} candles from Binance...")
@@ -39,32 +39,40 @@ def fetch_binance_candles(symbol="BTCUSDT", interval="5m", total_needed=2500):
     for col in ['open', 'high', 'low', 'close', 'volume']:
         df[col] = df[col].astype(np.float32)
         
+    # Add Technical Indicators (RSI & EMA) for better neural network mapping
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / (loss + 1e-8)
+    df['rsi'] = 100 - (100 / (1 + rs))
+    df['ema'] = df['close'].ewm(span=14, adjust=False).mean()
+    
+    df = df.dropna().reset_index(drop=True)
     df['open_time'] = pd.to_datetime(df['open_time'], unit='ms')
-    return df[['open_time', 'open', 'high', 'low', 'close', 'volume']].tail(total_needed).reset_index(drop=True)
+    return df[['open_time', 'open', 'high', 'low', 'close', 'volume', 'rsi', 'ema']].tail(total_needed).reset_index(drop=True)
 
 TOTAL_ROWS = 2500
-PRED_HORIZON = 100
+PRED_HORIZON = 30   # Shorter horizon for significantly higher accuracy
 INPUT_WINDOW = 200
 
 df = fetch_binance_candles(symbol="BTCUSDT", interval="5m", total_needed=TOTAL_ROWS)
-print(f"Loaded dataset size: {len(df)}")
+print(f"Loaded dataset size with indicators: {len(df)}")
 
 # ---------------------------------------------------------
-# 2. MIN-MAX SCALING
+# 2. SCALING (MinMax for price/volume, Direct bounds for indicators)
 # ---------------------------------------------------------
-features = ['open', 'high', 'low', 'close', 'volume']
+features = ['open', 'high', 'low', 'close', 'volume', 'rsi', 'ema']
 data_raw = df[features].values
 
 train_size = int(len(df) * 0.8)
 
-# Fit MinMax strictly on training bounds
 min_val = data_raw[:train_size].min(axis=0)
 max_val = data_raw[:train_size].max(axis=0)
-max_val[max_val == min_val] = 1.0 # Prevent division by zero
+max_val[max_val == min_val] = 1.0 
 
 data_normalized = (data_raw - min_val) / (max_val - min_val)
 
-def create_sequences(data, input_window=200, horizon=100):
+def create_sequences(data, input_window=200, horizon=30):
     X, Y = [], []
     for i in range(len(data) - input_window - horizon + 1):
         X.append(data[i : i + input_window])
@@ -79,10 +87,10 @@ train_X = torch.tensor(X_all[:max_train_idx])
 train_Y = torch.tensor(Y_all[:max_train_idx])
 
 # ---------------------------------------------------------
-# 3. UPGRADED HIGHER-CAPACITY TRANSFORMER
+# 3. UPGRADED TRANSFORMER ARCHITECTURE
 # ---------------------------------------------------------
 class BTCTransformer(nn.Module):
-    def __init__(self, feature_dim=5, d_model=128, n_heads=4, num_layers=3, output_horizon=100):
+    def __init__(self, feature_dim=7, d_model=128, n_heads=4, num_layers=3, output_horizon=30):
         super(BTCTransformer, self).__init__()
         self.output_horizon = output_horizon
         
@@ -90,7 +98,7 @@ class BTCTransformer(nn.Module):
         self.pos_encoder = nn.Parameter(torch.randn(1, 1000, d_model) * 0.01)
         
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=d_model, nhead=n_heads, dim_feedforward=256, dropout=0.15, batch_first=True
+            d_model=d_model, nhead=n_heads, dim_feedforward=256, dropout=0.1, batch_first=True
         )
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         
@@ -98,7 +106,7 @@ class BTCTransformer(nn.Module):
             nn.Linear(d_model, 128),
             nn.GELU(),
             nn.Dropout(0.1),
-            nn.Linear(128, 4) 
+            nn.Linear(128, 4) # Predicts OHLC
         )
         
     def forward(self, src):
@@ -109,33 +117,33 @@ class BTCTransformer(nn.Module):
         out = self.fc_out(x_last) 
         return out
 
-# Automatic hardware acceleration detection
+# Hardware acceleration setup
 if torch.cuda.is_available():
     device = torch.device("cuda")
 elif torch.backends.mps.is_available():
-    device = torch.device("mps") # For Apple Silicon Macs
+    device = torch.device("mps")
 else:
     device = torch.device("cpu")
 
 print(f"Using device: {device}")
 
-model = BTCTransformer(feature_dim=5, output_horizon=PRED_HORIZON).to(device)
+model = BTCTransformer(feature_dim=7, output_horizon=PRED_HORIZON).to(device)
 criterion = nn.HuberLoss()
 optimizer = optim.AdamW(model.parameters(), lr=0.001, weight_decay=1e-4)
+scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=15)
 
-# Move training data to device
 train_X = train_X.to(device)
 train_Y = train_Y.to(device)
 
 # ---------------------------------------------------------
-# 4. INITIAL TRAINING
+# 4. ROBUST TRAINING (15 Epochs)
 # ---------------------------------------------------------
-print("\n--- Phase 1: Initial Training on Historical Data ---")
+print("\n--- Phase 1: Deep Initial Training on Historical Data ---")
 train_dataset = TensorDataset(train_X, train_Y[:, :, :4]) 
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 
 model.train()
-epochs = 3
+epochs = 15
 for epoch in range(epochs):
     epoch_loss = 0
     for batch_x, batch_y in train_loader:
@@ -151,10 +159,11 @@ for epoch in range(epochs):
         optimizer.step()
         epoch_loss += loss.item()
         
+    scheduler.step()
     print(f"Epoch {epoch+1}/{epochs} | Training Loss: {epoch_loss / len(train_loader):.4f}")
 
 # ---------------------------------------------------------
-# 5. LIVE INCREMENTAL RE-LEARNING & PREDICTION
+# 5. LIVE INCREMENTAL RE-LEARNING & FINAL PREDICTION
 # ---------------------------------------------------------
 print("\n--- Phase 2: Live Incremental Re-learning & Final Prediction ---")
 model.train() 
@@ -176,21 +185,21 @@ if not torch.isnan(loss):
 pred_np = predicted_normalized.detach().cpu().numpy()[0]
 actual_np = actual_y_normalized.detach().cpu().numpy()[0]
 
-# Denormalize using MinMax bounds for OHLC (first 4 columns)
-min_ohlc = min_val[:4]
-max_ohlc = max_val[:4]
+# Denormalize Close prices (index 3 of OHLC)
+min_close = min_val[3]
+max_close = max_val[3]
 
-pred_denorm = (pred_np * (max_ohlc - min_ohlc)) + min_ohlc
-actual_denorm = (actual_np * (max_ohlc - min_ohlc)) + min_ohlc
+pred_denorm_close = (pred_np[:, 3] * (max_close - min_close)) + min_close
+actual_denorm_close = (actual_np[:, 3] * (max_close - min_close)) + min_close
 
 comparison_df = pd.DataFrame({
     'Candle_Index': range(1, PRED_HORIZON + 1),
-    'Pred_Close': pred_denorm[:, 3],
-    'Actual_Close': actual_denorm[:, 3],
+    'Pred_Close': pred_denorm_close,
+    'Actual_Close': actual_denorm_close,
 })
 comparison_df['Close_Error_%'] = (np.abs(comparison_df['Pred_Close'] - comparison_df['Actual_Close']) / comparison_df['Actual_Close']) * 100
 
-print("\n--- Sample Comparison Table (First 10 Candles) ---")
-print(comparison_df.head(10).to_string(index=False))
-comparison_df.to_csv("btc_transformer_2500_predictions.csv", index=False)
-print("\nSaved successfully to 'btc_transformer_2500_predictions.csv'.")
+print("\n--- Sample Comparison Table ---")
+print(comparison_df.to_string(index=False))
+comparison_df.to_csv("btc_transformer_optimized_predictions.csv", index=False)
+print("\nSaved successfully to 'btc_transformer_optimized_predictions.csv'.")
