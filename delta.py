@@ -91,6 +91,9 @@ train_Y = torch.tensor(Y_all[:max_train_idx], dtype=torch.float32)
 # ---------------------------------------------------------
 # 3. LIGHTWEIGHT TRANSFORMER ARCHITECTURE (Memory Optimized)
 # ---------------------------------------------------------
+# ---------------------------------------------------------
+# 3. LIGHTWEIGHT TRANSFORMER ARCHITECTURE (Memory Optimized)
+# ---------------------------------------------------------
 class BTCTransformer(nn.Module):
     def __init__(self, feature_dim=5, d_model=32, n_heads=2, num_layers=1, output_horizon=250):
         super(BTCTransformer, self).__init__()
@@ -105,15 +108,15 @@ class BTCTransformer(nn.Module):
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         
         self.fc_out = nn.Sequential(
-            nn.Linear(
+            nn.Linear(d_model, 32),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(32, 4) # OHLC
+        )
         
     def forward(self, src):
         batch_size, seq_len, _ = src.shape
-        x = self.input_embed(src) + self.pos_encoder[:, :seq_len, :]
-        x = self.transformer_encoder(x)
-        x_last = x[:, -1, :].unsqueeze(1).repeat(1, self.output_horizon, 1)
-        out = self.fc_out(x_last) 
-        return out
+        x = self.input
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using compute device: {device}")
