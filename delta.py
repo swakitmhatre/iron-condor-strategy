@@ -87,8 +87,12 @@ train_Y = torch.tensor(Y_all[:max_train_idx], dtype=torch.float32)
 # ---------------------------------------------------------
 # 3. TRANSFORMER ARCHITECTURE
 # ---------------------------------------------------------
+
+# ---------------------------------------------------------
+# 3. LIGHTWEIGHT TRANSFORMER ARCHITECTURE (Memory Optimized)
+# ---------------------------------------------------------
 class BTCTransformer(nn.Module):
-    def __init__(self, feature_dim=5, d_model=64, n_heads=4, num_layers=2, output_horizon=250):
+    def __init__(self, feature_dim=5, d_model=32, n_heads=2, num_layers=1, output_horizon=250):
         super(BTCTransformer, self).__init__()
         self.output_horizon = output_horizon
         
@@ -96,16 +100,12 @@ class BTCTransformer(nn.Module):
         self.pos_encoder = nn.Parameter(torch.randn(1, 2500, d_model) * 0.01)
         
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=d_model, nhead=n_heads, dim_feedforward=128, dropout=0.1, batch_first=True
+            d_model=d_model, nhead=n_heads, dim_feedforward=64, dropout=0.1, batch_first=True
         )
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         
         self.fc_out = nn.Sequential(
-            nn.Linear(d_model, 64),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(64, 4) # OHLC
-        )
+            nn.Linear(
         
     def forward(self, src):
         batch_size, seq_len, _ = src.shape
