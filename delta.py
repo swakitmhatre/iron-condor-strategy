@@ -8,9 +8,9 @@ import requests
 import time
 
 # ---------------------------------------------------------
-# 1. FETCH BINANCE CANDLES & COMPUTE INDICATORS
+# 1. FETCH 15-MINUTE BINANCE CANDLES & COMPUTE INDICATORS
 # ---------------------------------------------------------
-def fetch_binance_candles(symbol="BTCUSDT", interval="5m", total_needed=2500):
+def fetch_binance_candles(symbol="BTCUSDT", interval="15m", total_needed=2500):
     print(f"Fetching {total_needed} historical {interval} candles from Binance...")
     all_data = []
     end_time = None
@@ -39,7 +39,7 @@ def fetch_binance_candles(symbol="BTCUSDT", interval="5m", total_needed=2500):
     for col in ['open', 'high', 'low', 'close', 'volume']:
         df[col] = df[col].astype(np.float32)
         
-    # Add Technical Indicators (RSI & EMA) for better neural network mapping
+    # Technical Indicators for 15m trend smoothing
     delta = df['close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -52,14 +52,14 @@ def fetch_binance_candles(symbol="BTCUSDT", interval="5m", total_needed=2500):
     return df[['open_time', 'open', 'high', 'low', 'close', 'volume', 'rsi', 'ema']].tail(total_needed).reset_index(drop=True)
 
 TOTAL_ROWS = 2500
-PRED_HORIZON = 30   # Shorter horizon for significantly higher accuracy
+PRED_HORIZON = 30   # Predicting next 30 candles (7.5 hours ahead on 15m frame)
 INPUT_WINDOW = 200
 
-df = fetch_binance_candles(symbol="BTCUSDT", interval="5m", total_needed=TOTAL_ROWS)
-print(f"Loaded dataset size with indicators: {len(df)}")
+df = fetch_binance_candles(symbol="BTCUSDT", interval="15m", total_needed=TOTAL_ROWS)
+print(f"Loaded 15m dataset size: {len(df)}")
 
 # ---------------------------------------------------------
-# 2. SCALING (MinMax for price/volume, Direct bounds for indicators)
+# 2. SCALING
 # ---------------------------------------------------------
 features = ['open', 'high', 'low', 'close', 'volume', 'rsi', 'ema']
 data_raw = df[features].values
@@ -87,7 +87,7 @@ train_X = torch.tensor(X_all[:max_train_idx])
 train_Y = torch.tensor(Y_all[:max_train_idx])
 
 # ---------------------------------------------------------
-# 3. UPGRADED TRANSFORMER ARCHITECTURE
+# 3. TRANSFORMER ARCHITECTURE
 # ---------------------------------------------------------
 class BTCTransformer(nn.Module):
     def __init__(self, feature_dim=7, d_model=128, n_heads=4, num_layers=3, output_horizon=30):
@@ -136,9 +136,9 @@ train_X = train_X.to(device)
 train_Y = train_Y.to(device)
 
 # ---------------------------------------------------------
-# 4. ROBUST TRAINING (15 Epochs)
+# 4. TRAINING
 # ---------------------------------------------------------
-print("\n--- Phase 1: Deep Initial Training on Historical Data ---")
+print("\n--- Phase 1: Training on 15m Historical Data ---")
 train_dataset = TensorDataset(train_X, train_Y[:, :, :4]) 
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 
@@ -185,7 +185,7 @@ if not torch.isnan(loss):
 pred_np = predicted_normalized.detach().cpu().numpy()[0]
 actual_np = actual_y_normalized.detach().cpu().numpy()[0]
 
-# Denormalize Close prices (index 3 of OHLC)
+# Denormalize Close prices
 min_close = min_val[3]
 max_close = max_val[3]
 
@@ -199,7 +199,7 @@ comparison_df = pd.DataFrame({
 })
 comparison_df['Close_Error_%'] = (np.abs(comparison_df['Pred_Close'] - comparison_df['Actual_Close']) / comparison_df['Actual_Close']) * 100
 
-print("\n--- Sample Comparison Table ---")
+print("\n--- Sample Comparison Table (15m Timeframe) ---")
 print(comparison_df.to_string(index=False))
-comparison_df.to_csv("btc_transformer_optimized_predictions.csv", index=False)
-print("\nSaved successfully to 'btc_transformer_optimized_predictions.csv'.")
+comparison_df.to_csv("btc_transformer_15m_predictions.csv", index=False)
+print("\nSaved successfully to 'btc_transformer_15m_predictions.csv'.")
