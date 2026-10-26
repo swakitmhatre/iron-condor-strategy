@@ -8,9 +8,9 @@ import requests
 import time
 
 # ---------------------------------------------------------
-# 1. FETCH 15-MINUTE BINANCE CANDLES & COMPUTE INDICATORS
+# 1. FETCH COMPACT 500-CANDLE DATASET (15m Timeframe)
 # ---------------------------------------------------------
-def fetch_binance_candles(symbol="BTCUSDT", interval="15m", total_needed=2500):
+def fetch_binance_candles(symbol="BTCUSDT", interval="15m", total_needed=500):
     print(f"Fetching {total_needed} historical {interval} candles from Binance...")
     all_data = []
     end_time = None
@@ -39,7 +39,7 @@ def fetch_binance_candles(symbol="BTCUSDT", interval="15m", total_needed=2500):
     for col in ['open', 'high', 'low', 'close', 'volume']:
         df[col] = df[col].astype(np.float32)
         
-    # Technical Indicators for 15m trend smoothing
+    # Technical Indicators for trend stability
     delta = df['close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -51,12 +51,12 @@ def fetch_binance_candles(symbol="BTCUSDT", interval="15m", total_needed=2500):
     df['open_time'] = pd.to_datetime(df['open_time'], unit='ms')
     return df[['open_time', 'open', 'high', 'low', 'close', 'volume', 'rsi', 'ema']].tail(total_needed).reset_index(drop=True)
 
-TOTAL_ROWS = 2500
-PRED_HORIZON = 30   # Predicting next 30 candles (7.5 hours ahead on 15m frame)
-INPUT_WINDOW = 200
+TOTAL_ROWS = 500
+PRED_HORIZON = 10   # Short horizon (10 steps) to prevent high error drift
+INPUT_WINDOW = 100  # Smaller lookback window appropriate for 500 rows
 
 df = fetch_binance_candles(symbol="BTCUSDT", interval="15m", total_needed=TOTAL_ROWS)
-print(f"Loaded 15m dataset size: {len(df)}")
+print(f"Loaded dataset size: {len(df)}")
 
 # ---------------------------------------------------------
 # 2. SCALING
@@ -72,7 +72,7 @@ max_val[max_val == min_val] = 1.0
 
 data_normalized = (data_raw - min_val) / (max_val - min_val)
 
-def create_sequences(data, input_window=200, horizon=30):
+def create_sequences(data, input_window=100, horizon=10):
     X, Y = [], []
     for i in range(len(data) - input_window - horizon + 1):
         X.append(data[i : i + input_window])
@@ -87,26 +87,27 @@ train_X = torch.tensor(X_all[:max_train_idx])
 train_Y = torch.tensor(Y_all[:max_train_idx])
 
 # ---------------------------------------------------------
-# 3. TRANSFORMER ARCHITECTURE
+# 3. LIGHTWEIGHT, ANTI-OVERFITTING TRANSFORMER
 # ---------------------------------------------------------
-class BTCTransformer(nn.Module):
-    def __init__(self, feature_dim=7, d_model=128, n_heads=4, num_layers=3, output_horizon=30):
-        super(BTCTransformer, self).__init__()
+class LightBTCTransformer(nn.Module):
+    def __init__(self, feature_dim=7, d_model=32, n_heads=2, num_layers=1, output_horizon=10):
+        super(LightBTCTransformer, self).__init__()
         self.output_horizon = output_horizon
         
         self.input_embed = nn.Linear(feature_dim, d_model)
-        self.pos_encoder = nn.Parameter(torch.randn(1, 1000, d_model) * 0.01)
+        self.pos_encoder = nn.Parameter(torch.randn(1, 500, d_model) * 0.01)
         
+        # Single layer with high dropout to prevent memorization
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=d_model, nhead=n_heads, dim_feedforward=256, dropout=0.1, batch_first=True
+            d_model=d_model, nhead=n_heads, dim_feedforward=64, dropout=0.3, batch_first=True
         )
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         
         self.fc_out = nn.Sequential(
-            nn.Linear(d_model, 128),
+            nn.Linear(d_model, 32),
             nn.GELU(),
-            nn.Dropout(0.1),
-            nn.Linear(128, 4) # Predicts OHLC
+            nn.Dropout(0.2),
+            nn.Linear(32, 4) # Predicts OHLC
         )
         
     def forward(self, src):
@@ -117,7 +118,7 @@ class BTCTransformer(nn.Module):
         out = self.fc_out(x_last) 
         return out
 
-# Hardware acceleration setup
+# Hardware selection
 if torch.cuda.is_available():
     device = torch.device("cuda")
 elif torch.backends.mps.is_available():
@@ -127,23 +128,22 @@ else:
 
 print(f"Using device: {device}")
 
-model = BTCTransformer(feature_dim=7, output_horizon=PRED_HORIZON).to(device)
+model = LightBTCTransformer(feature_dim=7, output_horizon=PRED_HORIZON).to(device)
 criterion = nn.HuberLoss()
-optimizer = optim.AdamW(model.parameters(), lr=0.001, weight_decay=1e-4)
-scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=15)
+optimizer = optim.AdamW(model.parameters(), lr=0.005, weight_decay=1e-3) # Higher weight decay prevents overfitting
 
 train_X = train_X.to(device)
 train_Y = train_Y.to(device)
 
 # ---------------------------------------------------------
-# 4. TRAINING
+# 4. LIGHTWEIGHT INITIAL TRAINING (5 Epochs only)
 # ---------------------------------------------------------
-print("\n--- Phase 1: Training on 15m Historical Data ---")
+print("\n--- Phase 1: Rapid Baseline Training (500 Rows) ---")
 train_dataset = TensorDataset(train_X, train_Y[:, :, :4]) 
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 
 model.train()
-epochs = 15
+epochs = 5
 for epoch in range(epochs):
     epoch_loss = 0
     for batch_x, batch_y in train_loader:
@@ -159,31 +159,36 @@ for epoch in range(epochs):
         optimizer.step()
         epoch_loss += loss.item()
         
-    scheduler.step()
     print(f"Epoch {epoch+1}/{epochs} | Training Loss: {epoch_loss / len(train_loader):.4f}")
 
 # ---------------------------------------------------------
-# 5. LIVE INCREMENTAL RE-LEARNING & FINAL PREDICTION
+# 5. ONLINE ROLLING RE-LEARNING & PREDICTION
 # ---------------------------------------------------------
 print("\n--- Phase 2: Live Incremental Re-learning & Final Prediction ---")
 model.train() 
 
+# Simulating incremental weight adjustment on the very latest sample window
 eval_idx = len(X_all) - 1
 test_x = torch.tensor(X_all[eval_idx:eval_idx+1]).to(device)
 actual_y_normalized = torch.tensor(Y_all[eval_idx:eval_idx+1, :, :4]).to(device)
 
-predicted_normalized = model(test_x)
-
-loss = criterion(predicted_normalized, actual_y_normalized)
-if not torch.isnan(loss):
+# Micro gradient step update (Online Re-learning)
+for _ in range(3): 
     optimizer.zero_grad()
-    loss.backward()
-    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+    adapt_preds = model(test_x)
+    adapt_loss = criterion(adapt_preds, actual_y_normalized)
+    adapt_loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
     optimizer.step()
-    print(f"Online Re-learning Step Completed. Adaptation Loss: {loss.item():.4f}")
 
-pred_np = predicted_normalized.detach().cpu().numpy()[0]
-actual_np = actual_y_normalized.detach().cpu().numpy()[0]
+print(f"Online Re-learning Completed. Final Adaptation Loss: {adapt_loss.item():.4f}")
+
+model.eval()
+with torch.no_grad():
+    predicted_normalized = model(test_x)
+
+pred_np = predicted_normalized.cpu().numpy()[0]
+actual_np = actual_y_normalized.cpu().numpy()[0]
 
 # Denormalize Close prices
 min_close = min_val[3]
@@ -199,7 +204,7 @@ comparison_df = pd.DataFrame({
 })
 comparison_df['Close_Error_%'] = (np.abs(comparison_df['Pred_Close'] - comparison_df['Actual_Close']) / comparison_df['Actual_Close']) * 100
 
-print("\n--- Sample Comparison Table (15m Timeframe) ---")
+print("\n--- Final Comparison Table (500 Candles + Relearning) ---")
 print(comparison_df.to_string(index=False))
-comparison_df.to_csv("btc_transformer_15m_predictions.csv", index=False)
-print("\nSaved successfully to 'btc_transformer_15m_predictions.csv'.")
+comparison_df.to_csv("btc_transformer_500_predictions.csv", index=False)
+print("\nSaved successfully to 'btc_transformer_500_predictions.csv'.")
