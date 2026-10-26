@@ -28,7 +28,7 @@ def fetch_all_binance_candles(symbol="BTCUSDT", interval="5m", total_needed=2500
         response = requests.get(url)
         data = response.json()
         
-        if not data or 'code' in data:
+        if not data or isinstance(data, dict) and 'code' in data:
             print("API Error or rate limit reached. Stopping pagination.")
             break
             
@@ -62,7 +62,7 @@ data_raw = df[features].values
 train_size = 24750
 pred_horizon = 250
 
-# Calculate Mean and Std strictly from the first 24,750 candles to prevent lookahead leakage
+# Calculate Mean and Std strictly from the training history to prevent lookahead leakage
 mean = data_raw[:train_size].mean(axis=0)
 std = data_raw[:train_size].std(axis=0)
 std[std == 0] = 1e-5
@@ -79,23 +79,16 @@ INPUT_WINDOW = 500  # Past 500 candles as context for the Transformer
 X_all, Y_all = create_sequences(data_normalized, input_window=INPUT_WINDOW, horizon=pred_horizon)
 print(f"Total structured sequences built: {len(X_all)}")
 
-# Match the split exactly: Train on the history up to index 24,750 equivalent sequence bounds
+# Match split constraints safely
 max_train_idx = min(24250, len(X_all) - pred_horizon - 1)
 train_X = torch.tensor(X_all[:max_train_idx], dtype=torch.float32)
 train_Y = torch.tensor(Y_all[:max_train_idx], dtype=torch.float32)
 
 # ---------------------------------------------------------
-# 3. TRANSFORMER ARCHITECTURE
-# ---------------------------------------------------------
-
-# ---------------------------------------------------------
-# 3. LIGHTWEIGHT TRANSFORMER ARCHITECTURE (Memory Optimized)
-# ---------------------------------------------------------
-# ---------------------------------------------------------
-# 3. LIGHTWEIGHT TRANSFORMER ARCHITECTURE (Memory Optimized)
+# 3. TRANSFORMER ARCHITECTURE (CORRECTED FORWARD PASS)
 # ---------------------------------------------------------
 class BTCTransformer(nn.Module):
-    def __init__(self, feature_dim=5, d_model=32, n_heads=2, num_layers=1, output_horizon=250):
+    def __init__(self, feature_dim=5, d_model=64, n_heads=4, num_layers=2, output_horizon=250):
         super(BTCTransformer, self).__init__()
         self.output_horizon = output_horizon
         
@@ -103,20 +96,24 @@ class BTCTransformer(nn.Module):
         self.pos_encoder = nn.Parameter(torch.randn(1, 2500, d_model) * 0.01)
         
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=d_model, nhead=n_heads, dim_feedforward=64, dropout=0.1, batch_first=True
+            d_model=d_model, nhead=n_heads, dim_feedforward=128, dropout=0.1, batch_first=True
         )
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         
         self.fc_out = nn.Sequential(
-            nn.Linear(d_model, 32),
+            nn.Linear(d_model, 64),
             nn.ReLU(),
             nn.Dropout(0.1),
-            nn.Linear(32, 4) # OHLC
+            nn.Linear(64, 4) # Predicting OHLC (4 features)
         )
         
     def forward(self, src):
         batch_size, seq_len, _ = src.shape
-        x = self.input
+        x = self.input_embed(src) + self.pos_encoder[:, :seq_len, :]
+        x = self.transformer_encoder(x)
+        x_last = x[:, -1, :].unsqueeze(1).repeat(1, self.output_horizon, 1)
+        out = self.fc_out(x_last) 
+        return out
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using compute device: {device}")
@@ -126,11 +123,11 @@ criterion = nn.MSELoss()
 optimizer = optim.AdamW(model.parameters(), lr=0.0005, weight_decay=1e-4)
 
 # ---------------------------------------------------------
-# 4. INITIAL TRAINING ON 24,750+ HISTORICAL CANDLES
+# 4. INITIAL TRAINING ON HISTORICAL DATA
 # ---------------------------------------------------------
 print("\n--- Phase 1: Initial Training on Historical Data ---")
 train_dataset = TensorDataset(train_X, train_Y[:, :, :4]) 
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=False) # Sequential order maintained
+train_loader = DataLoader(train_dataset, batch_size=64, shuffle=False)
 
 model.train()
 epochs = 3
@@ -160,7 +157,6 @@ print("\n--- Phase 2: Live Incremental Re-learning & Final 250-Candle Prediction
 
 model.train() 
 
-# Target the final available sequence window to predict the absolute latest 250 candles
 eval_idx = len(X_all) - 1
 test_x = torch.tensor(X_all[eval_idx:eval_idx+1], dtype=torch.float32).to(device)
 actual_y_normalized = torch.tensor(Y_all[eval_idx:eval_idx+1, :, :4], dtype=torch.float32).to(device)
@@ -208,6 +204,5 @@ comparison_df['Close_Error_%'] = (np.abs(comparison_df['Close_Diff']) / comparis
 print("\n--- Sample Comparison Table (First 10 of the Predicted 250 Candles) ---")
 print(comparison_df[['Candle_Index', 'Pred_Close', 'Actual_Close', 'Close_Error_%']].head(10).to_string(index=False))
 
-# Export complete results
 comparison_df.to_csv("btc_transformer_25k_predictions.csv", index=False)
 print(f"\nSuccessfully generated and saved comparison table for all {pred_horizon} candles to 'btc_transformer_25k_predictions.csv'.")
