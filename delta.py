@@ -8,9 +8,9 @@ import requests
 import time
 
 # ---------------------------------------------------------
-# 1. FETCH BINANCE CANDLES
+# 1. FETCH BINANCE CANDLES (Adjusted for 2500 rows)
 # ---------------------------------------------------------
-def fetch_binance_candles(symbol="BTCUSDT", interval="5m", total_needed=10000):
+def fetch_binance_candles(symbol="BTCUSDT", interval="5m", total_needed=2500):
     print(f"Fetching {total_needed} historical {interval} candles from Binance...")
     all_data = []
     end_time = None
@@ -42,17 +42,20 @@ def fetch_binance_candles(symbol="BTCUSDT", interval="5m", total_needed=10000):
     df['open_time'] = pd.to_datetime(df['open_time'], unit='ms')
     return df[['open_time', 'open', 'high', 'low', 'close', 'volume']].tail(total_needed).reset_index(drop=True)
 
-df = fetch_binance_candles(symbol="BTCUSDT", interval="5m", total_needed=10000)
+TOTAL_ROWS = 2500
+PRED_HORIZON = 100
+INPUT_WINDOW = 200
+
+df = fetch_binance_candles(symbol="BTCUSDT", interval="5m", total_needed=TOTAL_ROWS)
 print(f"Loaded dataset size: {len(df)}")
 
 # ---------------------------------------------------------
-# 2. MIN-MAX SCALING (Far superior for crypto bounds)
+# 2. MIN-MAX SCALING
 # ---------------------------------------------------------
 features = ['open', 'high', 'low', 'close', 'volume']
 data_raw = df[features].values
 
-train_size = 9500
-pred_horizon = 250
+train_size = int(len(df) * 0.8)
 
 # Fit MinMax strictly on training bounds
 min_val = data_raw[:train_size].min(axis=0)
@@ -61,18 +64,17 @@ max_val[max_val == min_val] = 1.0 # Prevent division by zero
 
 data_normalized = (data_raw - min_val) / (max_val - min_val)
 
-def create_sequences(data, input_window=300, horizon=250):
+def create_sequences(data, input_window=200, horizon=100):
     X, Y = [], []
     for i in range(len(data) - input_window - horizon + 1):
         X.append(data[i : i + input_window])
         Y.append(data[i + input_window : i + input_window + horizon])
     return np.array(X, dtype=np.float32), np.array(Y, dtype=np.float32)
 
-INPUT_WINDOW = 300  
-X_all, Y_all = create_sequences(data_normalized, input_window=INPUT_WINDOW, horizon=pred_horizon)
+X_all, Y_all = create_sequences(data_normalized, input_window=INPUT_WINDOW, horizon=PRED_HORIZON)
 print(f"Total structured sequences built: {len(X_all)}")
 
-max_train_idx = min(9200, len(X_all) - pred_horizon - 1)
+max_train_idx = min(train_size - INPUT_WINDOW, len(X_all) - PRED_HORIZON - 1)
 train_X = torch.tensor(X_all[:max_train_idx])
 train_Y = torch.tensor(Y_all[:max_train_idx])
 
@@ -80,12 +82,12 @@ train_Y = torch.tensor(Y_all[:max_train_idx])
 # 3. UPGRADED HIGHER-CAPACITY TRANSFORMER
 # ---------------------------------------------------------
 class BTCTransformer(nn.Module):
-    def __init__(self, feature_dim=5, d_model=128, n_heads=4, num_layers=3, output_horizon=250):
+    def __init__(self, feature_dim=5, d_model=128, n_heads=4, num_layers=3, output_horizon=100):
         super(BTCTransformer, self).__init__()
         self.output_horizon = output_horizon
         
         self.input_embed = nn.Linear(feature_dim, d_model)
-        self.pos_encoder = nn.Parameter(torch.randn(1, 1500, d_model) * 0.01)
+        self.pos_encoder = nn.Parameter(torch.randn(1, 1000, d_model) * 0.01)
         
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model, nhead=n_heads, dim_feedforward=256, dropout=0.15, batch_first=True
@@ -107,10 +109,23 @@ class BTCTransformer(nn.Module):
         out = self.fc_out(x_last) 
         return out
 
-device = torch.device("cpu")
-model = BTCTransformer(feature_dim=5, output_horizon=pred_horizon).to(device)
-criterion = nn.HuberLoss() # Huber loss handles price outliers/wicks much better than MSE
+# Automatic hardware acceleration detection
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+elif torch.backends.mps.is_available():
+    device = torch.device("mps") # For Apple Silicon Macs
+else:
+    device = torch.device("cpu")
+
+print(f"Using device: {device}")
+
+model = BTCTransformer(feature_dim=5, output_horizon=PRED_HORIZON).to(device)
+criterion = nn.HuberLoss()
 optimizer = optim.AdamW(model.parameters(), lr=0.001, weight_decay=1e-4)
+
+# Move training data to device
+train_X = train_X.to(device)
+train_Y = train_Y.to(device)
 
 # ---------------------------------------------------------
 # 4. INITIAL TRAINING
@@ -145,8 +160,8 @@ print("\n--- Phase 2: Live Incremental Re-learning & Final Prediction ---")
 model.train() 
 
 eval_idx = len(X_all) - 1
-test_x = torch.tensor(X_all[eval_idx:eval_idx+1])
-actual_y_normalized = torch.tensor(Y_all[eval_idx:eval_idx+1, :, :4])
+test_x = torch.tensor(X_all[eval_idx:eval_idx+1]).to(device)
+actual_y_normalized = torch.tensor(Y_all[eval_idx:eval_idx+1, :, :4]).to(device)
 
 predicted_normalized = model(test_x)
 
@@ -158,8 +173,8 @@ if not torch.isnan(loss):
     optimizer.step()
     print(f"Online Re-learning Step Completed. Adaptation Loss: {loss.item():.4f}")
 
-pred_np = predicted_normalized.detach().numpy()[0]
-actual_np = actual_y_normalized.detach().numpy()[0]
+pred_np = predicted_normalized.detach().cpu().numpy()[0]
+actual_np = actual_y_normalized.detach().cpu().numpy()[0]
 
 # Denormalize using MinMax bounds for OHLC (first 4 columns)
 min_ohlc = min_val[:4]
@@ -169,7 +184,7 @@ pred_denorm = (pred_np * (max_ohlc - min_ohlc)) + min_ohlc
 actual_denorm = (actual_np * (max_ohlc - min_ohlc)) + min_ohlc
 
 comparison_df = pd.DataFrame({
-    'Candle_Index': range(1, pred_horizon + 1),
+    'Candle_Index': range(1, PRED_HORIZON + 1),
     'Pred_Close': pred_denorm[:, 3],
     'Actual_Close': actual_denorm[:, 3],
 })
@@ -177,5 +192,5 @@ comparison_df['Close_Error_%'] = (np.abs(comparison_df['Pred_Close'] - compariso
 
 print("\n--- Sample Comparison Table (First 10 Candles) ---")
 print(comparison_df.head(10).to_string(index=False))
-comparison_df.to_csv("btc_transformer_10k_minmax_predictions.csv", index=False)
-print("\nSaved successfully to 'btc_transformer_10k_minmax_predictions.csv'.")
+comparison_df.to_csv("btc_transformer_2500_predictions.csv", index=False)
+print("\nSaved successfully to 'btc_transformer_2500_predictions.csv'.")
