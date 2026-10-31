@@ -5,7 +5,7 @@ def main():
     print("=== INITIALIZING TERMINAL TRADING ENGINE (PLOTEXT 6.1.0) ===")
     
     # Mock data arrays converted cleanly to standard Python lists
-    time_steps = [f"Step {i}" for i in range(1, 21)]
+    time_steps = [f"2026-10-{i:02d}" for i in range(1, 21)]
     opens = np.random.uniform(0.00001, 0.00002, 20).tolist()
     highs = [o + abs(np.random.normal(0, 0.000002)) for o in opens]
     lows = [o - abs(np.random.normal(0, 0.000002)) for o in opens]
@@ -15,14 +15,14 @@ def main():
     signal = [m + np.random.uniform(-0.0000002, 0.0000002) for m in macd]
     rsi = np.random.uniform(20, 80, 20).tolist()
 
-    # --- 1. Candlestick Chart (Using plotext dictionary data layout) ---
     plt = fig.figure
+    
+    # --- 1. Candlestick Chart (Using required 'date' key for plotext) ---
     plt.clear()
     plt.title("PEPEUSDT - Candlestick Price Action")
     
-    # Pass a dictionary containing the required keys for plotext candlestick
     candle_data = {
-        'time': time_steps,
+        'date': time_steps,
         'open': opens,
         'high': highs,
         'low': lows,
