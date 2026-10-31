@@ -32,15 +32,15 @@ def main():
     }
     plt.candlestick(candle_data)
     #plt.xticks(indices[::3], time_steps[::3])  # Show every 3rd date label to avoid clutter
-    plt.show()
+    plt.draw()
 
     print("\n" + "="*50 + "\n")
 
     # --- 2. MACD Indicator ---
     plt.clear()
     plt.title("PEPEUSDT - MACD Indicator")
-    plt.plot(indices, macd, label="MACD", color="cyan")
-    plt.plot(indices, signal, label="Signal", color="orange")
+    plt.draw(indices, macd, label="MACD", color="cyan")
+    plt.draw(indices, signal, label="Signal", color="orange")
     #plt.xticks(indices[::3], time_steps[::3])
     plt.show()
 
@@ -49,7 +49,7 @@ def main():
     # --- 3. RSI Curve ---
     plt.clear()
     plt.title("PEPEUSDT - RSI (14)")
-    plt.plot(indices, rsi, label="RSI", color="magenta")
+    plt.draw(indices, rsi, label="RSI", color="magenta")
     plt.ylim(0, 100)
     #plt.xticks(indices[::3], time_steps[::3])
     plt.show()
