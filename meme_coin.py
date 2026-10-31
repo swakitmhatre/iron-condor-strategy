@@ -31,7 +31,7 @@ def main():
         'close': closes
     }
     plt.candlestick(candle_data)
-    plt.xticks(indices[::3], time_steps[::3])  # Show every 3rd date label to avoid clutter
+    #plt.xticks(indices[::3], time_steps[::3])  # Show every 3rd date label to avoid clutter
     plt.show()
 
     print("\n" + "="*50 + "\n")
@@ -41,7 +41,7 @@ def main():
     plt.title("PEPEUSDT - MACD Indicator")
     plt.plot(indices, macd, label="MACD", color="cyan")
     plt.plot(indices, signal, label="Signal", color="orange")
-    plt.xticks(indices[::3], time_steps[::3])
+    #plt.xticks(indices[::3], time_steps[::3])
     plt.show()
 
     print("\n" + "="*50 + "\n")
@@ -51,7 +51,7 @@ def main():
     plt.title("PEPEUSDT - RSI (14)")
     plt.plot(indices, rsi, label="RSI", color="magenta")
     plt.ylim(0, 100)
-    plt.xticks(indices[::3], time_steps[::3])
+    #plt.xticks(indices[::3], time_steps[::3])
     plt.show()
 
     print("\nAll terminal charts rendered successfully.")
