@@ -4,29 +4,27 @@ import datetime
 import requests
 import pandas as pd
 import numpy as np
-import matplotlib
-matplotlib.use('Agg')  # Headless backend for AWS EC2
-import matplotlib.pyplot as plt
 
-# ==========================================
-# DEPENDENCY & CONFIGURATION SETUP
-# ==========================================
+# Try importing plotext for ASCII Terminal Charts
+try:
+    import plotext as plt
+    HAS_PLOTEXT = True
+except ImportError:
+    HAS_PLOTEXT = False
+    print("[WARN] 'plotext' library not installed. Install with 'pip install plotext' to see terminal charts.")
+
+# Try importing pandas_ta
 try:
     import pandas_ta as ta
     HAS_PANDAS_TA = True
 except ImportError:
     HAS_PANDAS_TA = False
-    print("[WARN] 'pandas_ta' not found. Using native built-in technical indicators.")
 
 CHECK_INTERVAL_SECONDS = 300  # 5 minutes
 CANDLE_LIMIT = 50              # Minimum historical candles required for indicators
 
-CHARTS_DIR = "charts"
-os.makedirs(CHARTS_DIR, exist_ok=True)
-
-
 # ==========================================
-# SAFE TECHNICAL INDICATORS ENGINE
+# TECHNICAL INDICATORS ENGINE
 # ==========================================
 def calculate_indicators(df):
     if len(df) < CANDLE_LIMIT:
@@ -37,27 +35,24 @@ def calculate_indicators(df):
 
     if HAS_PANDAS_TA:
         try:
-            # 1. MACD (8, 17, 9)
             macd = ta.macd(df['close'], fast=8, slow=17, signal=9)
             if macd is not None and not macd.empty:
                 df['MACD'] = macd.iloc[:, 0]
                 df['MACD_hist'] = macd.iloc[:, 1]
                 df['MACD_signal'] = macd.iloc[:, 2]
 
-            # 2. RSI (14)
             rsi = ta.rsi(df['close'], length=14)
             if rsi is not None:
                 df['RSI'] = rsi
 
-            # 3. Supertrend (10, 3)
             st = ta.supertrend(df['high'], df['low'], df['close'], length=10, multiplier=3)
             if st is not None and not st.empty:
                 df['SUPERTREND'] = st.iloc[:, 0]
                 df['SUPERTREND_dir'] = st.iloc[:, 1]
 
             return df
-        except Exception as e:
-            print(f"[WARN] pandas_ta error ({e}), using native calculation fallback.")
+        except Exception:
+            pass
 
     # NATIVE FALLBACK CALCULATIONS
     ema_fast = df['close'].ewm(span=8, adjust=False).mean()
@@ -103,49 +98,41 @@ def calculate_indicators(df):
 
 
 # ==========================================
-# SAVE 5m CHART IMAGE FOR AWS EC2
+# PRINT ASCII CHART DIRECTLY ON TERMINAL
 # ==========================================
-def save_5m_chart(symbol, pool_addr, df):
-    if 'SUPERTREND' not in df.columns or df.dropna().empty:
+def print_terminal_chart(symbol, pool_addr, df):
+    """
+    Renders 5-minute price charts and indicators directly inside SSH prompt.
+    """
+    if not HAS_PLOTEXT or 'SUPERTREND' not in df.columns:
         return
 
-    plt.close('all')
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 8), sharex=True, gridspec_kw={'height_ratios': [3, 1, 1]})
+    # Take last 30 candles for clear view
+    plot_df = df.tail(30).reset_index(drop=True)
+    x_axis = list(range(len(plot_df)))
+
+    plt.clf()
+    plt.subplots(2, 1)
 
     # Subplot 1: Price & Supertrend
-    ax1.plot(df['timestamp'], df['close'], label='Close Price', color='black', alpha=0.8)
-    ax1.plot(df['timestamp'], df['SUPERTREND'], label='Supertrend (10,3)', color='purple', linestyle='--')
-    ax1.set_title(f"Solana Meme Coin: {symbol} ({pool_addr[:6]}) - 5m Chart")
-    ax1.legend(loc='upper left')
-    ax1.grid(True, alpha=0.3)
+    plt.subplot(1, 1)
+    plt.title(f"[{symbol}] Pool: {pool_addr[:6]}... - 5m Price & Supertrend")
+    plt.plot(x_axis, plot_df['close'], label="Price", color="cyan")
+    plt.plot(x_axis, plot_df['SUPERTREND'], label="Supertrend", color="magenta")
+    plt.grid(True)
 
     # Subplot 2: RSI
-    ax2.plot(df['timestamp'], df['RSI'], label='RSI (14)', color='blue')
-    ax2.axhline(70, color='red', linestyle=':')
-    ax2.axhline(30, color='green', linestyle=':')
-    ax2.set_ylabel('RSI')
-    ax2.legend(loc='upper left')
-    ax2.grid(True, alpha=0.3)
+    plt.subplot(2, 1)
+    plt.title("RSI (14)")
+    plt.plot(x_axis, plot_df['RSI'], label="RSI", color="yellow")
+    plt.grid(True)
 
-    # Subplot 3: MACD Histogram
-    colors = ['green' if val >= 0 else 'red' for val in df['MACD_hist']]
-    ax3.bar(df['timestamp'], df['MACD_hist'], color=colors, label='MACD Hist (8,17,9)')
-    ax3.legend(loc='upper left')
-    ax3.grid(True, alpha=0.3)
-
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-
-    # Unique file name per pool address to prevent overwriting
-    safe_address_suffix = pool_addr[:6]
-    file_path = os.path.join(CHARTS_DIR, f"{symbol}_{safe_address_suffix}_5m.png")
-    fig.savefig(file_path)
-    plt.close(fig)
-    print(f"  └─ 📊 Chart saved: {file_path}")
+    plt.plotsize(80, 18)  # Fits cleanly in standard EC2 SSH shell
+    plt.show()
 
 
 # ==========================================
-# DEXSCREENER FILTERING & DIAGNOSTICS
+# DEXSCREENER PAIR SEARCH
 # ==========================================
 def fetch_and_filter_solana_coins():
     keywords = ["PEPE", "WIF", "BONK", "CAT", "AI", "MEME"]
@@ -169,7 +156,6 @@ def fetch_and_filter_solana_coins():
         except Exception:
             continue
 
-    # Deduplicate by pairAddress to guarantee 3 uniquely different coins
     unique_coins = {}
     for c in all_pairs:
         if c['pairAddress'] not in unique_coins:
@@ -179,7 +165,7 @@ def fetch_and_filter_solana_coins():
 
     selected_coins = list(unique_coins.values())
     symbols_str = ", ".join([f"{c['symbol']} ({c['pairAddress'][:6]}...)" for c in selected_coins])
-    print(f"[SUCCESS] Selected top 3 unique meme pools: {symbols_str}")
+    print(f"[SUCCESS] Selected top 3 unique pools: {symbols_str}")
     return selected_coins
 
 
@@ -202,7 +188,7 @@ def fetch_geckoterminal_ohlcv(pool_address):
 
 
 # ==========================================
-# MAIN EXECUTION LOOP
+# MAIN LOOP
 # ==========================================
 def main():
     print("[SYSTEM] Starting Solana Meme Trading Bot...")
@@ -221,13 +207,19 @@ def main():
                 
                 latest = df.iloc[-1]
                 rsi_val = round(latest.get('RSI', 0), 2)
-                macd_h = round(latest.get('MACD_hist', 0), 6)
+                
+                # Format low-decimal MACD Hist using scientific notation so it shows actual non-zero delta
+                macd_h_raw = latest.get('MACD_hist', 0)
+                macd_h_str = f"{macd_h_raw:.4e}" if abs(macd_h_raw) < 0.0001 else f"{macd_h_raw:.6f}"
+                
                 st_dir = "BULLISH 🟢" if latest.get('SUPERTREND_dir', 1) == 1 else "BEARISH 🔴"
                 
-                print(f"\n► [{symbol}] Price: ${coin['priceUsd']} | RSI: {rsi_val} | MACD Hist: {macd_h} | Supertrend: {st_dir}")
+                print(f"\n==================================================================")
+                print(f"► [{symbol}] Pool: {pool_addr[:6]}... | Price: ${coin['priceUsd']} | RSI: {rsi_val} | MACD Hist: {macd_h_str} | Supertrend: {st_dir}")
+                print(f"==================================================================")
                 
-                # Pass pool_addr correctly to avoid NameError
-                save_5m_chart(symbol, pool_addr, df)
+                # Render ASCII chart on terminal prompt
+                print_terminal_chart(symbol, pool_addr, df)
 
         print(f"\n[SLEEP] Waiting {CHECK_INTERVAL_SECONDS // 60} minutes for next candle cycle...\n")
         time.sleep(CHECK_INTERVAL_SECONDS)
