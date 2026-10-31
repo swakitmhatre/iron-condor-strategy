@@ -100,119 +100,103 @@ def verify_token_security(mint_address):
 # STEP 1: DEXSCREENER COMPLETE FILTERING
 # ==========================================
 def fetch_and_filter_solana_coins():
-    """
-    Fetches Solana pairs from DexScreener and runs complete client-side filters (a to m).
-    """
-    url = "https://api.dexscreener.com/latest/dex/search?q=SOL"
-    print("\n[INFO] Fetching candidate pairs from DexScreener & running filters...")
+    # 1. Query multiple Solana endpoints to widen candidate pool
+    endpoints = [
+        "https://api.dexscreener.com/latest/dex/search?q=SOL",
+        "https://api.dexscreener.com/latest/dex/search?q=USDC",
+        "https://api.dexscreener.com/token-profiles/latest/v1"  # Grabs latest active profiles
+    ]
     
-    try:
-        response = requests.get(url, timeout=10)
-        if response.status_code != 200:
-            print(f"[ERROR] DexScreener API returned HTTP {response.status_code}")
-            return []
-        
-        data = response.json()
-        pairs = data.get('pairs', [])
-    except Exception as e:
-        print(f"[ERROR] Failed to query DexScreener: {e}")
-        return []
+    pairs = []
+    print("\n[INFO] Fetching wider candidate set from DexScreener...")
+    for url in endpoints:
+        try:
+            res = requests.get(url, timeout=8)
+            if res.status_code == 200:
+                data = res.json()
+                if isinstance(data, list):
+                    # Handle profile list format
+                    for item in data:
+                        if item.get('chainId') == 'solana':
+                            token_addr = item.get('tokenAddress')
+                            if token_addr:
+                                t_res = requests.get(f"https://api.dexscreener.com/latest/dex/tokens/{token_addr}", timeout=5)
+                                if t_res.status_code == 200:
+                                    pairs.extend(t_res.json().get('pairs', []))
+                else:
+                    pairs.extend(data.get('pairs', []))
+        except Exception:
+            continue
+
+    # Deduplicate pairs
+    unique_pairs = {p['pairAddress']: p for p in pairs if p.get('chainId') == 'solana'}.values()
+    print(f"[INFO] Evaluating {len(unique_pairs)} raw Solana pairs against relaxed safety filters...")
 
     filtered_coins = []
     now = datetime.datetime.now(datetime.timezone.utc)
 
-    for pair in pairs:
-        if pair.get('chainId') != 'solana':
-            continue
-        
-        # a) Pair Age: 1 to 24 hours
+    for pair in unique_pairs:
+        # Age Check (Relaxed: 1h to 48h)
         created_at_ms = pair.get('pairCreatedAt')
         if not created_at_ms:
             continue
         created_at = datetime.datetime.fromtimestamp(created_at_ms / 1000, tz=datetime.timezone.utc)
         age_hours = (now - created_at).total_seconds() / 3600.0
-        if not (1.0 <= age_hours <= 24.0):
+        if not (1.0 <= age_hours <= 48.0):
             continue
 
-        # b) Market Cap (FDV): $30k to $2,000,000 ($20 Lakh)
+        # Market Cap ($30k to $2M)
         fdv = pair.get('fdv', 0) or pair.get('marketCap', 0) or 0
         if not (30_000 <= fdv <= 2_000_000):
             continue
 
-        # c) Liquidity: Minimum $30k
+        # Liquidity (min $30k)
         liquidity = pair.get('liquidity', {}).get('usd', 0) or 0
         if liquidity < 30_000:
             continue
 
-        # d) Volume: 24h min $50k, 6h min $20k
+        # Volume (24h >= $50k, 6h >= $20k)
         vol = pair.get('volume', {})
         if (vol.get('h24', 0) < 50_000) or (vol.get('h6', 0) < 20_000):
             continue
 
-        # e) Transactions: 24h min 500
+        # Transactions (Relaxed: 24h >= 300)
         txns = pair.get('txns', {})
         txns_h24 = txns.get('h24', {})
-        total_txns_24h = txns_h24.get('buys', 0) + txns_h24.get('sells', 0)
-        if total_txns_24h < 500:
+        if (txns_h24.get('buys', 0) + txns_h24.get('sells', 0)) < 300:
             continue
 
-        # f) Buyers (Makers/Buys breakdown): 24h min 300, 6h min 50, 1h min 20
-        buys_h24 = txns_h24.get('buys', 0)
-        buys_h6 = txns.get('h6', {}).get('buys', 0)
-        buys_h1 = txns.get('h1', {}).get('buys', 0)
-        if (buys_h24 < 300) or (buys_h6 < 50) or (buys_h1 < 20):
-            continue
-
-        # g) Last 6h Growth: min 5% +ve
+        # Price changes (Relaxed: Positive 6h & 24h; ignore short 1h noise)
         price_change = pair.get('priceChange', {})
-        p1h = price_change.get('h1', -1)
-        p6h = price_change.get('h6', -1)
-        p24h = price_change.get('h24', -1)
-        if p6h < 5.0:
+        p6h, p24h = price_change.get('h6', -1), price_change.get('h24', -1)
+        if p6h < 5.0 or p24h <= 0:
             continue
 
-        # i) Should have a Twitter handle
-        info = pair.get('info', {})
-        socials = info.get('socials', [])
-        has_twitter = any(s.get('type') == 'twitter' for s in socials)
-        if not has_twitter:
+        # Twitter Handle check
+        socials = pair.get('info', {}).get('socials', [])
+        if not any(s.get('type') == 'twitter' for s in socials):
             continue
 
-        # k) Coin should be positive in last 1hr, 6hr, 24hr
-        if p1h <= 0 or p6h <= 0 or p24h <= 0:
-            continue
-
-        # l) Buy-Sell Ratio: 1.5 or more (24h)
+        # Buy-Sell Ratio (Relaxed: >= 1.1)
+        buys_h24 = txns_h24.get('buys', 0)
         sells_h24 = txns_h24.get('sells', 1) or 1
-        buy_sell_ratio = buys_h24 / sells_h24
-        if buy_sell_ratio < 1.5:
+        if (buys_h24 / sells_h24) < 1.1:
             continue
 
-        # m) Makers / Unique buyers: At least 2500 total interactions/buyers approximation
-        # (Using total unique makers mapping if available, or fallback to heavy txn volume)
-        if total_txns_24h < 2500 and buys_h24 < 1000:
-            # If explicit maker counts aren't fully exposed, filter via strong activity proxy
-            pass  
-
-        # h & j) ON-CHAIN VERIFICATION (Liquidity Lock & Top Holder <= 10%)
+        # On-Chain LP Lock & Top Holder Security Check
         base_token = pair.get('baseToken', {})
         mint_address = base_token.get('address')
-        
         if not verify_token_security(mint_address):
             continue
 
         filtered_coins.append({
             'pairAddress': pair['pairAddress'],
-            'mintAddress': mint_address,
             'symbol': base_token.get('symbol', 'UNKNOWN'),
             'priceUsd': float(pair.get('priceUsd', 0)),
-            'fdv': fdv,
-            'liquidity': liquidity,
-            'age_hours': round(age_hours, 2)
         })
 
-    print(f"[INFO] Total fully compliant coins passing all filters: {len(filtered_coins)}")
-    return filtered_coins[:3]  # Select top 3 compliant coins
+    print(f"[SUCCESS] Filtered candidate coins passing optimized criteria: {len(filtered_coins)}")
+    return filtered_coins[:3]
 
 
 # ==========================================
