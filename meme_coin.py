@@ -11,7 +11,7 @@ FETCH_INTERVAL_SEC = 300  # 5 minutes
 
 
 # --- 1. DATA FETCHING & INDICATOR ENGINE ---
-def fetch_klines(symbol="PEPEUSDT", limit=60):
+def fetch_klines(symbol="PEPEUSDT", limit=50):
     """Fetches real OHLC historical candles from Binance public API."""
     url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=5m&limit={limit}"
     try:
@@ -29,8 +29,8 @@ def fetch_klines(symbol="PEPEUSDT", limit=60):
         print(f"[ERROR] Data fetch failed: {e}. Generating fallback data...")
         return generate_dummy_df(limit)
 
-def generate_dummy_df(limit=60):
-    """Fallback generator if network request drops."""
+def generate_dummy_df(limit=50):
+    """Fallback data generator."""
     times = pd.date_range(end=pd.Timestamp.now(), periods=limit, freq="5min").strftime("%H:%M")
     base_price = 0.0000090
     closes = base_price + np.cumsum(np.random.normal(0, 0.0000001, limit))
@@ -40,7 +40,7 @@ def generate_dummy_df(limit=60):
     return pd.DataFrame({"open_time": times, "open": opens, "high": highs, "low": lows, "close": closes})
 
 def calculate_indicators(df):
-    """Calculates Supertrend, RSI, and MACD (Lines & Histogram)."""
+    """Calculates Supertrend, RSI, and MACD."""
     # RSI (14)
     delta = df["close"].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
@@ -63,27 +63,32 @@ def calculate_indicators(df):
     return df.dropna().reset_index(drop=True)
 
 
-# --- 2. TERMINAL GRAPHICS RENDERER ---
+# --- 2. TERMINAL GRAPHICS RENDERER (PLOTEXT V5 COMPATIBLE) ---
 def render_terminal_dashboard(df, symbol):
-    """Renders multi-panel color candlestick and technical indicator plots in terminal."""
-    plt.clf()
+    """Renders multi-panel color candlestick and technical indicator plots."""
+    plt.clear_figure()  # Modern plotext replacement for clf()
     plt.subplots(3, 1)
 
     dates = list(df["open_time"])
-    
+    dates_idx = list(range(len(dates)))  # Numeric X-axis for stability
+
     # -------------------------------------------------------------
     # PANEL 1: CANDLESTICK CHART + SUPERTREND OVERLAY
     # -------------------------------------------------------------
     plt.subplot(1, 1)
-    plt.title(f"{symbol} 5m | OHLC Candlestick + Supertrend")
+    plt.title(f"{symbol} 5m | Candlesticks + Supertrend")
     
-    # Plot Candlesticks (Green for Up, Red for Down)
-    plt.candlestick(dates, df["open"].tolist(), df["high"].tolist(), 
-                    df["low"].tolist(), df["close"].tolist(), 
-                    colors=["green", "red"])
+    # Modern Candlestick API format: candlestick(dates/indices, dict_of_ohlc)
+    plt.candlestick(dates_idx, {
+        "open": df["open"].tolist(),
+        "high": df["high"].tolist(),
+        "low": df["low"].tolist(),
+        "close": df["close"].tolist()
+    })
     
     # Overlay Supertrend line
-    plt.plot(dates, df["supertrend"].tolist(), label="Supertrend", color="magenta")
+    plt.plot(dates_idx, df["supertrend"].tolist(), label="Supertrend", color="magenta")
+    plt.xticks(dates_idx[::5], dates[::5])
     plt.ylabel("Price (USDT)")
     plt.theme("dark")
 
@@ -92,12 +97,13 @@ def render_terminal_dashboard(df, symbol):
     # -------------------------------------------------------------
     plt.subplot(2, 1)
     plt.title("Relative Strength Index (RSI 14)")
-    plt.plot(dates, df["rsi"].tolist(), color="cyan", label="RSI")
+    plt.plot(dates_idx, df["rsi"].tolist(), color="cyan", label="RSI")
     
-    # Overbought/Oversold Threshold Lines
-    plt.plot(dates, [70] * len(dates), color="red")
-    plt.plot(dates, [30] * len(dates), color="green")
+    # Threshold Lines
+    plt.plot(dates_idx, [70] * len(dates_idx), color="red")
+    plt.plot(dates_idx, [30] * len(dates_idx), color="green")
     plt.ylim(0, 100)
+    plt.xticks(dates_idx[::5], dates[::5])
     plt.ylabel("RSI Level")
     plt.theme("dark")
 
@@ -106,16 +112,17 @@ def render_terminal_dashboard(df, symbol):
     # -------------------------------------------------------------
     plt.subplot(3, 1)
     plt.title("MACD (12, 26, 9) & Histogram")
-    plt.plot(dates, df["macd"].tolist(), color="yellow", label="MACD")
-    plt.plot(dates, df["macd_signal"].tolist(), color="blue", label="Signal")
+    plt.plot(dates_idx, df["macd"].tolist(), color="yellow", label="MACD")
+    plt.plot(dates_idx, df["macd_signal"].tolist(), color="blue", label="Signal")
     
     # MACD Histogram Bars
-    plt.bar(dates, df["macd_hist"].tolist(), label="Hist", color="white")
+    plt.bar(dates_idx, df["macd_hist"].tolist(), label="Hist", color="white")
+    plt.xticks(dates_idx[::5], dates[::5])
     plt.xlabel("Time (UTC)")
     plt.ylabel("Value")
     plt.theme("dark")
 
-    # Display entire layout to stdout
+    # Display layout to terminal screen
     plt.show()
 
 
@@ -124,7 +131,7 @@ def main():
     print("=== STARTING AUTONOMOUS TERMINAL TRADING ENGINE ===")
     while True:
         try:
-            # Clear console screen between updates
+            # Clear terminal console screen
             print("\033[H\033[J", end="")
             
             timestamp = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
@@ -133,7 +140,7 @@ def main():
             df = fetch_klines(SYMBOL)
             df_calculated = calculate_indicators(df)
             
-            # Print full-color terminal chart
+            # Print chart
             render_terminal_dashboard(df_calculated, SYMBOL)
             
             print(f"\n[ENGINE ACTIVE] Next cycle in {FETCH_INTERVAL_SEC // 60} minutes. Press Ctrl+C to stop.")
