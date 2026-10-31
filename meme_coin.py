@@ -1,8 +1,12 @@
+import os
 import time
 import datetime
 import requests
 import pandas as pd
 import numpy as np
+import matplotlib
+# Set headless backend for AWS EC2 SSH CLI environment
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 # ==========================================
@@ -20,18 +24,18 @@ LOOKBACK_CANDLES = 3           # Overwrite last 2-3 candles for accuracy
 CANDLE_LIMIT = 50              # Minimum historical candles required for indicators
 
 SOLANA_RPC_URL = "https://api.mainnet-beta.solana.com"
+CHARTS_DIR = "charts"
 COIN_DATABASE = {}
 TRADE_LOG = []
 
+# Ensure chart directory exists
+os.makedirs(CHARTS_DIR, exist_ok=True)
+
 
 # ==========================================
-# SAFE TECHNICAL INDICATORS (WITH FALLBACK)
+# SAFE TECHNICAL INDICATORS ENGINE
 # ==========================================
 def calculate_indicators(df):
-    """
-    Calculates MACD(8,17,9), RSI(14), and Supertrend(10,3) safely 
-    without throwing KeyError or index alignment errors.
-    """
     if len(df) < CANDLE_LIMIT:
         print(f"[WARN] Insufficient candles ({len(df)}). Need min {CANDLE_LIMIT}.")
         return df
@@ -52,7 +56,7 @@ def calculate_indicators(df):
             if rsi is not None:
                 df['RSI'] = rsi
 
-            # 3. Supertrend (10, 3) - Uses positional indexing to avoid naming mismatches
+            # 3. Supertrend (10, 3)
             st = ta.supertrend(df['high'], df['low'], df['close'], length=10, multiplier=3)
             if st is not None and not st.empty:
                 df['SUPERTREND'] = st.iloc[:, 0]
@@ -60,7 +64,7 @@ def calculate_indicators(df):
 
             return df
         except Exception as e:
-            print(f"[WARN] pandas_ta computation error ({e}), switching to native calculation.")
+            print(f"[WARN] pandas_ta error ({e}), using native calculation fallback.")
 
     # NATIVE FALLBACK CALCULATIONS
     ema_fast = df['close'].ewm(span=8, adjust=False).mean()
@@ -106,50 +110,54 @@ def calculate_indicators(df):
 
 
 # ==========================================
-# ON-CHAIN SECURITY AUDIT (Criteria h & j)
+# SAVE 5m CHART IMAGE FOR AWS AWS EC2
 # ==========================================
-def verify_token_security(mint_address):
-    if not mint_address:
-        return False
-    try:
-        # Check LP Lock via RugCheck API
-        rugcheck_url = f"https://api.rugcheck.xyz/v1/tokens/{mint_address}/report/summary"
-        res = requests.get(rugcheck_url, timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            markets = data.get('markets', [])
-            is_locked = any(m.get('lp', {}).get('lpLockedPct', 0) >= 90.0 for m in markets)
-            if not is_locked and data.get('lpLockedPct', 0) < 90.0:
-                return False
-        else:
-            return False
+def save_5m_chart(symbol, df):
+    """
+    Renders and saves the 5-minute price chart with MACD, RSI, and Supertrend 
+    to disk (`charts/{symbol}_5m.png`).
+    """
+    if 'SUPERTREND' not in df.columns or df.dropna().empty:
+        return
 
-        # Top Holder Concentration Check via Solana RPC
-        payload = {"jsonrpc": "2.0", "id": 1, "method": "getTokenLargestAccounts", "params": [mint_address]}
-        rpc_res = requests.post(SOLANA_RPC_URL, json=payload, timeout=5).json()
-        accounts = rpc_res.get('result', {}).get('value', [])
-        if not accounts:
-            return False
+    plt.close('all')
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 8), sharex=True, gridspec_kw={'height_ratios': [3, 1, 1]})
 
-        supply_payload = {"jsonrpc": "2.0", "id": 1, "method": "getTokenSupply", "params": [mint_address]}
-        supply_res = requests.post(SOLANA_RPC_URL, json=supply_payload, timeout=5).json()
-        total_supply = float(supply_res.get('result', {}).get('value', {}).get('uiAmount', 0))
+    # Subplot 1: Price & Supertrend
+    ax1.plot(df['timestamp'], df['close'], label='Close Price', color='black', alpha=0.8)
+    ax1.plot(df['timestamp'], df['SUPERTREND'], label='Supertrend (10,3)', color='purple', linestyle='--')
+    ax1.set_title(f"Solana Meme Coin: {symbol} - 5m Chart")
+    ax1.legend(loc='upper left')
+    ax1.grid(True, alpha=0.3)
 
-        if total_supply <= 0:
-            return False
+    # Subplot 2: RSI
+    ax2.plot(df['timestamp'], df['RSI'], label='RSI (14)', color='blue')
+    ax2.axhline(70, color='red', linestyle=':')
+    ax2.axhline(30, color='green', linestyle=':')
+    ax2.set_ylabel('RSI')
+    ax2.legend(loc='upper left')
+    ax2.grid(True, alpha=0.3)
 
-        top_holder_pct = (float(accounts[0].get('uiAmount', 0)) / total_supply) * 100.0
-        return top_holder_pct <= 10.0
+    # Subplot 3: MACD Histogram
+    colors = ['green' if val >= 0 else 'red' for val in df['MACD_hist']]
+    ax3.bar(df['timestamp'], df['MACD_hist'], color=colors, label='MACD Hist (8,17,9)')
+    ax3.legend(loc='upper left')
+    ax3.grid(True, alpha=0.3)
 
-    except Exception:
-        return False
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    # Save PNG chart file to disk
+    file_path = os.path.join(CHARTS_DIR, f"{symbol}_5m.png")
+    fig.savefig(file_path)
+    plt.close(fig)
+    print(f"  └─ 📊 Chart image saved to disk: {file_path}")
 
 
 # ==========================================
-# DEXSCREENER FILTERING
+# DEXSCREENER FILTERING & DIAGNOSTICS
 # ==========================================
 def fetch_and_filter_solana_coins():
-    # Diagnostic mode enabled to ensure test coins pass through for indicators & charts
     url = "https://api.dexscreener.com/latest/dex/search?q=SOL"
     print("\n[INFO] Fetching candidate pairs from DexScreener...")
     
@@ -175,7 +183,7 @@ def fetch_and_filter_solana_coins():
         if len(diagnostic_coins) >= 3:
             break
 
-    print(f"[SUCCESS] Selected {len(diagnostic_coins)} active test coins.")
+    print(f"[SUCCESS] Selected top {len(diagnostic_coins)} coins for 5m indicators analysis.")
     return diagnostic_coins
 
 
@@ -201,20 +209,32 @@ def fetch_geckoterminal_ohlcv(pool_address):
 # MAIN EXECUTION LOOP
 # ==========================================
 def main():
-    print("[SYSTEM] Starting 100% Filter-Compliant Solana Meme Trading Bot...")
+    print("[SYSTEM] Starting Solana Meme Trading Bot...")
     
     while True:
         top_coins = fetch_and_filter_solana_coins()
 
         for coin in top_coins:
-            print(f"[INIT] Genesis fetch for pool {coin['pairAddress']}")
-            df = fetch_geckoterminal_ohlcv(coin['pairAddress'])
+            symbol = coin['symbol']
+            pool_addr = coin['pairAddress']
+
+            df = fetch_geckoterminal_ohlcv(pool_addr)
             
             if not df.empty:
                 df = calculate_indicators(df)
-                print(f"[SUCCESS] Processed {coin['symbol']}: {len(df)} candles parsed and indicators applied.")
+                
+                # Terminal output dashboard line
+                latest = df.iloc[-1]
+                rsi_val = round(latest.get('RSI', 0), 2)
+                macd_h = round(latest.get('MACD_hist', 0), 6)
+                st_dir = "BULLISH 🟢" if latest.get('SUPERTREND_dir', 1) == 1 else "BEARISH 🔴"
+                
+                print(f"\n► [{symbol}] Price: ${coin['priceUsd']} | RSI: {rsi_val} | MACD Hist: {macd_h} | Supertrend: {st_dir}")
+                
+                # Save visual chart PNG for EC2
+                save_5m_chart(symbol, df)
 
-        print(f"\n[SLEEP] Waiting {CHECK_INTERVAL_SECONDS // 60} minutes for next cycle...\n")
+        print(f"\n[SLEEP] Waiting {CHECK_INTERVAL_SECONDS // 60} minutes for next candle cycle...\n")
         time.sleep(CHECK_INTERVAL_SECONDS)
 
 if __name__ == "__main__":
