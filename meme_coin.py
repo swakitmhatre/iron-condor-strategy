@@ -131,7 +131,7 @@ def fetch_and_filter_solana_coins():
             continue
         created_at = datetime.datetime.fromtimestamp(created_at_ms / 1000, tz=datetime.timezone.utc)
         age_hours = (now - created_at).total_seconds() / 3600.0
-        if not (1.0 <= age_hours <= 48.0):
+        if not (1.0 <= age_hours <= 24.0):
             continue
 
         # b) Market Cap (FDV): $30k to $2,000,000 ($20 Lakh)
