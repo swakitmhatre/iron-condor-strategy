@@ -102,7 +102,7 @@ def calculate_indicators(df):
 # ==========================================
 def print_terminal_chart(symbol, pool_addr, df):
     """
-    Renders 5-minute price charts and indicators directly inside SSH prompt using plotext.
+    Renders 5-minute price charts and indicators directly inside SSH prompt.
     """
     if not HAS_PLOTEXT or 'SUPERTREND' not in df.columns:
         return
@@ -110,8 +110,15 @@ def print_terminal_chart(symbol, pool_addr, df):
     plot_df = df.tail(30).reset_index(drop=True)
     x_axis = list(range(len(plot_df)))
 
-    # Clear figure canvas cleanly using valid plotext syntax
-    plt.clear_figure()
+    # Safe clear figure canvas for any plotext version
+    try:
+        plt.clf()
+    except AttributeError:
+        try:
+            plt.clear_data()
+        except AttributeError:
+            pass
+
     plt.subplots(2, 1)
 
     # Subplot 1: Price & Supertrend
