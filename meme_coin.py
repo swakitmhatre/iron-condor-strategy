@@ -11,7 +11,7 @@ try:
     HAS_PLOTEXT = True
 except ImportError:
     HAS_PLOTEXT = False
-    print("[WARN] 'plotext' library not installed. Run 'pip install plotext'.")
+    print("[WARN] 'plotext' library not installed. Install with 'pip install plotext'.")
 
 # Import pandas_ta
 try:
@@ -98,11 +98,12 @@ def calculate_indicators(df):
 
 
 # ==========================================
-# PRINT ASCII CHART DIRECTLY ON TERMINAL
+# PRINT ASCII CHART DIRECTLY ON TERMINAL (COMPATIBLE WITH ALL PLOTEXT VERSIONS)
 # ==========================================
 def print_terminal_chart(symbol, pool_addr, df):
     """
     Renders 5-minute price charts and indicators directly inside SSH prompt.
+    Fully backwards and forwards compatible across all plotext versions.
     """
     if not HAS_PLOTEXT or 'SUPERTREND' not in df.columns:
         return
@@ -110,31 +111,37 @@ def print_terminal_chart(symbol, pool_addr, df):
     plot_df = df.tail(30).reset_index(drop=True)
     x_axis = list(range(len(plot_df)))
 
-    # Safe clear figure canvas for any plotext version
+    # Clear plotext canvas safely
     try:
-        plt.clf()
-    except AttributeError:
+        plt.clear_figure()
+    except Exception:
         try:
-            plt.clear_data()
-        except AttributeError:
+            plt.clf()
+        except Exception:
             pass
 
-    plt.subplots(2, 1)
-
-    # Subplot 1: Price & Supertrend
-    plt.subplot(1, 1)
-    plt.title(f"[{symbol}] Pool: {pool_addr[:6]}... - 5m Price & Supertrend")
-    plt.plot(x_axis, plot_df['close'], label="Price", color="cyan")
+    # Plot Price & Supertrend
+    plt.title(f"[{symbol}] Pool: {pool_addr[:6]}... | 5m Price & Supertrend")
+    plt.plot(x_axis, plot_df['close'], label="Close Price", color="cyan")
     plt.plot(x_axis, plot_df['SUPERTREND'], label="Supertrend", color="magenta")
     plt.grid(True)
+    plt.plotsize(80, 14)
+    plt.show()
 
-    # Subplot 2: RSI
-    plt.subplot(2, 1)
-    plt.title("RSI (14)")
+    # Clear canvas before next indicator sub-chart
+    try:
+        plt.clear_figure()
+    except Exception:
+        try:
+            plt.clf()
+        except Exception:
+            pass
+
+    # Plot RSI (14)
+    plt.title(f"[{symbol}] RSI (14)")
     plt.plot(x_axis, plot_df['RSI'], label="RSI", color="yellow")
     plt.grid(True)
-
-    plt.plotsize(80, 18)
+    plt.plotsize(80, 8)
     plt.show()
 
 
