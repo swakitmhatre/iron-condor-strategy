@@ -7,7 +7,7 @@ import numpy as np
 CHECK_INTERVAL_SECONDS = 300  # 5 minutes
 CANDLE_LIMIT = 50
 
-# ANSI Color Codes for Terminal Printing
+# ANSI Color Codes
 GREEN = "\033[92m"
 RED = "\033[91m"
 CYAN = "\033[96m"
@@ -15,19 +15,22 @@ YELLOW = "\033[93m"
 RESET = "\033[0m"
 
 # ==========================================
-# TECHNICAL INDICATORS
+# TECHNICAL INDICATORS CALCULATOR
 # ==========================================
 def calculate_indicators(df):
     if len(df) < CANDLE_LIMIT:
         return df
 
     df = df.copy()
+
+    # 1. MACD (8, 17, 9)
     ema_fast = df['close'].ewm(span=8, adjust=False).mean()
     ema_slow = df['close'].ewm(span=17, adjust=False).mean()
     df['MACD'] = ema_fast - ema_slow
     df['MACD_signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
     df['MACD_hist'] = df['MACD'] - df['MACD_signal']
 
+    # 2. RSI (14)
     delta = df['close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -35,6 +38,7 @@ def calculate_indicators(df):
     df['RSI'] = 100 - (100 / (1 + rs))
     df['RSI'] = df['RSI'].fillna(50)
 
+    # 3. Supertrend (10, 3)
     high_low = df['high'] - df['low']
     high_cp = (df['high'] - df['close'].shift(1)).abs()
     low_cp = (df['low'] - df['close'].shift(1)).abs()
@@ -63,54 +67,69 @@ def calculate_indicators(df):
 
 
 # ==========================================
-# TRUE 2D TERMINAL GRID CHART RENDERER
+# FULL TERMINAL CONSOLE PRINT ENGINE
 # ==========================================
-def print_2d_terminal_chart(symbol, pool_addr, df):
+def print_complete_terminal_dashboard(symbol, pool_addr, df):
     plot_df = df.tail(30).reset_index(drop=True)
-    closes = plot_df['close'].tolist()
-    opens = plot_df['open'].tolist()
-    
     latest = df.iloc[-1]
+
     rsi_val = round(latest.get('RSI', 0), 2)
     macd_h_raw = latest.get('MACD_hist', 0)
     macd_h_str = f"{macd_h_raw:.4e}" if abs(macd_h_raw) < 0.0001 else f"{macd_h_raw:.6f}"
     st_dir = f"{GREEN}BULLISH 🟢{RESET}" if latest.get('SUPERTREND_dir', 1) == 1 else f"{RED}BEARISH 🔴{RESET}"
 
-    print("\n" + "=" * 78)
-    print(f"► [{CYAN}{symbol}{RESET}] Pool: {pool_addr[:6]}... | Price: ${latest['close']} | RSI: {rsi_val} | ST: {st_dir}")
-    print(f"► MACD Hist: {macd_h_str}")
-    print("=" * 78)
-    print(f"{CYAN}  [2D TIME vs PRICE GRID (Last 30 Candles)] {RESET}\n")
+    start_time = plot_df.iloc[0]['timestamp'].strftime('%H:%M')
+    end_time = plot_df.iloc[-1]['timestamp'].strftime('%H:%M UTC')
 
+    print("\n" + "=" * 105)
+    print(f"► [{CYAN}{symbol}{RESET}] Pool: {pool_addr[:8]}... | Price: ${latest['close']} | RSI: {rsi_val} | ST: {st_dir}")
+    print(f"► MACD Hist: {macd_h_str}")
+    print("=" * 105)
+
+    # SECTION 1: OHLC & INDICATORS TABLE (LAST 5 CANDLES)
+    print(f"\n{YELLOW}  [RECENT 5m CANDLE METRICS: OHLC & INDICATORS]{RESET}")
+    print(f"  {'TIMESTAMP (UTC)':<18} | {'OPEN':<12} | {'HIGH':<12} | {'LOW':<12} | {'CLOSE':<12} | {'RSI':<6} | {'MACD HIST':<12} | {'ST TREND'}")
+    print("  " + "-" * 100)
+
+    for _, row in plot_df.tail(5).iterrows():
+        t_str = row['timestamp'].strftime('%Y-%m-%d %H:%M')
+        o, h, l, c = row['open'], row['high'], row['low'], row['close']
+        r = f"{row.get('RSI', 0):.1f}"
+        mh = row.get('MACD_hist', 0)
+        mh_str = f"{mh:.2e}" if abs(mh) < 0.0001 else f"{mh:.6f}"
+        st_row = f"{GREEN}BULL{RESET}" if row.get('SUPERTREND_dir', 1) == 1 else f"{RED}BEAR{RESET}"
+        
+        c_color = GREEN if c >= o else RED
+        print(f"  {t_str:<18} | {o:<12.6f} | {h:<12.6f} | {l:<12.6f} | {c_color}{c:<12.6f}{RESET} | {r:<6} | {mh_str:<12} | {st_row}")
+
+    print("  " + "-" * 100)
+
+    # SECTION 2: 2D PRICE GRID WITH TIMESTAMPS
+    print(f"\n{CYAN}  [2D TIME vs PRICE GRID ({len(plot_df)} CANDLES: {start_time} to {end_time})]{RESET}\n")
+
+    closes = plot_df['close'].tolist()
+    opens = plot_df['open'].tolist()
     min_p, max_p = min(closes), max(closes)
     if min_p == max_p:
         max_p += 1e-12
-        
-    grid_rows = 12
+
+    grid_rows = 10
     grid = [[" " for _ in range(len(plot_df))] for _ in range(grid_rows)]
 
-    # Map each candle to the 2D coordinate grid
     for col_idx, (o, c) in enumerate(zip(opens, closes)):
-        normalized_row = int((c - min_p) / (max_p - min_p) * (grid_rows - 1))
-        row_idx = (grid_rows - 1) - max(0, min(normalized_row, grid_rows - 1))
-        
-        color_char = f"{GREEN}▲{RESET}" if c >= o else f"{RED}▼{RESET}"
-        grid[row_idx][col_idx] = color_char
+        norm_row = int((c - min_p) / (max_p - min_p) * (grid_rows - 1))
+        row_idx = (grid_rows - 1) - max(0, min(norm_row, grid_rows - 1))
+        grid[row_idx][col_idx] = f"{GREEN}▲{RESET}" if c >= o else f"{RED}▼{RESET}"
 
-    # Print grid with vertical price scale labels
     for r in range(grid_rows):
         row_price = max_p - (r / (grid_rows - 1)) * (max_p - min_p)
-        if row_price < 0.01:
-            price_label = f"${row_price:.6f}"
-        else:
-            price_label = f"${row_price:.4f}"
-            
+        price_label = f"${row_price:.6f}" if row_price < 0.01 else f"${row_price:.4f}"
         row_str = "".join(grid[r])
         print(f"  {price_label:>10} | {row_str}")
 
     print("             " + "-" * len(plot_df))
-    print(f"             {YELLOW}Time ➔ (Oldest to Newest 5m intervals){RESET}")
-    print("=" * 78 + "\n")
+    print(f"  Timeline   | {start_time}" + " " * (len(plot_df) - 13) + f"{end_time}")
+    print("=" * 105 + "\n")
 
 
 # ==========================================
@@ -119,8 +138,8 @@ def print_2d_terminal_chart(symbol, pool_addr, df):
 def fetch_and_filter_solana_coins():
     keywords = ["PEPE", "WIF", "BONK", "CAT", "AI", "MEME"]
     all_pairs = []
-    
-    print("\n[INFO] Fetching diverse meme coin pairs from DexScreener...")
+
+    print("\n[INFO] Fetching Solana pairs from DexScreener...")
     for kw in keywords:
         url = f"https://api.dexscreener.com/latest/dex/search?q={kw}"
         try:
@@ -161,14 +180,14 @@ def fetch_geckoterminal_ohlcv(pool_address):
     return pd.DataFrame()
 
 def main():
-    print("[SYSTEM] Starting Solana 2D Grid Chart Bot...")
+    print("[SYSTEM] Starting Solana Complete Dashboard Bot...")
     while True:
         top_coins = fetch_and_filter_solana_coins()
         for coin in top_coins:
             df = fetch_geckoterminal_ohlcv(coin['pairAddress'])
             if not df.empty:
                 df = calculate_indicators(df)
-                print_2d_terminal_chart(coin['symbol'], coin['pairAddress'], df)
+                print_complete_terminal_dashboard(coin['symbol'], coin['pairAddress'], df)
 
         print(f"[SLEEP] Waiting 5 minutes for next candle cycle...\n")
         time.sleep(CHECK_INTERVAL_SECONDS)
