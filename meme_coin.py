@@ -78,7 +78,7 @@ def main():
     macd_sub.legend(visible=True)
 
     # Setup Indicator Lines
-    st_line = chart.create_line(name="Supertrend", color="magenta", width=2)
+    st_line = chart.create_line(name="supertrend", color="magenta", width=2)
     rsi_line = rsi_sub.create_line(name="RSI (14)", color="cyan", width=2)
     macd_line = macd_sub.create_line(name="MACD", color="yellow", width=2)
     signal_line = macd_sub.create_line(name="Signal", color="blue", width=2)
