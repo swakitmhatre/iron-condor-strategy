@@ -158,33 +158,38 @@ def save_5m_chart(symbol, df):
 # DEXSCREENER FILTERING & DIAGNOSTICS
 # ==========================================
 def fetch_and_filter_solana_coins():
-    url = "https://api.dexscreener.com/latest/dex/search?q=SOL"
-    print("\n[INFO] Fetching candidate pairs from DexScreener...")
+    # Search keywords targeted toward active meme tokens on Solana
+    keywords = ["PEPE", "WIF", "BONK", "CAT", "AI", "MEME", "SOL"]
+    all_pairs = []
     
-    try:
-        response = requests.get(url, timeout=10)
-        if response.status_code != 200:
-            return []
-        pairs = response.json().get('pairs', [])
-    except Exception as e:
-        print(f"[ERROR] DexScreener fetch failed: {e}")
-        return []
-
-    diagnostic_coins = []
-    for pair in pairs:
-        if pair.get('chainId') != 'solana':
+    print("\n[INFO] Fetching diverse meme coin pairs from DexScreener...")
+    
+    for kw in keywords:
+        url = f"https://api.dexscreener.com/latest/dex/search?q={kw}"
+        try:
+            res = requests.get(url, timeout=5)
+            if res.status_code == 200:
+                pairs = res.json().get('pairs', [])
+                for p in pairs:
+                    # Filter strictly for Solana chain and exclude native/wrapped SOL itself
+                    if p.get('chainId') == 'solana':
+                        base_symbol = p.get('baseToken', {}).get('symbol', '').upper()
+                        if base_symbol not in ['SOL', 'WSOL', 'USDC', 'USDT']:
+                            all_pairs.append({
+                                'pairAddress': p['pairAddress'],
+                                'symbol': base_symbol,
+                                'priceUsd': float(p.get('priceUsd', 0)),
+                            })
+        except Exception:
             continue
-        base_token = pair.get('baseToken', {})
-        diagnostic_coins.append({
-            'pairAddress': pair['pairAddress'],
-            'symbol': base_token.get('symbol', 'UNKNOWN'),
-            'priceUsd': float(pair.get('priceUsd', 0)),
-        })
-        if len(diagnostic_coins) >= 3:
-            break
 
-    print(f"[SUCCESS] Selected top {len(diagnostic_coins)} coins for 5m indicators analysis.")
-    return diagnostic_coins
+    # Deduplicate by pair address to ensure unique coins
+    unique_coins = {c['pairAddress']: c for c in all_pairs}.values()
+    selected_coins = list(unique_coins)[:3]  # Grab top 3 distinct coins
+
+    symbols_str = ", ".join([c['symbol'] for c in selected_coins]) if selected_coins else "None"
+    print(f"[SUCCESS] Selected top 3 unique meme coins: {symbols_str}")
+    return selected_coins
 
 
 # ==========================================
