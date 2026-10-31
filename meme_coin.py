@@ -9,22 +9,25 @@ def main():
     time_steps = [f"Step {i}" for i in range(1, 21)]
     close_price = np.linspace(0.00001, 0.00002, 20) + np.random.normal(0, 0.000001, 20)
     macd = np.random.uniform(-0.000001, 0.000001, 20)
-    signal = macd + np.random.uniform(-0.0000005, 0.000005, 20)
+    signal = macd + np.random.uniform(-0.0000005, 0.0000005, 20)
     rsi = np.random.uniform(20, 80, 20)
 
+    # Define a 3-row, 1-column grid layout using the modern subplots function
+    plt.subplots(3, 1)
+    
     # --- Pane 1: Price Action Curve ---
-    plt.subplot(3, 1, 1)
+    plt.subplot(1, 1) # Select row 1, col 1
     plt.title("PEPEUSDT - Price Action")
     plt.plot(time_steps, close_price, label="Close", color="cyan")
     
     # --- Pane 2: MACD Indicator ---
-    plt.subplot(3, 1, 2)
+    plt.subplot(2, 1) # Select row 2, col 1
     plt.title("MACD & Signal")
     plt.plot(time_steps, macd, label="MACD", color="blue")
     plt.plot(time_steps, signal, label="Signal", color="orange")
     
     # --- Pane 3: RSI Curve ---
-    plt.subplot(3, 1, 3)
+    plt.subplot(3, 1) # Select row 3, col 1
     plt.title("RSI (14)")
     plt.plot(time_steps, rsi, label="RSI", color="magenta")
     plt.ylim(0, 100) # Lock RSI scale between 0 and 100
