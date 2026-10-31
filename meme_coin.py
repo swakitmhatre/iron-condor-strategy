@@ -1,51 +1,43 @@
-import pandas as pd
 import plotext as plt
 import numpy as np
 
 def main():
-    print("=== INITIALIZING TERMINAL TRADING ENGINE: CANDLESTICK + MACD + RSI ===")
+    print("=== INITIALIZING TERMINAL TRADING ENGINE: PRICE + MACD + RSI ===")
     
-    # -------------------------------------------------------------
-    # NOTE: Replace this section with your actual DataFrame columns 
-    # (e.g., df['time'], df['open'], df['high'], df['low'], df['close'], 
-    # df['rsi'], df['macd'], df['macd_signal'])
-    # -------------------------------------------------------------
-    dates = [f"2026-10-{i:02d}" for i in range(1, 21)]
-    opens = np.random.uniform(0.00001, 0.00002, 20)
-    highs = opens + np.random.uniform(0.000001, 0.000005, 20)
-    lows = opens - np.random.uniform(0.000001, 0.000005, 20)
-    closes = opens + np.random.uniform(-0.000002, 0.000002, 20)
-    
-    rsi = np.random.uniform(30, 70, 20)
+    # Dummy data representing time steps and trading metrics
+    # (Replace these with your actual DataFrame columns)
+    time_steps = [f"Step {i}" for i in range(1, 21)]
+    close_price = np.linspace(0.00001, 0.00002, 20) + np.random.normal(0, 0.000001, 20)
     macd = np.random.uniform(-0.000001, 0.000001, 20)
     signal = macd + np.random.uniform(-0.0000005, 0.0000005, 20)
+    rsi = np.random.uniform(20, 80, 20)
 
-    # Clear any previous terminal plot states
-    #plt.clf()
+    # Clear any existing plot buffers safely
+    plt.clf()
     
-    # Set terminal canvas dimensions (Width, Height in characters)
-    plt.plotsize(110, 42)
+    # Adjust terminal layout size (Width, Height)
+    plt.figsize(100, 35)
     
-    # --- Pane 1: Candlestick Chart ---
+    # --- Pane 1: Price Action Curve ---
     plt.subplot(3, 1, 1)
-    plt.title("PEPEUSDT - Candlestick Price Action")
-    plt.candlestick(dates, opens, highs, lows, closes)
+    plt.title("PEPEUSDT - Price Action")
+    plt.plot(time_steps, close_price, label="Close", color="cyan")
     
     # --- Pane 2: MACD Indicator ---
     plt.subplot(3, 1, 2)
-    plt.title("MACD Indicator")
-    plt.plot(dates, macd, label="MACD", color="cyan")
-    plt.plot(dates, signal, label="Signal", color="orange")
+    plt.title("MACD & Signal")
+    plt.plot(time_steps, macd, label="MACD", color="blue")
+    plt.plot(time_steps, signal, label="Signal", color="orange")
     
     # --- Pane 3: RSI Curve ---
     plt.subplot(3, 1, 3)
     plt.title("RSI (14)")
-    plt.plot(dates, rsi, label="RSI", color="magenta")
-    plt.ylim(0, 100) # Keep RSI bounded between 0 and 100
+    plt.plot(time_steps, rsi, label="RSI", color="magenta")
+    plt.ylim(0, 100) # Lock RSI scale between 0 and 100
     
-    # Render all panes directly inside the terminal window
+    # Render everything directly in the terminal command line
     plt.show()
-    print("Terminal dashboard rendered successfully.")
+    print("Dashboard rendered successfully inside terminal.")
 
 if __name__ == '__main__':
     main()
