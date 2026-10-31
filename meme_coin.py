@@ -62,21 +62,26 @@ def main():
     
     # Create Main Chart Layout (Candlesticks)
     chart = Chart(inner_width=1, inner_height=0.6)
-    chart.title(f"{SYMBOL} - 5m Multi-Panel Trading Engine")
+    
+    # Correct API call for title/watermark overlay
+    chart.watermark(f"{SYMBOL} 5m Engine", color="rgba(180, 180, 240, 0.6)")
+    chart.legend(visible=True)
     chart.time_scale(visible=False)
 
     # Create Sub-pane for RSI (Synchronized timescale)
     rsi_sub = chart.create_subchart(width=1, height=0.2, sync=True)
+    rsi_sub.legend(visible=True)
     rsi_sub.time_scale(visible=False)
 
     # Create Sub-pane for MACD (Synchronized timescale)
     macd_sub = chart.create_subchart(width=1, height=0.2, sync=True)
+    macd_sub.legend(visible=True)
 
     # Setup Indicator Lines
-    st_line = chart.create_line("Supertrend", color="magenta", width=2)
-    rsi_line = rsi_sub.create_line("RSI (14)", color="cyan", width=2)
-    macd_line = macd_sub.create_line("MACD", color="yellow", width=2)
-    signal_line = macd_sub.create_line("Signal", color="blue", width=2)
+    st_line = chart.create_line(name="Supertrend", color="magenta", width=2)
+    rsi_line = rsi_sub.create_line(name="RSI (14)", color="cyan", width=2)
+    macd_line = macd_sub.create_line(name="MACD", color="yellow", width=2)
+    signal_line = macd_sub.create_line(name="Signal", color="blue", width=2)
 
     # Fetch and assign initial data
     df = fetch_and_calculate_data()
