@@ -12,10 +12,7 @@ def main():
     signal = macd + np.random.uniform(-0.0000005, 0.0000005, 20)
     rsi = np.random.uniform(20, 80, 20)
 
-    # Clear any previous figures cleanly using plotext syntax
-    plt.clear_figure()
-    
-    # Correct size attribute for plotext: plotsize (Width, Height)
+    # Set terminal canvas layout size (Width, Height) using verified plotsize function
     plt.plotsize(100, 35)
     
     # --- Pane 1: Price Action Curve ---
@@ -35,7 +32,7 @@ def main():
     plt.plot(time_steps, rsi, label="RSI", color="magenta")
     plt.ylim(0, 100) # Lock RSI scale between 0 and 100
     
-    # Render everything directly in the terminal command line
+    # Render everything directly in the terminal command line prompt
     plt.show()
     print("Dashboard rendered successfully inside terminal.")
 
