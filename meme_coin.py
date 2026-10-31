@@ -30,9 +30,9 @@ def main():
         'low': lows,
         'close': closes
     }
-    plt.candlestick(candle_data)
+    candle=plt.candlestick(candle_data)
     #plt.xticks(indices[::3], time_steps[::3])  # Show every 3rd date label to avoid clutter
-    plt.draw()
+    plt.draw(candle)
 
     print("\n" + "="*50 + "\n")
 
