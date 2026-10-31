@@ -12,6 +12,7 @@ GREEN = "\033[92m"
 RED = "\033[91m"
 CYAN = "\033[96m"
 YELLOW = "\033[93m"
+GRAY = "\033[90m"
 RESET = "\033[0m"
 
 # ==========================================
@@ -67,10 +68,11 @@ def calculate_indicators(df):
 
 
 # ==========================================
-# FULL TERMINAL CONSOLE PRINT ENGINE
+# TRADINGVIEW-STYLE CANDLESTICK ENGINE
 # ==========================================
-def print_complete_terminal_dashboard(symbol, pool_addr, df):
-    plot_df = df.tail(30).reset_index(drop=True)
+def print_tradingview_terminal_dashboard(symbol, pool_addr, df):
+    # Plot last 24 candles for clean prompt alignment
+    plot_df = df.tail(24).reset_index(drop=True)
     latest = df.iloc[-1]
 
     rsi_val = round(latest.get('RSI', 0), 2)
@@ -78,18 +80,17 @@ def print_complete_terminal_dashboard(symbol, pool_addr, df):
     macd_h_str = f"{macd_h_raw:.4e}" if abs(macd_h_raw) < 0.0001 else f"{macd_h_raw:.6f}"
     st_dir = f"{GREEN}BULLISH 🟢{RESET}" if latest.get('SUPERTREND_dir', 1) == 1 else f"{RED}BEARISH 🔴{RESET}"
 
-    start_time = plot_df.iloc[0]['timestamp'].strftime('%H:%M')
-    end_time = plot_df.iloc[-1]['timestamp'].strftime('%H:%M UTC')
-
-    print("\n" + "=" * 105)
+    print("\n" + "=" * 108)
     print(f"► [{CYAN}{symbol}{RESET}] Pool: {pool_addr[:8]}... | Price: ${latest['close']} | RSI: {rsi_val} | ST: {st_dir}")
     print(f"► MACD Hist: {macd_h_str}")
-    print("=" * 105)
+    print("=" * 108)
 
-    # SECTION 1: OHLC & INDICATORS TABLE (LAST 5 CANDLES)
-    print(f"\n{YELLOW}  [RECENT 5m CANDLE METRICS: OHLC & INDICATORS]{RESET}")
+    # -------------------------------------------------------------
+    # SECTION 1: OHLC & INDICATOR DATA TABLE (LAST 5 CANDLES)
+    # -------------------------------------------------------------
+    print(f"\n{YELLOW}  [OHLC & TECHNICAL INDICATOR DATA TABLE]{RESET}")
     print(f"  {'TIMESTAMP (UTC)':<18} | {'OPEN':<12} | {'HIGH':<12} | {'LOW':<12} | {'CLOSE':<12} | {'RSI':<6} | {'MACD HIST':<12} | {'ST TREND'}")
-    print("  " + "-" * 100)
+    print("  " + "-" * 102)
 
     for _, row in plot_df.tail(5).iterrows():
         t_str = row['timestamp'].strftime('%Y-%m-%d %H:%M')
@@ -102,44 +103,90 @@ def print_complete_terminal_dashboard(symbol, pool_addr, df):
         c_color = GREEN if c >= o else RED
         print(f"  {t_str:<18} | {o:<12.6f} | {h:<12.6f} | {l:<12.6f} | {c_color}{c:<12.6f}{RESET} | {r:<6} | {mh_str:<12} | {st_row}")
 
-    print("  " + "-" * 100)
+    print("  " + "-" * 102)
 
-    # SECTION 2: 2D PRICE GRID WITH TIMESTAMPS
-    print(f"\n{CYAN}  [2D TIME vs PRICE GRID ({len(plot_df)} CANDLES: {start_time} to {end_time})]{RESET}\n")
+    # -------------------------------------------------------------
+    # SECTION 2: 2D CANDLESTICK CHART WITH WICKS & STEPPED TIMELINE
+    # -------------------------------------------------------------
+    print(f"\n{CYAN}  [TRADINGVIEW-STYLE CANDLESTICK CHART WITH WICKS (5m CANDLES)]{RESET}\n")
 
-    closes = plot_df['close'].tolist()
-    opens = plot_df['open'].tolist()
-    min_p, max_p = min(closes), max(closes)
-    if min_p == max_p:
-        max_p += 1e-12
+    grid_rows = 12
+    num_candles = len(plot_df)
 
-    grid_rows = 10
-    grid = [[" " for _ in range(len(plot_df))] for _ in range(grid_rows)]
+    min_price = plot_df['low'].min()
+    max_price = plot_df['high'].max()
+    if min_price == max_price:
+        max_price += 1e-12
 
-    for col_idx, (o, c) in enumerate(zip(opens, closes)):
-        norm_row = int((c - min_p) / (max_p - min_p) * (grid_rows - 1))
-        row_idx = (grid_rows - 1) - max(0, min(norm_row, grid_rows - 1))
-        grid[row_idx][col_idx] = f"{GREEN}▲{RESET}" if c >= o else f"{RED}▼{RESET}"
+    price_range = max_price - min_price
 
+    def price_to_row(p):
+        norm = (p - min_price) / price_range
+        r = int((1.0 - norm) * (grid_rows - 1))
+        return max(0, min(r, grid_rows - 1))
+
+    # Build 2D Character & Color Buffer
+    char_matrix = [[" " for _ in range(num_candles)] for _ in range(grid_rows)]
+    color_matrix = [[RESET for _ in range(num_candles)] for _ in range(grid_rows)]
+
+    for col in range(num_candles):
+        row_data = plot_df.iloc[col]
+        o, h, l, c = row_data['open'], row_data['high'], row_data['low'], row_data['close']
+        
+        r_high = price_to_row(h)
+        r_low = price_to_row(l)
+        r_open = price_to_row(o)
+        r_close = price_to_row(c)
+
+        r_body_top = min(r_open, r_close)
+        r_body_bottom = max(r_open, r_close)
+
+        color = GREEN if c >= o else RED
+
+        # Draw Wicks (Upper & Lower)
+        for r in range(r_high, r_low + 1):
+            char_matrix[r][col] = "│"
+            color_matrix[r][col] = GRAY
+
+        # Draw Real Candlestick Bodies over Wicks
+        for r in range(r_body_top, r_body_bottom + 1):
+            char_matrix[r][col] = "█"
+            color_matrix[r][col] = color
+
+    # Print Chart Lines with Y-Axis Price Scales
     for r in range(grid_rows):
-        row_price = max_p - (r / (grid_rows - 1)) * (max_p - min_p)
-        price_label = f"${row_price:.6f}" if row_price < 0.01 else f"${row_price:.4f}"
-        row_str = "".join(grid[r])
-        print(f"  {price_label:>10} | {row_str}")
+        row_p = max_price - (r / (grid_rows - 1)) * price_range
+        price_str = f"${row_p:.6f}" if row_p < 0.01 else f"${row_p:.4f}"
 
-    print("             " + "-" * len(plot_df))
-    print(f"  Timeline   | {start_time}" + " " * (len(plot_df) - 13) + f"{end_time}")
-    print("=" * 105 + "\n")
+        line_chars = []
+        for c in range(num_candles):
+            line_chars.append(f"{color_matrix[r][c]}{char_matrix[r][c]}{RESET}")
+        
+        row_content = "".join(line_chars)
+        print(f"  {price_str:>10} | {row_content}")
+
+    # Print Horizontal Time Axis & Stepped Timestamps
+    print("             " + "-" * num_candles)
+
+    t_start = plot_df.iloc[0]['timestamp'].strftime('%H:%M')
+    t_mid = plot_df.iloc[len(plot_df)//2]['timestamp'].strftime('%H:%M')
+    t_end = plot_df.iloc[-1]['timestamp'].strftime('%H:%M UTC')
+
+    step_gap = (num_candles // 2) - 5
+    time_axis_line = f"{t_start}" + " " * max(1, step_gap) + f"{t_mid}" + " " * max(1, step_gap) + f"{t_end}"
+    
+    print(f"  Timestamp  | {time_axis_line}")
+    print("=" * 108 + "\n")
 
 
 # ==========================================
-# DATA FETCHERS & MAIN LOOP
+# DEXSCREENER & GECKOTERMINAL DATA ENGINE
 # ==========================================
 def fetch_and_filter_solana_coins():
     keywords = ["PEPE", "WIF", "BONK", "CAT", "AI", "MEME"]
     all_pairs = []
 
-    print("\n[INFO] Fetching Solana pairs from DexScreener...")
+    print("\n[INFO] Fetching active Solana pairs from DexScreener...")
     for kw in keywords:
         url = f"https://api.dexscreener.com/latest/dex/search?q={kw}"
         try:
@@ -179,15 +226,19 @@ def fetch_geckoterminal_ohlcv(pool_address):
         pass
     return pd.DataFrame()
 
+
+# ==========================================
+# MAIN EXECUTION LOOP
+# ==========================================
 def main():
-    print("[SYSTEM] Starting Solana Complete Dashboard Bot...")
+    print("[SYSTEM] Starting Solana TradingView Terminal Bot...")
     while True:
         top_coins = fetch_and_filter_solana_coins()
         for coin in top_coins:
             df = fetch_geckoterminal_ohlcv(coin['pairAddress'])
             if not df.empty:
                 df = calculate_indicators(df)
-                print_complete_terminal_dashboard(coin['symbol'], coin['pairAddress'], df)
+                print_tradingview_terminal_dashboard(coin['symbol'], coin['pairAddress'], df)
 
         print(f"[SLEEP] Waiting 5 minutes for next candle cycle...\n")
         time.sleep(CHECK_INTERVAL_SECONDS)
