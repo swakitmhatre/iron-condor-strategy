@@ -4,7 +4,7 @@ import numpy as np
 def main():
     print("=== INITIALIZING TERMINAL TRADING ENGINE (PLOTEXT 6.1.0) ===")
     
-    # Mock data or your actual DataFrame arrays
+    # Mock data arrays
     time_steps = [f"Step {i}" for i in range(1, 21)]
     opens = np.random.uniform(0.00001, 0.00002, 20)
     highs = opens + np.random.uniform(0.000001, 0.000005, 20)
@@ -15,26 +15,35 @@ def main():
     signal = macd + np.random.uniform(-0.0000005, 0.0000005, 20)
     rsi = np.random.uniform(20, 80, 20)
 
+    # --- 1. Candlestick Chart (Convert NumPy arrays to lists via .tolist()) ---
     plt = fig.figure
     plt.clear()
-    # --- 1. Candlestick Chart ---
+  
     plt.title("PEPEUSDT - Candlestick Price Action")
-    plt.candlestick(time_steps, opens, highs, lows, closes)
+    plt.candlestick(
+        time_steps, 
+        opens.tolist(), 
+        highs.tolist(), 
+        lows.tolist(), 
+        closes.tolist()
+    )
     plt.show()
 
     print("\n" + "="*50 + "\n")
 
     # --- 2. MACD Indicator ---
+    plt.clf()
     plt.title("PEPEUSDT - MACD Indicator")
-    plt.plot(time_steps, macd, label="MACD", color="cyan")
-    plt.plot(time_steps, signal, label="Signal", color="orange")
+    plt.plot(time_steps, macd.tolist(), label="MACD", color="cyan")
+    plt.plot(time_steps, signal.tolist(), label="Signal", color="orange")
     plt.show()
 
     print("\n" + "="*50 + "\n")
 
     # --- 3. RSI Curve ---
+    plt.clf()
     plt.title("PEPEUSDT - RSI (14)")
-    plt.plot(time_steps, rsi, label="RSI", color="magenta")
+    plt.plot(time_steps, rsi.tolist(), label="RSI", color="magenta")
     plt.ylim(0, 100)
     plt.show()
 
