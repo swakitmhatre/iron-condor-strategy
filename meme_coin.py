@@ -5,15 +5,15 @@ import requests
 import pandas as pd
 import numpy as np
 
-# Try importing plotext for ASCII Terminal Charts
+# Import plotext for terminal ASCII charts
 try:
     import plotext as plt
     HAS_PLOTEXT = True
 except ImportError:
     HAS_PLOTEXT = False
-    print("[WARN] 'plotext' library not installed. Install with 'pip install plotext' to see terminal charts.")
+    print("[WARN] 'plotext' library not installed. Run 'pip install plotext'.")
 
-# Try importing pandas_ta
+# Import pandas_ta
 try:
     import pandas_ta as ta
     HAS_PANDAS_TA = True
@@ -21,7 +21,7 @@ except ImportError:
     HAS_PANDAS_TA = False
 
 CHECK_INTERVAL_SECONDS = 300  # 5 minutes
-CANDLE_LIMIT = 50              # Minimum historical candles required for indicators
+CANDLE_LIMIT = 50              # Minimum historical candles required
 
 # ==========================================
 # TECHNICAL INDICATORS ENGINE
@@ -102,16 +102,16 @@ def calculate_indicators(df):
 # ==========================================
 def print_terminal_chart(symbol, pool_addr, df):
     """
-    Renders 5-minute price charts and indicators directly inside SSH prompt.
+    Renders 5-minute price charts and indicators directly inside SSH prompt using plotext.
     """
     if not HAS_PLOTEXT or 'SUPERTREND' not in df.columns:
         return
 
-    # Take last 30 candles for clear view
     plot_df = df.tail(30).reset_index(drop=True)
     x_axis = list(range(len(plot_df)))
 
-    plt.clf()
+    # Clear figure canvas cleanly using valid plotext syntax
+    plt.clear_figure()
     plt.subplots(2, 1)
 
     # Subplot 1: Price & Supertrend
@@ -127,7 +127,7 @@ def print_terminal_chart(symbol, pool_addr, df):
     plt.plot(x_axis, plot_df['RSI'], label="RSI", color="yellow")
     plt.grid(True)
 
-    plt.plotsize(80, 18)  # Fits cleanly in standard EC2 SSH shell
+    plt.plotsize(80, 18)
     plt.show()
 
 
@@ -208,7 +208,6 @@ def main():
                 latest = df.iloc[-1]
                 rsi_val = round(latest.get('RSI', 0), 2)
                 
-                # Format low-decimal MACD Hist using scientific notation so it shows actual non-zero delta
                 macd_h_raw = latest.get('MACD_hist', 0)
                 macd_h_str = f"{macd_h_raw:.4e}" if abs(macd_h_raw) < 0.0001 else f"{macd_h_raw:.6f}"
                 
@@ -218,7 +217,6 @@ def main():
                 print(f"► [{symbol}] Pool: {pool_addr[:6]}... | Price: ${coin['priceUsd']} | RSI: {rsi_val} | MACD Hist: {macd_h_str} | Supertrend: {st_dir}")
                 print(f"==================================================================")
                 
-                # Render ASCII chart on terminal prompt
                 print_terminal_chart(symbol, pool_addr, df)
 
         print(f"\n[SLEEP] Waiting {CHECK_INTERVAL_SECONDS // 60} minutes for next candle cycle...\n")
