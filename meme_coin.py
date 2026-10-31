@@ -1,6 +1,5 @@
 import os
 import time
-import datetime
 import requests
 import pandas as pd
 import numpy as np
@@ -8,23 +7,27 @@ import numpy as np
 CHECK_INTERVAL_SECONDS = 300  # 5 minutes
 CANDLE_LIMIT = 50
 
+# ANSI Color Codes for Terminal Printing
+GREEN = "\033[92m"
+RED = "\033[91m"
+CYAN = "\033[96m"
+YELLOW = "\033[93m"
+RESET = "\033[0m"
+
 # ==========================================
-# INDICATORS ENGINE (NATIVE NUMPY/PANDAS)
+# TECHNICAL INDICATORS
 # ==========================================
 def calculate_indicators(df):
     if len(df) < CANDLE_LIMIT:
         return df
 
     df = df.copy()
-
-    # MACD (8, 17, 9)
     ema_fast = df['close'].ewm(span=8, adjust=False).mean()
     ema_slow = df['close'].ewm(span=17, adjust=False).mean()
     df['MACD'] = ema_fast - ema_slow
     df['MACD_signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
     df['MACD_hist'] = df['MACD'] - df['MACD_signal']
 
-    # RSI (14)
     delta = df['close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -32,7 +35,6 @@ def calculate_indicators(df):
     df['RSI'] = 100 - (100 / (1 + rs))
     df['RSI'] = df['RSI'].fillna(50)
 
-    # Supertrend (10, 3)
     high_low = df['high'] - df['low']
     high_cp = (df['high'] - df['close'].shift(1)).abs()
     low_cp = (df['low'] - df['close'].shift(1)).abs()
@@ -53,59 +55,66 @@ def calculate_indicators(df):
             direction[i] = -1
         else:
             direction[i] = direction[i-1]
-
         supertrend[i] = basic_lower.iloc[i] if direction[i] == 1 else basic_upper.iloc[i]
 
     df['SUPERTREND'] = supertrend
     df['SUPERTREND_dir'] = direction
-
     return df
 
 
 # ==========================================
-# ASCII PROMPT CHART PRINTER
+# TRUE 2D TERMINAL GRID CHART RENDERER
 # ==========================================
-def print_prompt_chart(symbol, pool_addr, df):
-    """
-    Prints a clean ASCII chart directly inside the SSH text prompt.
-    Does not rely on Matplotlib, Plotext, or desktop GUI components.
-    """
-    plot_df = df.tail(20).reset_index(drop=True)
-    prices = plot_df['close'].tolist()
-    rsi_vals = plot_df['RSI'].tolist()
+def print_2d_terminal_chart(symbol, pool_addr, df):
+    plot_df = df.tail(30).reset_index(drop=True)
+    closes = plot_df['close'].tolist()
+    opens = plot_df['open'].tolist()
     
-    min_p, max_p = min(prices), max(prices)
-    span = max_p - min_p if max_p != min_p else 1
-
     latest = df.iloc[-1]
     rsi_val = round(latest.get('RSI', 0), 2)
     macd_h_raw = latest.get('MACD_hist', 0)
     macd_h_str = f"{macd_h_raw:.4e}" if abs(macd_h_raw) < 0.0001 else f"{macd_h_raw:.6f}"
-    st_dir = "BULLISH 🟢" if latest.get('SUPERTREND_dir', 1) == 1 else "BEARISH 🔴"
+    st_dir = f"{GREEN}BULLISH 🟢{RESET}" if latest.get('SUPERTREND_dir', 1) == 1 else f"{RED}BEARISH 🔴{RESET}"
 
-    print("\n" + "=" * 75)
-    print(f"► [{symbol}] Pool: {pool_addr[:6]}... | Price: ${latest['close']} | RSI: {rsi_val}")
-    print(f"► MACD Hist: {macd_h_str} | Supertrend: {st_dir}")
-    print("=" * 75)
+    print("\n" + "=" * 78)
+    print(f"► [{CYAN}{symbol}{RESET}] Pool: {pool_addr[:6]}... | Price: ${latest['close']} | RSI: {rsi_val} | ST: {st_dir}")
+    print(f"► MACD Hist: {macd_h_str}")
+    print("=" * 78)
+    print(f"{CYAN}  [2D TIME vs PRICE GRID (Last 30 Candles)] {RESET}\n")
 
-    # 1. Price Visual Graph
-    print("\n  [PRICE TREND - LAST 20 CANDLES (5m)]")
-    for i, p in enumerate(prices):
-        bar_len = int(((p - min_p) / span) * 30)
-        bar = "█" * max(1, bar_len)
-        price_str = f"${p:.6f}" if p < 0.01 else f"${p:.4f}"
-        print(f"  {price_str} | {bar}")
+    min_p, max_p = min(closes), max(closes)
+    if min_p == max_p:
+        max_p += 1e-12
+        
+    grid_rows = 12
+    grid = [[" " for _ in range(len(plot_df))] for _ in range(grid_rows)]
 
-    # 2. RSI Level Visual Bar
-    print("\n  [RSI (14) VISUAL GAUGE]")
-    rsi_bar_len = int((rsi_val / 100.0) * 30)
-    rsi_bar = "█" * rsi_bar_len
-    print(f"  RSI: {rsi_val} | [0 {rsi_bar:<30} 100]")
-    print("=" * 75 + "\n")
+    # Map each candle to the 2D coordinate grid
+    for col_idx, (o, c) in enumerate(zip(opens, closes)):
+        normalized_row = int((c - min_p) / (max_p - min_p) * (grid_rows - 1))
+        row_idx = (grid_rows - 1) - max(0, min(normalized_row, grid_rows - 1))
+        
+        color_char = f"{GREEN}▲{RESET}" if c >= o else f"{RED}▼{RESET}"
+        grid[row_idx][col_idx] = color_char
+
+    # Print grid with vertical price scale labels
+    for r in range(grid_rows):
+        row_price = max_p - (r / (grid_rows - 1)) * (max_p - min_p)
+        if row_price < 0.01:
+            price_label = f"${row_price:.6f}"
+        else:
+            price_label = f"${row_price:.4f}"
+            
+        row_str = "".join(grid[r])
+        print(f"  {price_label:>10} | {row_str}")
+
+    print("             " + "-" * len(plot_df))
+    print(f"             {YELLOW}Time ➔ (Oldest to Newest 5m intervals){RESET}")
+    print("=" * 78 + "\n")
 
 
 # ==========================================
-# DEXSCREENER & GECKOTERMINAL FETCHERS
+# DATA FETCHERS & MAIN LOOP
 # ==========================================
 def fetch_and_filter_solana_coins():
     keywords = ["PEPE", "WIF", "BONK", "CAT", "AI", "MEME"]
@@ -135,11 +144,7 @@ def fetch_and_filter_solana_coins():
             unique_coins[c['pairAddress']] = c
         if len(unique_coins) >= 3:
             break
-
-    selected = list(unique_coins.values())
-    symbols_str = ", ".join([f"{c['symbol']} ({c['pairAddress'][:6]}...)" for c in selected])
-    print(f"[SUCCESS] Selected top 3 unique pools: {symbols_str}")
-    return selected
+    return list(unique_coins.values())
 
 def fetch_geckoterminal_ohlcv(pool_address):
     url = f"https://api.geckoterminal.com/api/v2/networks/solana/pools/{pool_address}/ohlcv/minute?aggregate=5"
@@ -151,31 +156,21 @@ def fetch_geckoterminal_ohlcv(pool_address):
             df = pd.DataFrame(ohlcv_list, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', utc=True)
             return df.sort_values('timestamp').reset_index(drop=True)
-    except Exception as e:
-        print(f"[ERROR] Candle fetch error: {e}")
+    except Exception:
+        pass
     return pd.DataFrame()
 
-
-# ==========================================
-# MAIN EXECUTION LOOP
-# ==========================================
 def main():
-    print("[SYSTEM] Starting Solana Meme Trading Bot...")
-    
+    print("[SYSTEM] Starting Solana 2D Grid Chart Bot...")
     while True:
         top_coins = fetch_and_filter_solana_coins()
-
         for coin in top_coins:
-            symbol = coin['symbol']
-            pool_addr = coin['pairAddress']
-
-            df = fetch_geckoterminal_ohlcv(pool_addr)
-            
+            df = fetch_geckoterminal_ohlcv(coin['pairAddress'])
             if not df.empty:
                 df = calculate_indicators(df)
-                print_prompt_chart(symbol, pool_addr, df)
+                print_2d_terminal_chart(coin['symbol'], coin['pairAddress'], df)
 
-        print(f"[SLEEP] Waiting {CHECK_INTERVAL_SECONDS // 60} minutes for next candle cycle...\n")
+        print(f"[SLEEP] Waiting 5 minutes for next candle cycle...\n")
         time.sleep(CHECK_INTERVAL_SECONDS)
 
 if __name__ == "__main__":
