@@ -175,25 +175,82 @@ def sync_candle_database(pool_address):
 # ==========================================
 def calculate_indicators(df):
     """
-    Calculates MACD(8,17,9), RSI(14), and Supertrend(10,3) safely without index errors.
+    Calculates MACD(8,17,9), RSI(14), and Supertrend(10,3) safely.
+    Handles column name variations in pandas_ta dynamically.
     """
     if len(df) < CANDLE_LIMIT:
-        print(f"[WARN] Insufficient candles ({len(df)}). Minimum required: {CANDLE_LIMIT}. Skipping indicator calculation.")
+        print(f"[WARN] Insufficient candles ({len(df)}). Need min {CANDLE_LIMIT}.")
         return df
 
-    # MACD (8, 17, 9)
-    macd = ta.macd(df['close'], fast=8, slow=17, signal=9)
-    df['MACD'] = macd['MACD_8_17_9']
-    df['MACD_signal'] = macd['MACDs_8_17_9']
-    df['MACD_hist'] = macd['MACDh_8_17_9']
+    df = df.copy()
 
-    # RSI (14)
-    df['RSI'] = ta.rsi(df['close'], length=14)
+    if HAS_PANDAS_TA:
+        try:
+            # 1. MACD (8, 17, 9)
+            macd = ta.macd(df['close'], fast=8, slow=17, signal=9)
+            if macd is not None and not macd.empty:
+                df['MACD'] = macd.iloc[:, 0]        # MACD Line
+                df['MACD_hist'] = macd.iloc[:, 1]   # MACD Histogram
+                df['MACD_signal'] = macd.iloc[:, 2] # MACD Signal Line
 
-    # Supertrend (10, 3)
-    st = ta.supertrend(df['high'], df['low'], df['close'], length=10, multiplier=3)
-    df['SUPERTREND'] = st['SUPERT_10_3.0']
-    df['SUPERTREND_dir'] = st['SUPERTd_10_3.0']
+            # 2. RSI (14)
+            rsi = ta.rsi(df['close'], length=14)
+            if rsi is not None:
+                df['RSI'] = rsi
+
+            # 3. Supertrend (10, 3) - DYNAMIC COLUMN EXTRACTION (Fixes KeyError)
+            st = ta.supertrend(df['high'], df['low'], df['close'], length=10, multiplier=3)
+            if st is not None and not st.empty:
+                # Column 0 is Supertrend value, Column 1 is Direction (1 or -1)
+                df['SUPERTREND'] = st.iloc[:, 0]
+                df['SUPERTREND_dir'] = st.iloc[:, 1]
+
+            return df
+        except Exception as e:
+            print(f"[WARN] pandas_ta computation error ({e}), switching to native computation.")
+
+    # NATIVE FALLBACK CALCULATIONS (If pandas_ta fails or isn't installed)
+    # 1. MACD (8, 17, 9)
+    ema_fast = df['close'].ewm(span=8, adjust=False).mean()
+    ema_slow = df['close'].ewm(span=17, adjust=False).mean()
+    df['MACD'] = ema_fast - ema_slow
+    df['MACD_signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+    df['MACD_hist'] = df['MACD'] - df['MACD_signal']
+
+    # 2. RSI (14)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss.replace(0, np.nan)
+    df['RSI'] = 100 - (100 / (1 + rs))
+    df['RSI'] = df['RSI'].fillna(50)
+
+    # 3. Supertrend (10, 3)
+    high_low = df['high'] - df['low']
+    high_cp = (df['high'] - df['close'].shift(1)).abs()
+    low_cp = (df['low'] - df['close'].shift(1)).abs()
+    tr = pd.concat([high_low, high_cp, low_cp], axis=1).max(axis=1)
+    atr = tr.rolling(10).mean()
+
+    hl2 = (df['high'] + df['low']) / 2
+    basic_upper = hl2 + (3 * atr)
+    basic_lower = hl2 - (3 * atr)
+
+    supertrend = np.zeros(len(df))
+    direction = np.ones(len(df))
+
+    for i in range(1, len(df)):
+        if df['close'].iloc[i] > basic_upper.iloc[i-1]:
+            direction[i] = 1
+        elif df['close'].iloc[i] < basic_lower.iloc[i-1]:
+            direction[i] = -1
+        else:
+            direction[i] = direction[i-1]
+
+        supertrend[i] = basic_lower.iloc[i] if direction[i] == 1 else basic_upper.iloc[i]
+
+    df['SUPERTREND'] = supertrend
+    df['SUPERTREND_dir'] = direction
 
     return df
 
