@@ -9,12 +9,9 @@ def main():
     time_steps = [f"Step {i}" for i in range(1, 21)]
     close_price = np.linspace(0.00001, 0.00002, 20) + np.random.normal(0, 0.000001, 20)
     macd = np.random.uniform(-0.000001, 0.000001, 20)
-    signal = macd + np.random.uniform(-0.0000005, 0.0000005, 20)
+    signal = macd + np.random.uniform(-0.0000005, 0.000005, 20)
     rsi = np.random.uniform(20, 80, 20)
 
-    # Set terminal canvas layout size (Width, Height) using verified plotsize function
-    plt.plotsize(100, 35)
-    
     # --- Pane 1: Price Action Curve ---
     plt.subplot(3, 1, 1)
     plt.title("PEPEUSDT - Price Action")
