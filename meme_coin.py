@@ -100,103 +100,31 @@ def verify_token_security(mint_address):
 # STEP 1: DEXSCREENER COMPLETE FILTERING
 # ==========================================
 def fetch_and_filter_solana_coins():
-    # 1. Query multiple Solana endpoints to widen candidate pool
-    endpoints = [
-        "https://api.dexscreener.com/latest/dex/search?q=SOL",
-        "https://api.dexscreener.com/latest/dex/search?q=USDC",
-        "https://api.dexscreener.com/token-profiles/latest/v1"  # Grabs latest active profiles
-    ]
-    
-    pairs = []
-    print("\n[INFO] Fetching wider candidate set from DexScreener...")
-    for url in endpoints:
-        try:
-            res = requests.get(url, timeout=8)
-            if res.status_code == 200:
-                data = res.json()
-                if isinstance(data, list):
-                    # Handle profile list format
-                    for item in data:
-                        if item.get('chainId') == 'solana':
-                            token_addr = item.get('tokenAddress')
-                            if token_addr:
-                                t_res = requests.get(f"https://api.dexscreener.com/latest/dex/tokens/{token_addr}", timeout=5)
-                                if t_res.status_code == 200:
-                                    pairs.extend(t_res.json().get('pairs', []))
-                else:
-                    pairs.extend(data.get('pairs', []))
-        except Exception:
+    url = "https://api.dexscreener.com/latest/dex/search?q=SOL"
+    print("\n[INFO] [DIAGNOSTIC MODE] Fetching active Solana pairs...")
+    try:
+        res = requests.get(url, timeout=10)
+        pairs = res.json().get('pairs', [])
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        return []
+
+    diagnostic_coins = []
+    for pair in pairs:
+        if pair.get('chainId') != 'solana':
             continue
-
-    # Deduplicate pairs
-    unique_pairs = {p['pairAddress']: p for p in pairs if p.get('chainId') == 'solana'}.values()
-    print(f"[INFO] Evaluating {len(unique_pairs)} raw Solana pairs against relaxed safety filters...")
-
-    filtered_coins = []
-    now = datetime.datetime.now(datetime.timezone.utc)
-
-    for pair in unique_pairs:
-        # Age Check (Relaxed: 1h to 48h)
-        created_at_ms = pair.get('pairCreatedAt')
-        if not created_at_ms:
-            continue
-        created_at = datetime.datetime.fromtimestamp(created_at_ms / 1000, tz=datetime.timezone.utc)
-        age_hours = (now - created_at).total_seconds() / 3600.0
-        if not (1.0 <= age_hours <= 48.0):
-            continue
-
-        # Market Cap ($30k to $2M)
-        fdv = pair.get('fdv', 0) or pair.get('marketCap', 0) or 0
-        if not (30_000 <= fdv <= 2_000_000):
-            continue
-
-        # Liquidity (min $30k)
-        liquidity = pair.get('liquidity', {}).get('usd', 0) or 0
-        if liquidity < 30_000:
-            continue
-
-        # Volume (24h >= $50k, 6h >= $20k)
-        vol = pair.get('volume', {})
-        if (vol.get('h24', 0) < 50_000) or (vol.get('h6', 0) < 20_000):
-            continue
-
-        # Transactions (Relaxed: 24h >= 300)
-        txns = pair.get('txns', {})
-        txns_h24 = txns.get('h24', {})
-        if (txns_h24.get('buys', 0) + txns_h24.get('sells', 0)) < 300:
-            continue
-
-        # Price changes (Relaxed: Positive 6h & 24h; ignore short 1h noise)
-        price_change = pair.get('priceChange', {})
-        p6h, p24h = price_change.get('h6', -1), price_change.get('h24', -1)
-        if p6h < 5.0 or p24h <= 0:
-            continue
-
-        # Twitter Handle check
-        socials = pair.get('info', {}).get('socials', [])
-        if not any(s.get('type') == 'twitter' for s in socials):
-            continue
-
-        # Buy-Sell Ratio (Relaxed: >= 1.1)
-        buys_h24 = txns_h24.get('buys', 0)
-        sells_h24 = txns_h24.get('sells', 1) or 1
-        if (buys_h24 / sells_h24) < 1.1:
-            continue
-
-        # On-Chain LP Lock & Top Holder Security Check
+            
         base_token = pair.get('baseToken', {})
-        mint_address = base_token.get('address')
-        if not verify_token_security(mint_address):
-            continue
-
-        filtered_coins.append({
+        diagnostic_coins.append({
             'pairAddress': pair['pairAddress'],
             'symbol': base_token.get('symbol', 'UNKNOWN'),
             'priceUsd': float(pair.get('priceUsd', 0)),
         })
+        if len(diagnostic_coins) >= 3:
+            break  # Grab just 3 active coins for testing
 
-    print(f"[SUCCESS] Filtered candidate coins passing optimized criteria: {len(filtered_coins)}")
-    return filtered_coins[:3]
+    print(f"[SUCCESS] Diagnostic mode selected {len(diagnostic_coins)} active test coins.")
+    return diagnostic_coins
 
 
 # ==========================================
