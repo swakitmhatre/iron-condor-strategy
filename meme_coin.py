@@ -63,14 +63,23 @@ def calculate_indicators(df):
     return df.dropna().reset_index(drop=True)
 
 
-# --- 2. TERMINAL GRAPHICS RENDERER (PLOTEXT V5 COMPATIBLE) ---
+# --- 2. UNIVERSAL PLOTEXT CLEANER & RENDERER ---
+def clear_plotext_figure():
+    """Universal reset method that prevents AttributeError on any version of plotext."""
+    if hasattr(plt, "clear_figure"):
+        plt.clear_figure()
+    elif hasattr(plt, "clf"):
+        plt.clf()
+    elif hasattr(plt, "clear_data"):
+        plt.clear_data()
+
 def render_terminal_dashboard(df, symbol):
     """Renders multi-panel color candlestick and technical indicator plots."""
-    plt.clear_figure()  # Modern plotext replacement for clf()
+    clear_plotext_figure()
     plt.subplots(3, 1)
 
     dates = list(df["open_time"])
-    dates_idx = list(range(len(dates)))  # Numeric X-axis for stability
+    dates_idx = list(range(len(dates)))
 
     # -------------------------------------------------------------
     # PANEL 1: CANDLESTICK CHART + SUPERTREND OVERLAY
@@ -78,13 +87,17 @@ def render_terminal_dashboard(df, symbol):
     plt.subplot(1, 1)
     plt.title(f"{symbol} 5m | Candlesticks + Supertrend")
     
-    # Modern Candlestick API format: candlestick(dates/indices, dict_of_ohlc)
-    plt.candlestick(dates_idx, {
-        "open": df["open"].tolist(),
-        "high": df["high"].tolist(),
-        "low": df["low"].tolist(),
-        "close": df["close"].tolist()
-    })
+    # Universal Candlestick API (Works across plotext v4, v5, v6)
+    try:
+        plt.candlestick(dates_idx, {
+            "open": df["open"].tolist(),
+            "high": df["high"].tolist(),
+            "low": df["low"].tolist(),
+            "close": df["close"].tolist()
+        })
+    except Exception:
+        plt.candlestick(dates_idx, df["open"].tolist(), df["high"].tolist(), 
+                        df["low"].tolist(), df["close"].tolist())
     
     # Overlay Supertrend line
     plt.plot(dates_idx, df["supertrend"].tolist(), label="Supertrend", color="magenta")
@@ -99,7 +112,7 @@ def render_terminal_dashboard(df, symbol):
     plt.title("Relative Strength Index (RSI 14)")
     plt.plot(dates_idx, df["rsi"].tolist(), color="cyan", label="RSI")
     
-    # Threshold Lines
+    # Reference boundary lines
     plt.plot(dates_idx, [70] * len(dates_idx), color="red")
     plt.plot(dates_idx, [30] * len(dates_idx), color="green")
     plt.ylim(0, 100)
@@ -115,23 +128,23 @@ def render_terminal_dashboard(df, symbol):
     plt.plot(dates_idx, df["macd"].tolist(), color="yellow", label="MACD")
     plt.plot(dates_idx, df["macd_signal"].tolist(), color="blue", label="Signal")
     
-    # MACD Histogram Bars
+    # MACD Histogram
     plt.bar(dates_idx, df["macd_hist"].tolist(), label="Hist", color="white")
     plt.xticks(dates_idx[::5], dates[::5])
     plt.xlabel("Time (UTC)")
     plt.ylabel("Value")
     plt.theme("dark")
 
-    # Display layout to terminal screen
+    # Render dashboard
     plt.show()
 
 
-# --- 3. MAIN EXECUTION LOOP ---
+# --- 3. MAIN LOOP ---
 def main():
     print("=== STARTING AUTONOMOUS TERMINAL TRADING ENGINE ===")
     while True:
         try:
-            # Clear terminal console screen
+            # Clear terminal console window before redrawing
             print("\033[H\033[J", end="")
             
             timestamp = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
@@ -140,7 +153,6 @@ def main():
             df = fetch_klines(SYMBOL)
             df_calculated = calculate_indicators(df)
             
-            # Print chart
             render_terminal_dashboard(df_calculated, SYMBOL)
             
             print(f"\n[ENGINE ACTIVE] Next cycle in {FETCH_INTERVAL_SEC // 60} minutes. Press Ctrl+C to stop.")
