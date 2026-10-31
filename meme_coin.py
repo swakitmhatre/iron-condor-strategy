@@ -5,8 +5,7 @@ import requests
 import pandas as pd
 import numpy as np
 import matplotlib
-# Set headless backend for AWS EC2 SSH CLI environment
-matplotlib.use('Agg')
+matplotlib.use('Agg')  # Headless backend for AWS EC2
 import matplotlib.pyplot as plt
 
 # ==========================================
@@ -20,15 +19,9 @@ except ImportError:
     print("[WARN] 'pandas_ta' not found. Using native built-in technical indicators.")
 
 CHECK_INTERVAL_SECONDS = 300  # 5 minutes
-LOOKBACK_CANDLES = 3           # Overwrite last 2-3 candles for accuracy
 CANDLE_LIMIT = 50              # Minimum historical candles required for indicators
 
-SOLANA_RPC_URL = "https://api.mainnet-beta.solana.com"
 CHARTS_DIR = "charts"
-COIN_DATABASE = {}
-TRADE_LOG = []
-
-# Ensure chart directory exists
 os.makedirs(CHARTS_DIR, exist_ok=True)
 
 
@@ -110,13 +103,9 @@ def calculate_indicators(df):
 
 
 # ==========================================
-# SAVE 5m CHART IMAGE FOR AWS AWS EC2
+# SAVE 5m CHART IMAGE FOR AWS EC2
 # ==========================================
-def save_5m_chart(symbol, df):
-    """
-    Renders and saves the 5-minute price chart with MACD, RSI, and Supertrend 
-    to disk (`charts/{symbol}_5m.png`).
-    """
+def save_5m_chart(symbol, pool_addr, df):
     if 'SUPERTREND' not in df.columns or df.dropna().empty:
         return
 
@@ -126,7 +115,7 @@ def save_5m_chart(symbol, df):
     # Subplot 1: Price & Supertrend
     ax1.plot(df['timestamp'], df['close'], label='Close Price', color='black', alpha=0.8)
     ax1.plot(df['timestamp'], df['SUPERTREND'], label='Supertrend (10,3)', color='purple', linestyle='--')
-    ax1.set_title(f"Solana Meme Coin: {symbol} - 5m Chart")
+    ax1.set_title(f"Solana Meme Coin: {symbol} ({pool_addr[:6]}) - 5m Chart")
     ax1.legend(loc='upper left')
     ax1.grid(True, alpha=0.3)
 
@@ -147,12 +136,14 @@ def save_5m_chart(symbol, df):
     plt.xticks(rotation=45)
     plt.tight_layout()
 
+    # Unique file name per pool address to prevent overwriting
     safe_address_suffix = pool_addr[:6]
     file_path = os.path.join(CHARTS_DIR, f"{symbol}_{safe_address_suffix}_5m.png")
     fig.savefig(file_path)
     plt.close(fig)
     print(f"  └─ 📊 Chart saved: {file_path}")
-   
+
+
 # ==========================================
 # DEXSCREENER FILTERING & DIAGNOSTICS
 # ==========================================
@@ -228,7 +219,6 @@ def main():
             if not df.empty:
                 df = calculate_indicators(df)
                 
-                # Terminal output dashboard line
                 latest = df.iloc[-1]
                 rsi_val = round(latest.get('RSI', 0), 2)
                 macd_h = round(latest.get('MACD_hist', 0), 6)
@@ -236,8 +226,8 @@ def main():
                 
                 print(f"\n► [{symbol}] Price: ${coin['priceUsd']} | RSI: {rsi_val} | MACD Hist: {macd_h} | Supertrend: {st_dir}")
                 
-                # Save visual chart PNG for EC2
-                save_5m_chart(symbol, df)
+                # Pass pool_addr correctly to avoid NameError
+                save_5m_chart(symbol, pool_addr, df)
 
         print(f"\n[SLEEP] Waiting {CHECK_INTERVAL_SECONDS // 60} minutes for next candle cycle...\n")
         time.sleep(CHECK_INTERVAL_SECONDS)
