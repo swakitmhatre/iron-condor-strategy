@@ -88,7 +88,7 @@ def main():
     
     chart.set(df[["time", "open", "high", "low", "close"]])
     st_line.set(df[["time", "supertrend"]])
-    rsi_line.set(df[["time", "RSI (14)"]])
+    rsi_line.set(df[["time", "rsi"]])
     macd_line.set(df[["time", "macd"]])
     signal_line.set(df[["time", "macd_signal"]])
 
