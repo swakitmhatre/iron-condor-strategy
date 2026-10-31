@@ -147,31 +147,26 @@ def save_5m_chart(symbol, df):
     plt.xticks(rotation=45)
     plt.tight_layout()
 
-    # Save PNG chart file to disk
-    file_path = os.path.join(CHARTS_DIR, f"{symbol}_5m.png")
+    safe_address_suffix = pool_addr[:6]
+    file_path = os.path.join(CHARTS_DIR, f"{symbol}_{safe_address_suffix}_5m.png")
     fig.savefig(file_path)
     plt.close(fig)
-    print(f"  └─ 📊 Chart image saved to disk: {file_path}")
-
-
+    print(f"  └─ 📊 Chart saved: {file_path}")
+   
 # ==========================================
 # DEXSCREENER FILTERING & DIAGNOSTICS
 # ==========================================
 def fetch_and_filter_solana_coins():
-    # Search keywords targeted toward active meme tokens on Solana
-    keywords = ["PEPE", "WIF", "BONK", "CAT", "AI", "MEME", "SOL"]
+    keywords = ["PEPE", "WIF", "BONK", "CAT", "AI", "MEME"]
     all_pairs = []
     
     print("\n[INFO] Fetching diverse meme coin pairs from DexScreener...")
-    
     for kw in keywords:
         url = f"https://api.dexscreener.com/latest/dex/search?q={kw}"
         try:
             res = requests.get(url, timeout=5)
             if res.status_code == 200:
-                pairs = res.json().get('pairs', [])
-                for p in pairs:
-                    # Filter strictly for Solana chain and exclude native/wrapped SOL itself
+                for p in res.json().get('pairs', []):
                     if p.get('chainId') == 'solana':
                         base_symbol = p.get('baseToken', {}).get('symbol', '').upper()
                         if base_symbol not in ['SOL', 'WSOL', 'USDC', 'USDT']:
@@ -183,12 +178,17 @@ def fetch_and_filter_solana_coins():
         except Exception:
             continue
 
-    # Deduplicate by pair address to ensure unique coins
-    unique_coins = {c['pairAddress']: c for c in all_pairs}.values()
-    selected_coins = list(unique_coins)[:3]  # Grab top 3 distinct coins
+    # Deduplicate by pairAddress to guarantee 3 uniquely different coins
+    unique_coins = {}
+    for c in all_pairs:
+        if c['pairAddress'] not in unique_coins:
+            unique_coins[c['pairAddress']] = c
+        if len(unique_coins) >= 3:
+            break
 
-    symbols_str = ", ".join([c['symbol'] for c in selected_coins]) if selected_coins else "None"
-    print(f"[SUCCESS] Selected top 3 unique meme coins: {symbols_str}")
+    selected_coins = list(unique_coins.values())
+    symbols_str = ", ".join([f"{c['symbol']} ({c['pairAddress'][:6]}...)" for c in selected_coins])
+    print(f"[SUCCESS] Selected top 3 unique meme pools: {symbols_str}")
     return selected_coins
 
 
