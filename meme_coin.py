@@ -1,15 +1,15 @@
 import os
 import time
+import datetime
 import requests
 import pandas as pd
 import numpy as np
-import plotext as plt
 
 CHECK_INTERVAL_SECONDS = 300  # 5 minutes
 CANDLE_LIMIT = 50
 
 # ==========================================
-# TECHNICAL INDICATORS ENGINE
+# INDICATORS ENGINE (NATIVE NUMPY/PANDAS)
 # ==========================================
 def calculate_indicators(df):
     if len(df) < CANDLE_LIMIT:
@@ -63,49 +63,55 @@ def calculate_indicators(df):
 
 
 # ==========================================
-# PRINT COLOR CHARTS DIRECTLY IN TERMINAL PROMPT
+# ASCII PROMPT CHART PRINTER
 # ==========================================
-def draw_terminal_color_chart(symbol, pool_addr, df):
+def print_prompt_chart(symbol, pool_addr, df):
     """
-    Renders visual color price charts & indicators inside SSH terminal prompt.
-    Uses strict plotext v5+ API to avoid syntax errors.
+    Prints a clean ASCII chart directly inside the SSH text prompt.
+    Does not rely on Matplotlib, Plotext, or desktop GUI components.
     """
-    plot_df = df.tail(30).reset_index(drop=True)
-    x_axis = list(range(len(plot_df)))
+    plot_df = df.tail(20).reset_index(drop=True)
+    prices = plot_df['close'].tolist()
+    rsi_vals = plot_df['RSI'].tolist()
+    
+    min_p, max_p = min(prices), max(prices)
+    span = max_p - min_p if max_p != min_p else 1
 
-    # Clear terminal canvas for clean rendering
-    plt.clear_figure()
+    latest = df.iloc[-1]
+    rsi_val = round(latest.get('RSI', 0), 2)
+    macd_h_raw = latest.get('MACD_hist', 0)
+    macd_h_str = f"{macd_h_raw:.4e}" if abs(macd_h_raw) < 0.0001 else f"{macd_h_raw:.6f}"
+    st_dir = "BULLISH 🟢" if latest.get('SUPERTREND_dir', 1) == 1 else "BEARISH 🔴"
 
-    # Create 2 vertical subplots (Top: Price/Supertrend, Bottom: RSI)
-    plt.subplots(2, 1)
+    print("\n" + "=" * 75)
+    print(f"► [{symbol}] Pool: {pool_addr[:6]}... | Price: ${latest['close']} | RSI: {rsi_val}")
+    print(f"► MACD Hist: {macd_h_str} | Supertrend: {st_dir}")
+    print("=" * 75)
 
-    # --- Subplot 1: Price & Supertrend ---
-    plt.subplot(1, 1)
-    plt.title(f"{symbol} ({pool_addr[:6]}...) — 5m Price & Supertrend")
-    plt.plot(x_axis, plot_df['close'], label="Close Price", color="cyan")
-    plt.plot(x_axis, plot_df['SUPERTREND'], label="Supertrend", color="magenta")
-    plt.grid(True, True)
+    # 1. Price Visual Graph
+    print("\n  [PRICE TREND - LAST 20 CANDLES (5m)]")
+    for i, p in enumerate(prices):
+        bar_len = int(((p - min_p) / span) * 30)
+        bar = "█" * max(1, bar_len)
+        price_str = f"${p:.6f}" if p < 0.01 else f"${p:.4f}"
+        print(f"  {price_str} | {bar}")
 
-    # --- Subplot 2: RSI Indicator ---
-    plt.subplot(2, 1)
-    plt.title("RSI (14)")
-    plt.plot(x_axis, plot_df['RSI'], label="RSI", color="yellow")
-    plt.plot(x_axis, [70]*len(x_axis), color="red")
-    plt.plot(x_axis, [30]*len(x_axis), color="green")
-    plt.grid(True, True)
-
-    # Render inside terminal prompt window
-    plt.plotsize(85, 20)
-    plt.show()
+    # 2. RSI Level Visual Bar
+    print("\n  [RSI (14) VISUAL GAUGE]")
+    rsi_bar_len = int((rsi_val / 100.0) * 30)
+    rsi_bar = "█" * rsi_bar_len
+    print(f"  RSI: {rsi_val} | [0 {rsi_bar:<30} 100]")
+    print("=" * 75 + "\n")
 
 
 # ==========================================
-# DATA FETCHERS
+# DEXSCREENER & GECKOTERMINAL FETCHERS
 # ==========================================
 def fetch_and_filter_solana_coins():
     keywords = ["PEPE", "WIF", "BONK", "CAT", "AI", "MEME"]
     all_pairs = []
     
+    print("\n[INFO] Fetching diverse meme coin pairs from DexScreener...")
     for kw in keywords:
         url = f"https://api.dexscreener.com/latest/dex/search?q={kw}"
         try:
@@ -130,7 +136,10 @@ def fetch_and_filter_solana_coins():
         if len(unique_coins) >= 3:
             break
 
-    return list(unique_coins.values())
+    selected = list(unique_coins.values())
+    symbols_str = ", ".join([f"{c['symbol']} ({c['pairAddress'][:6]}...)" for c in selected])
+    print(f"[SUCCESS] Selected top 3 unique pools: {symbols_str}")
+    return selected
 
 def fetch_geckoterminal_ohlcv(pool_address):
     url = f"https://api.geckoterminal.com/api/v2/networks/solana/pools/{pool_address}/ohlcv/minute?aggregate=5"
@@ -142,8 +151,8 @@ def fetch_geckoterminal_ohlcv(pool_address):
             df = pd.DataFrame(ohlcv_list, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', utc=True)
             return df.sort_values('timestamp').reset_index(drop=True)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[ERROR] Candle fetch error: {e}")
     return pd.DataFrame()
 
 
@@ -151,7 +160,7 @@ def fetch_geckoterminal_ohlcv(pool_address):
 # MAIN EXECUTION LOOP
 # ==========================================
 def main():
-    print("\n[SYSTEM] Starting Terminal Chart Bot on AWS...\n")
+    print("[SYSTEM] Starting Solana Meme Trading Bot...")
     
     while True:
         top_coins = fetch_and_filter_solana_coins()
@@ -164,21 +173,9 @@ def main():
             
             if not df.empty:
                 df = calculate_indicators(df)
-                
-                latest = df.iloc[-1]
-                rsi_val = round(latest.get('RSI', 0), 2)
-                macd_h_raw = latest.get('MACD_hist', 0)
-                macd_h_str = f"{macd_h_raw:.4e}" if abs(macd_h_raw) < 0.0001 else f"{macd_h_raw:.6f}"
-                st_dir = "BULLISH 🟢" if latest.get('SUPERTREND_dir', 1) == 1 else "BEARISH 🔴"
-                
-                print("\n==========================================================================================")
-                print(f"► [{symbol}] Pool: {pool_addr[:6]}... | Price: ${coin['priceUsd']} | RSI: {rsi_val} | MACD Hist: {macd_h_str} | ST: {st_dir}")
-                print("==========================================================================================")
-                
-                # Prints color graph on prompt
-                draw_terminal_color_chart(symbol, pool_addr, df)
+                print_prompt_chart(symbol, pool_addr, df)
 
-        print(f"\n[SLEEP] Cycle completed. Waiting 5 minutes for next candle update...\n")
+        print(f"[SLEEP] Waiting {CHECK_INTERVAL_SECONDS // 60} minutes for next candle cycle...\n")
         time.sleep(CHECK_INTERVAL_SECONDS)
 
 if __name__ == "__main__":
