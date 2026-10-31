@@ -1,4 +1,4 @@
-import plotext as plt
+import plotext as fig
 import numpy as np
 
 def main():
@@ -15,6 +15,8 @@ def main():
     signal = macd + np.random.uniform(-0.0000005, 0.0000005, 20)
     rsi = np.random.uniform(20, 80, 20)
 
+    plt = fig.figure
+    plt.clear()
     # --- 1. Candlestick Chart ---
     plt.title("PEPEUSDT - Candlestick Price Action")
     plt.candlestick(time_steps, opens, highs, lows, closes)
