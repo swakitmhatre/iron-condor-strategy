@@ -12,9 +12,6 @@ def main():
     signal = macd + np.random.uniform(-0.0000005, 0.0000005, 20)
     rsi = np.random.uniform(20, 80, 20)
 
-    # Clear any existing plot buffers safely
-    plt.clf()
-    
     # Adjust terminal layout size (Width, Height)
     plt.figsize(100, 35)
     
