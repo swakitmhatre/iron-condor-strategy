@@ -2,39 +2,44 @@ import plotext as plt
 import numpy as np
 
 def main():
-    print("=== INITIALIZING TERMINAL TRADING ENGINE: PRICE + MACD + RSI ===")
+    print("=== INITIALIZING TERMINAL TRADING ENGINE (PLOTEXT 6.1.0) ===")
     
-    # Dummy data representing time steps and trading metrics
-    # (Replace these with your actual DataFrame columns)
+    # Dummy or DataFrame columns (replace with your actual data)
     time_steps = [f"Step {i}" for i in range(1, 21)]
-    close_price = np.linspace(0.00001, 0.00002, 20) + np.random.normal(0, 0.000001, 20)
+    opens = np.random.uniform(0.00001, 0.00002, 20)
+    highs = opens + np.random.uniform(0.000001, 0.000005, 20)
+    lows = opens - np.random.uniform(0.000001, 0.000005, 20)
+    closes = opens + np.random.uniform(-0.000002, 0.000002, 20)
+    
     macd = np.random.uniform(-0.000001, 0.000001, 20)
     signal = macd + np.random.uniform(-0.0000005, 0.0000005, 20)
     rsi = np.random.uniform(20, 80, 20)
 
-    # Define a 3-row, 1-column grid layout using the modern subplots function
-    plt.subplots(3, 1)
-    
-    # --- Pane 1: Price Action Curve ---
-    plt.subplot(1, 1) # Select row 1, col 1
-    plt.title("PEPEUSDT - Price Action")
-    plt.plot(time_steps, close_price, label="Close", color="cyan")
-    
-    # --- Pane 2: MACD Indicator ---
-    plt.subplot(2, 1) # Select row 2, col 1
-    plt.title("MACD & Signal")
-    plt.plot(time_steps, macd, label="MACD", color="blue")
-    plt.plot(time_steps, signal, label="Signal", color="orange")
-    
-    # --- Pane 3: RSI Curve ---
-    plt.subplot(3, 1) # Select row 3, col 1
-    plt.title("RSI (14)")
-    plt.plot(time_steps, rsi, label="RSI", color="magenta")
-    plt.ylim(0, 100) # Lock RSI scale between 0 and 100
-    
-    # Render everything directly in the terminal command line prompt
+    # --- 1. Candlestick Chart ---
+    plt.clear_data()
+    plt.title("PEPEUSDT - Candlestick Price Action")
+    plt.candlestick(time_steps, opens, highs, lows, closes)
     plt.show()
-    print("Dashboard rendered successfully inside terminal.")
+
+    print("\n" + "="*50 + "\n")
+
+    # --- 2. MACD Indicator ---
+    plt.clear_data()
+    plt.title("PEPEUSDT - MACD Indicator")
+    plt.plot(time_steps, macd, label="MACD", color="cyan")
+    plt.plot(time_steps, signal, label="Signal", color="orange")
+    plt.show()
+
+    print("\n" + "="*50 + "\n")
+
+    # --- 3. RSI Curve ---
+    plt.clear_data()
+    plt.title("PEPEUSDT - RSI (14)")
+    plt.plot(time_steps, rsi, label="RSI", color="magenta")
+    plt.ylim(0, 100)
+    plt.show()
+
+    print("\nAll terminal charts rendered successfully.")
 
 if __name__ == '__main__':
     main()
