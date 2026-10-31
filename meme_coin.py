@@ -12,8 +12,11 @@ def main():
     signal = macd + np.random.uniform(-0.0000005, 0.0000005, 20)
     rsi = np.random.uniform(20, 80, 20)
 
-    # Adjust terminal layout size (Width, Height)
-    plt.figsize(100, 35)
+    # Clear any previous figures cleanly using plotext syntax
+    plt.clear_figure()
+    
+    # Correct size attribute for plotext: plotsize (Width, Height)
+    plt.plotsize(100, 35)
     
     # --- Pane 1: Price Action Curve ---
     plt.subplot(3, 1, 1)
