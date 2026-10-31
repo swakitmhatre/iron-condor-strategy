@@ -9,11 +9,12 @@ import http.server
 import socketserver
 import threading
 
-CHECK_INTERVAL_SECONDS = 300  # 5 minutes
+CHECK_INTERVAL_SECONDS = 300  # 5-minute candle cycle
 PORT = 8000
+TARGET_SYMBOLS = ["PEPE", "WIF", "BONK"]
 
 # ==========================================
-# 1. TECHNICAL INDICATORS ENGINE
+# STEP 2: DETERMINISTIC INDICATOR ENGINE
 # ==========================================
 def calculate_indicators(df):
     if len(df) < 14:
@@ -21,14 +22,14 @@ def calculate_indicators(df):
 
     df = df.copy()
 
-    # MACD (8, 17, 9)
+    # 1. MACD (8, 17, 9) — Precise Exponential Smoothing
     ema_fast = df['close'].ewm(span=8, adjust=False).mean()
     ema_slow = df['close'].ewm(span=17, adjust=False).mean()
     df['MACD'] = ema_fast - ema_slow
     df['MACD_signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
     df['MACD_hist'] = df['MACD'] - df['MACD_signal']
 
-    # RSI (14)
+    # 2. RSI (14) — Wilder's Smoothing (Exact TradingView Logic)
     delta = df['close'].diff()
     gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
     loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
@@ -36,7 +37,7 @@ def calculate_indicators(df):
     df['RSI'] = 100 - (100 / (1 + rs))
     df['RSI'] = df['RSI'].fillna(50.0)
 
-    # Supertrend (10, 3)
+    # 3. Supertrend (10, 3) — Precise Trailing Band Calculation
     high_low = df['high'] - df['low']
     high_cp = (df['high'] - df['close'].shift(1)).abs()
     low_cp = (df['low'] - df['close'].shift(1)).abs()
@@ -65,89 +66,77 @@ def calculate_indicators(df):
 
 
 # ==========================================
-# 2. PLOTLY CHART GENERATOR ENGINE
+# MULTI-PANEL CHART DASHBOARD GENERATOR
 # ==========================================
-def generate_interactive_chart(symbol, df, filename="chart.html"):
+def generate_interactive_chart(symbol, df, filename):
     fig = make_subplots(
         rows=3, cols=1,
         shared_xaxes=True,
         vertical_spacing=0.03,
-        subplot_titles=(f"{symbol} 5m Price & Supertrend", "MACD (Line vs Signal vs Histogram)", "RSI (14) Oscillator"),
-        row_heights=[0.6, 0.2, 0.2]
+        subplot_titles=(
+            f"{symbol} (5m) — Price & Supertrend Overlay", 
+            "MACD (Blue: Line | Orange: Signal | Bars: Hist)", 
+            "RSI 14 (Purple: Curve | Red/Green: Boundaries)"
+        ),
+        row_heights=[0.55, 0.22, 0.23]
     )
 
-    # Main Panel: Candlesticks
+    # 1. Main Candlesticks + Supertrend Line
     fig.add_trace(go.Candlestick(
-        x=df['timestamp'],
-        open=df['open'], high=df['high'], low=df['low'], close=df['close'],
-        name='Candles',
-        increasing_line_color='#06d6a0', decreasing_line_color='#ef476f'
+        x=df['timestamp'], open=df['open'], high=df['high'], low=df['low'], close=df['close'],
+        name='Price (OHLC)', increasing_line_color='#06d6a0', decreasing_line_color='#ef476f'
     ), row=1, col=1)
 
-    # Main Panel: Supertrend Line Overlay
     fig.add_trace(go.Scatter(
         x=df['timestamp'], y=df['SUPERTREND'],
-        mode='lines', line=dict(color='#ffd166', width=1.5),
-        name='Supertrend'
+        mode='lines', line=dict(color='#ffd166', width=1.5), name='Supertrend'
     ), row=1, col=1)
 
-    # Subpanel 1: MACD Line, Signal Line, and Color-Coded Histogram
+    # 2. MACD Histogram + MACD Line vs Signal Line
     colors = ['#06d6a0' if val >= 0 else '#ef476f' for val in df['MACD_hist']]
     fig.add_trace(go.Bar(
-        x=df['timestamp'], y=df['MACD_hist'],
-        marker_color=colors, name='MACD Hist'
+        x=df['timestamp'], y=df['MACD_hist'], marker_color=colors, name='MACD Hist'
     ), row=2, col=1)
+
     fig.add_trace(go.Scatter(
         x=df['timestamp'], y=df['MACD'],
-        mode='lines', line=dict(color='#118ab2', width=1.5),
-        name='MACD Line'
+        mode='lines', line=dict(color='#118ab2', width=1.8), name='MACD Line'
     ), row=2, col=1)
+
     fig.add_trace(go.Scatter(
         x=df['timestamp'], y=df['MACD_signal'],
-        mode='lines', line=dict(color='#ff9f1c', width=1.5),
-        name='Signal Line'
+        mode='lines', line=dict(color='#ff9f1c', width=1.8), name='Signal Line'
     ), row=2, col=1)
 
-    # Subpanel 2: RSI Curve & Thresholds (70 Overbought / 30 Oversold)
+    # 3. RSI Curve with Overbought/Oversold Threshold Lines
     fig.add_trace(go.Scatter(
         x=df['timestamp'], y=df['RSI'],
-        mode='lines', line=dict(color='#9d4edd', width=2),
-        name='RSI (14)'
+        mode='lines', line=dict(color='#9d4edd', width=2), name='RSI (14)'
     ), row=3, col=1)
-    fig.add_hline(y=70, line_dash="dash", line_color="#ef476f", row=3, col=1)
-    fig.add_hline(y=30, line_dash="dash", line_color="#06d6a0", row=3, col=1)
 
-    # Dark Theme Layout
+    fig.add_hline(y=70, line_dash="dash", line_color="#ef476f", row=3, col=1, annotation_text="Overbought 70")
+    fig.add_hline(y=30, line_dash="dash", line_color="#06d6a0", row=3, col=1, annotation_text="Oversold 30")
+
+    # Unified Hover Crosshair Template
     fig.update_layout(
         template="plotly_dark",
-        title=f"TradingView Console Monitor — {symbol}",
+        title=f"Precision Execution Dashboard — {symbol}",
         xaxis_rangeslider_visible=False,
-        height=850,
+        hovermode="x unified",
+        height=880,
         margin=dict(l=50, r=30, t=60, b=40)
     )
 
     fig.write_html(filename)
-    print(f"[UPDATED] Visual chart rendered to {filename}")
+    print(f"[SUCCESS] Updated {symbol} chart -> {filename}")
 
 
 # ==========================================
-# 3. BACKGROUND WEB SERVER
+# STEP 1: STEP-FREE DATA PIPELINE
 # ==========================================
-def start_web_server():
-    Handler = http.server.SimpleHTTPRequestHandler
-    with socketserver.TCPServer(("", PORT), Handler) as httpd:
-        print(f"[SERVER] Live Web Viewer running on http://13.201.230.37:{PORT}/chart.html")
-        httpd.serve_forever()
-
-
-# ==========================================
-# 4. DATA FETCHERS & MAIN LOOP
-# ==========================================
-def fetch_and_filter_solana_coins():
-    keywords = ["PEPE", "WIF", "BONK"]
-    all_pairs = []
-
-    for kw in keywords:
+def fetch_top_solana_coins():
+    found_coins = []
+    for kw in TARGET_SYMBOLS:
         url = f"https://api.dexscreener.com/latest/dex/search?q={kw}"
         try:
             res = requests.get(url, timeout=5)
@@ -155,21 +144,15 @@ def fetch_and_filter_solana_coins():
                 for p in res.json().get('pairs', []):
                     if p.get('chainId') == 'solana':
                         base_symbol = p.get('baseToken', {}).get('symbol', '').upper()
-                        if base_symbol not in ['SOL', 'WSOL', 'USDC', 'USDT']:
-                            all_pairs.append({
+                        if base_symbol == kw:
+                            found_coins.append({
                                 'pairAddress': p['pairAddress'],
                                 'symbol': base_symbol
                             })
+                            break
         except Exception:
             continue
-
-    unique_coins = {}
-    for c in all_pairs:
-        if c['pairAddress'] not in unique_coins:
-            unique_coins[c['pairAddress']] = c
-        if len(unique_coins) >= 1:
-            break
-    return list(unique_coins.values())
+    return found_coins
 
 def fetch_geckoterminal_ohlcv(pool_address):
     url = f"https://api.geckoterminal.com/api/v2/networks/solana/pools/{pool_address}/ohlcv/minute?aggregate=5"
@@ -185,21 +168,36 @@ def fetch_geckoterminal_ohlcv(pool_address):
         pass
     return pd.DataFrame()
 
+
+# ==========================================
+# BACKGROUND SERVER & LOOP
+# ==========================================
+def start_web_server():
+    Handler = http.server.SimpleHTTPRequestHandler
+    with socketserver.TCPServer(("", PORT), Handler) as httpd:
+        print(f"\n[DASHBOARD HUB READY]")
+        print(f"  ► PEPE Chart: http://13.201.230.37:{PORT}/pepe.html")
+        print(f"  ► WIF Chart:  http://13.201.230.37:{PORT}/wif.html")
+        print(f"  ► BONK Chart: http://13.201.230.37:{PORT}/bonk.html\n")
+        httpd.serve_forever()
+
 def main():
-    # Start web server thread
     server_thread = threading.Thread(target=start_web_server, daemon=True)
     server_thread.start()
 
-    print("[SYSTEM] Starting Live Chart Monitor...")
+    print("[SYSTEM] Running Solana Indicator & Charting Engine...")
     while True:
-        top_coins = fetch_and_filter_solana_coins()
-        for coin in top_coins:
+        coins = fetch_top_solana_coins()
+        for coin in coins:
+            symbol = coin['symbol']
+            filename = f"{symbol.lower()}.html"
+            
             df = fetch_geckoterminal_ohlcv(coin['pairAddress'])
             if not df.empty:
                 df = calculate_indicators(df)
-                generate_interactive_chart(coin['symbol'], df)
+                generate_interactive_chart(symbol, df, filename)
 
-        print(f"[SLEEP] Waiting 5 minutes for next candle cycle...\n")
+        print(f"[SLEEP] Cycles updated. Waiting 5 minutes...\n")
         time.sleep(CHECK_INTERVAL_SECONDS)
 
 if __name__ == "__main__":
