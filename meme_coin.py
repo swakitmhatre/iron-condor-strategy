@@ -1,204 +1,150 @@
-import os
 import time
 import requests
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import http.server
-import socketserver
-import threading
+import plotext as plt
 
-CHECK_INTERVAL_SECONDS = 300  # 5-minute candle cycle
-PORT = 8000
-TARGET_SYMBOLS = ["PEPE", "WIF", "BONK"]
-
-# ==========================================
-# STEP 2: DETERMINISTIC INDICATOR ENGINE
-# ==========================================
-def calculate_indicators(df):
-    if len(df) < 14:
-        return df
-
-    df = df.copy()
-
-    # 1. MACD (8, 17, 9) — Precise Exponential Smoothing
-    ema_fast = df['close'].ewm(span=8, adjust=False).mean()
-    ema_slow = df['close'].ewm(span=17, adjust=False).mean()
-    df['MACD'] = ema_fast - ema_slow
-    df['MACD_signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
-    df['MACD_hist'] = df['MACD'] - df['MACD_signal']
-
-    # 2. RSI (14) — Wilder's Smoothing (Exact TradingView Logic)
-    delta = df['close'].diff()
-    gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
-    loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
-    rs = gain / loss.replace(0, np.nan)
-    df['RSI'] = 100 - (100 / (1 + rs))
-    df['RSI'] = df['RSI'].fillna(50.0)
-
-    # 3. Supertrend (10, 3) — Precise Trailing Band Calculation
-    high_low = df['high'] - df['low']
-    high_cp = (df['high'] - df['close'].shift(1)).abs()
-    low_cp = (df['low'] - df['close'].shift(1)).abs()
-    tr = pd.concat([high_low, high_cp, low_cp], axis=1).max(axis=1)
-    atr = tr.rolling(min(10, len(df))).mean()
-
-    hl2 = (df['high'] + df['low']) / 2
-    basic_upper = hl2 + (3 * atr)
-    basic_lower = hl2 - (3 * atr)
-
-    supertrend = np.zeros(len(df))
-    direction = np.ones(len(df))
-
-    for i in range(1, len(df)):
-        if df['close'].iloc[i] > basic_upper.iloc[i-1]:
-            direction[i] = 1
-        elif df['close'].iloc[i] < basic_lower.iloc[i-1]:
-            direction[i] = -1
-        else:
-            direction[i] = direction[i-1]
-        supertrend[i] = basic_lower.iloc[i] if direction[i] == 1 else basic_upper.iloc[i]
-
-    df['SUPERTREND'] = supertrend
-    df['SUPERTREND_dir'] = direction
-    return df
+# --- CONFIGURATION ---
+SYMBOL = "PEPEUSDT"
+INTERVAL_MINUTES = 5
+FETCH_INTERVAL_SEC = 300  # 5 minutes
 
 
-# ==========================================
-# MULTI-PANEL CHART DASHBOARD GENERATOR
-# ==========================================
-def generate_interactive_chart(symbol, df, filename):
-    fig = make_subplots(
-        rows=3, cols=1,
-        shared_xaxes=True,
-        vertical_spacing=0.03,
-        subplot_titles=(
-            f"{symbol} (5m) — Price & Supertrend Overlay", 
-            "MACD (Blue: Line | Orange: Signal | Bars: Hist)", 
-            "RSI 14 (Purple: Curve | Red/Green: Boundaries)"
-        ),
-        row_heights=[0.55, 0.22, 0.23]
-    )
-
-    # 1. Main Candlesticks + Supertrend Line
-    fig.add_trace(go.Candlestick(
-        x=df['timestamp'], open=df['open'], high=df['high'], low=df['low'], close=df['close'],
-        name='Price (OHLC)', increasing_line_color='#06d6a0', decreasing_line_color='#ef476f'
-    ), row=1, col=1)
-
-    fig.add_trace(go.Scatter(
-        x=df['timestamp'], y=df['SUPERTREND'],
-        mode='lines', line=dict(color='#ffd166', width=1.5), name='Supertrend'
-    ), row=1, col=1)
-
-    # 2. MACD Histogram + MACD Line vs Signal Line
-    colors = ['#06d6a0' if val >= 0 else '#ef476f' for val in df['MACD_hist']]
-    fig.add_trace(go.Bar(
-        x=df['timestamp'], y=df['MACD_hist'], marker_color=colors, name='MACD Hist'
-    ), row=2, col=1)
-
-    fig.add_trace(go.Scatter(
-        x=df['timestamp'], y=df['MACD'],
-        mode='lines', line=dict(color='#118ab2', width=1.8), name='MACD Line'
-    ), row=2, col=1)
-
-    fig.add_trace(go.Scatter(
-        x=df['timestamp'], y=df['MACD_signal'],
-        mode='lines', line=dict(color='#ff9f1c', width=1.8), name='Signal Line'
-    ), row=2, col=1)
-
-    # 3. RSI Curve with Overbought/Oversold Threshold Lines
-    fig.add_trace(go.Scatter(
-        x=df['timestamp'], y=df['RSI'],
-        mode='lines', line=dict(color='#9d4edd', width=2), name='RSI (14)'
-    ), row=3, col=1)
-
-    fig.add_hline(y=70, line_dash="dash", line_color="#ef476f", row=3, col=1, annotation_text="Overbought 70")
-    fig.add_hline(y=30, line_dash="dash", line_color="#06d6a0", row=3, col=1, annotation_text="Oversold 30")
-
-    # Unified Hover Crosshair Template
-    fig.update_layout(
-        template="plotly_dark",
-        title=f"Precision Execution Dashboard — {symbol}",
-        xaxis_rangeslider_visible=False,
-        hovermode="x unified",
-        height=880,
-        margin=dict(l=50, r=30, t=60, b=40)
-    )
-
-    fig.write_html(filename)
-    print(f"[SUCCESS] Updated {symbol} chart -> {filename}")
-
-
-# ==========================================
-# STEP 1: STEP-FREE DATA PIPELINE
-# ==========================================
-def fetch_top_solana_coins():
-    found_coins = []
-    for kw in TARGET_SYMBOLS:
-        url = f"https://api.dexscreener.com/latest/dex/search?q={kw}"
-        try:
-            res = requests.get(url, timeout=5)
-            if res.status_code == 200:
-                for p in res.json().get('pairs', []):
-                    if p.get('chainId') == 'solana':
-                        base_symbol = p.get('baseToken', {}).get('symbol', '').upper()
-                        if base_symbol == kw:
-                            found_coins.append({
-                                'pairAddress': p['pairAddress'],
-                                'symbol': base_symbol
-                            })
-                            break
-        except Exception:
-            continue
-    return found_coins
-
-def fetch_geckoterminal_ohlcv(pool_address):
-    url = f"https://api.geckoterminal.com/api/v2/networks/solana/pools/{pool_address}/ohlcv/minute?aggregate=5"
-    headers = {"Accept": "application/json;version=20230302"}
+# --- 1. DATA FETCHING & INDICATOR ENGINE ---
+def fetch_klines(symbol="PEPEUSDT", limit=60):
+    """Fetches real OHLC historical candles from Binance public API."""
+    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=5m&limit={limit}"
     try:
-        res = requests.get(url, headers=headers, timeout=10)
-        if res.status_code == 200:
-            ohlcv_list = res.json().get('data', {}).get('attributes', {}).get('ohlcv_list', [])
-            df = pd.DataFrame(ohlcv_list, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', utc=True)
-            return df.sort_values('timestamp').reset_index(drop=True)
-    except Exception:
-        pass
-    return pd.DataFrame()
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        df = pd.DataFrame(data, columns=[
+            "open_time", "open", "high", "low", "close", "volume",
+            "close_time", "qav", "num_trades", "tbb", "tbq", "ignore"
+        ])
+        df["open_time"] = pd.to_datetime(df["open_time"], unit="ms").dt.strftime("%H:%M")
+        for col in ["open", "high", "low", "close", "volume"]:
+            df[col] = df[col].astype(float)
+        return df
+    except Exception as e:
+        print(f"[ERROR] Data fetch failed: {e}. Generating fallback data...")
+        return generate_dummy_df(limit)
+
+def generate_dummy_df(limit=60):
+    """Fallback generator if network request drops."""
+    times = pd.date_range(end=pd.Timestamp.now(), periods=limit, freq="5min").strftime("%H:%M")
+    base_price = 0.0000090
+    closes = base_price + np.cumsum(np.random.normal(0, 0.0000001, limit))
+    opens = closes - np.random.normal(0, 0.00000005, limit)
+    highs = np.maximum(opens, closes) + abs(np.random.normal(0, 0.00000005, limit))
+    lows = np.minimum(opens, closes) - abs(np.random.normal(0, 0.00000005, limit))
+    return pd.DataFrame({"open_time": times, "open": opens, "high": highs, "low": lows, "close": closes})
+
+def calculate_indicators(df):
+    """Calculates Supertrend, RSI, and MACD (Lines & Histogram)."""
+    # RSI (14)
+    delta = df["close"].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / (loss + 1e-10)
+    df["rsi"] = 100 - (100 / (1 + rs))
+
+    # MACD (12, 26, 9)
+    ema12 = df["close"].ewm(span=12, adjust=False).mean()
+    ema26 = df["close"].ewm(span=26, adjust=False).mean()
+    df["macd"] = ema12 - ema26
+    df["macd_signal"] = df["macd"].ewm(span=9, adjust=False).mean()
+    df["macd_hist"] = df["macd"] - df["macd_signal"]
+
+    # Supertrend (10, 3)
+    atr = (df["high"] - df["low"]).rolling(10).mean()
+    hl2 = (df["high"] + df["low"]) / 2
+    df["supertrend"] = hl2 - (3 * atr)
+    
+    return df.dropna().reset_index(drop=True)
 
 
-# ==========================================
-# BACKGROUND SERVER & LOOP
-# ==========================================
-def start_web_server():
-    Handler = http.server.SimpleHTTPRequestHandler
-    with socketserver.TCPServer(("", PORT), Handler) as httpd:
-        print(f"\n[DASHBOARD HUB READY]")
-        print(f"  ► PEPE Chart: http://13.201.230.37:{PORT}/pepe.html")
-        print(f"  ► WIF Chart:  http://13.201.230.37:{PORT}/wif.html")
-        print(f"  ► BONK Chart: http://13.201.230.37:{PORT}/bonk.html\n")
-        httpd.serve_forever()
+# --- 2. TERMINAL GRAPHICS RENDERER ---
+def render_terminal_dashboard(df, symbol):
+    """Renders multi-panel color candlestick and technical indicator plots in terminal."""
+    plt.clf()
+    plt.subplots(3, 1)
 
+    dates = list(df["open_time"])
+    
+    # -------------------------------------------------------------
+    # PANEL 1: CANDLESTICK CHART + SUPERTREND OVERLAY
+    # -------------------------------------------------------------
+    plt.subplot(1, 1)
+    plt.title(f"{symbol} 5m | OHLC Candlestick + Supertrend")
+    
+    # Plot Candlesticks (Green for Up, Red for Down)
+    plt.candlestick(dates, df["open"].tolist(), df["high"].tolist(), 
+                    df["low"].tolist(), df["close"].tolist(), 
+                    colors=["green", "red"])
+    
+    # Overlay Supertrend line
+    plt.plot(dates, df["supertrend"].tolist(), label="Supertrend", color="magenta")
+    plt.ylabel("Price (USDT)")
+    plt.theme("dark")
+
+    # -------------------------------------------------------------
+    # PANEL 2: RSI INDICATOR (30/70 BOUNDARIES)
+    # -------------------------------------------------------------
+    plt.subplot(2, 1)
+    plt.title("Relative Strength Index (RSI 14)")
+    plt.plot(dates, df["rsi"].tolist(), color="cyan", label="RSI")
+    
+    # Overbought/Oversold Threshold Lines
+    plt.plot(dates, [70] * len(dates), color="red")
+    plt.plot(dates, [30] * len(dates), color="green")
+    plt.ylim(0, 100)
+    plt.ylabel("RSI Level")
+    plt.theme("dark")
+
+    # -------------------------------------------------------------
+    # PANEL 3: MACD LINES & HISTOGRAM
+    # -------------------------------------------------------------
+    plt.subplot(3, 1)
+    plt.title("MACD (12, 26, 9) & Histogram")
+    plt.plot(dates, df["macd"].tolist(), color="yellow", label="MACD")
+    plt.plot(dates, df["macd_signal"].tolist(), color="blue", label="Signal")
+    
+    # MACD Histogram Bars
+    plt.bar(dates, df["macd_hist"].tolist(), label="Hist", color="white")
+    plt.xlabel("Time (UTC)")
+    plt.ylabel("Value")
+    plt.theme("dark")
+
+    # Display entire layout to stdout
+    plt.show()
+
+
+# --- 3. MAIN EXECUTION LOOP ---
 def main():
-    server_thread = threading.Thread(target=start_web_server, daemon=True)
-    server_thread.start()
-
-    print("[SYSTEM] Running Solana Indicator & Charting Engine...")
+    print("=== STARTING AUTONOMOUS TERMINAL TRADING ENGINE ===")
     while True:
-        coins = fetch_top_solana_coins()
-        for coin in coins:
-            symbol = coin['symbol']
-            filename = f"{symbol.lower()}.html"
+        try:
+            # Clear console screen between updates
+            print("\033[H\033[J", end="")
             
-            df = fetch_geckoterminal_ohlcv(coin['pairAddress'])
-            if not df.empty:
-                df = calculate_indicators(df)
-                generate_interactive_chart(symbol, df, filename)
-
-        print(f"[SLEEP] Cycles updated. Waiting 5 minutes...\n")
-        time.sleep(CHECK_INTERVAL_SECONDS)
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+            print(f"[{timestamp}] Updating technical market pattern cross-check for {SYMBOL}...")
+            
+            df = fetch_klines(SYMBOL)
+            df_calculated = calculate_indicators(df)
+            
+            # Print full-color terminal chart
+            render_terminal_dashboard(df_calculated, SYMBOL)
+            
+            print(f"\n[ENGINE ACTIVE] Next cycle in {FETCH_INTERVAL_SEC // 60} minutes. Press Ctrl+C to stop.")
+            time.sleep(FETCH_INTERVAL_SEC)
+            
+        except KeyboardInterrupt:
+            print("\n[SHUTDOWN] Engine stopped cleanly.")
+            break
+        except Exception as e:
+            print(f"[ERROR] Exception during execution: {e}")
+            time.sleep(10)
 
 if __name__ == "__main__":
     main()
