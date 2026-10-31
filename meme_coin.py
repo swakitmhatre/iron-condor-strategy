@@ -81,7 +81,7 @@ def main():
     st_line = chart.create_line(name="supertrend", color="magenta", width=2)
     rsi_line = rsi_sub.create_line(name="rsi", color="cyan", width=2)
     macd_line = macd_sub.create_line(name="macd", color="yellow", width=2)
-    signal_line = macd_sub.create_line(name="Signal", color="blue", width=2)
+    signal_line = macd_sub.create_line(name="macd_signal", color="blue", width=2)
 
     # Fetch and assign initial data
     df = fetch_and_calculate_data()
