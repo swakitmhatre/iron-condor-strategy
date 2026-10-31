@@ -21,7 +21,7 @@ def main():
     signal = macd + np.random.uniform(-0.0000005, 0.0000005, 20)
 
     # Clear any previous terminal plot states
-    plt.clf()
+    #plt.clf()
     
     # Set terminal canvas dimensions (Width, Height in characters)
     plt.plotsize(110, 42)
