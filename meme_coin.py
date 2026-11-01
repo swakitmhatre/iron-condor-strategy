@@ -104,7 +104,7 @@ def fetch_dexscreener_coins():
         filtered_coins.append(p)
         
     # Apply secondary filters (g to m). If empty, relax criteria.
-    
+    print(filtered_coins)
     final_list = []
     for coin in filtered_coins:
         e = coin["_evaluated_strict"]
