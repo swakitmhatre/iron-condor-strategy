@@ -77,7 +77,7 @@ def fetch_dexscreener_coins():
             continue
 
         # Primary Strict Filters (a to f)
-        if not (30000 <= market_cap <= 2000000): continue
+        if (30000 <= market_cap <= 2000000): continue
         if liquidity_usd < 30000: continue
         if vol_24h < 50000: continue
         if vol_6h < 20000: continue
@@ -109,10 +109,10 @@ def fetch_dexscreener_coins():
     for coin in filtered_coins:
         e = coin["_evaluated_strict"]
         passes_secondary = (
-            e["chg_6h"] >= 5.0 and
+            e["chg_6h"] >= 1.0 and
             e["has_twitter"] and
             #e["chg_1h"] > -100 and e["chg_6h"] > -100 and e["chg_24h"] > -100 and
-            e["buy_sell_ratio"] >= 1.0
+            e["buy_sell_ratio"] >= 0.5
         )
         if passes_secondary:
             final_list.append(coin)
