@@ -87,15 +87,15 @@ class TradingEngine:
 
             # Strict Filtering criteria (1a to 1m)
             strict_pass = (
-                1 <= age_hours <= 24 and
+                1 <= age_hours <= 48 and
                 30000 <= market_cap <= 2000000 and
                 liquidity >= 30000 and
                 vol_24h >= 50000 and
                 vol_6h >= 20000 and
                 txns_24h >= 500 and
                 buys_24h >= 300 and
-                chg_6h >= 5 and
-                has_twitter 
+                chg_6h >= 5 
+               
                 
             )
             #chg_1h > 0 and chg_6h > 0 and chg_24h > 0 and
