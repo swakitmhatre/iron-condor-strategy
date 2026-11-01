@@ -96,6 +96,8 @@ def fetch_dexscreener_coins():
         # Passed primary filters (a-f)
         primary_passed.append(p)
 
+        print(primary_passed)
+
         # --- Secondary Filters (g to m) ---
         passes_secondary = (
             #chg_6h >= 5.0 and             # g: last 6 hrs growth min +5%
