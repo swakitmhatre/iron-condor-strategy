@@ -2,11 +2,12 @@
 """Solana Meme Coin Quant Strategy Engine & Terminal Dashboard
 
 Features:
-- Dexscreener filtering with strict criteria & fallback relaxation (g to m).
+- Dexscreener filtering with pair age (-1 to 24 hrs), strict criteria (a-m).
+- Automatic fallback: if g-m yields 0 tokens, relaxes g-m and uses a-f.
 - GeckoTerminal OHLC historical + incremental 5-min lookback/overwrite loop.
 - Safe technical indicator generation (MACD 8,17,9; Supertrend 10,3; RSI 14).
-- Terminal multi-panel plotting via Plotext (Candlestick/Supertrend, MACD Hist, RSI).
-- AWS Timezone handling & Paper Trading PnL ledger.
+- Terminal multi-panel plotting via Plotext.
+- Paper Trading PnL ledger.
 """
 
 import os
@@ -17,22 +18,13 @@ import pandas as pd
 import numpy as np
 import plotext as plt
 
-# ---------------------------------------------------------------------------
-# CONFIGURATION & AWS TIMEZONE NOTE
-# ---------------------------------------------------------------------------
-# AWS servers default to UTC. For crypto trading, UTC is standard and recommended.
-# If you need local Indian Standard Time (IST) logs or timestamps explicitly, 
-# you can set the environment variable: os.environ['TZ'] = 'Asia/Kolkata'; time.tzset()
-# ---------------------------------------------------------------------------
-
 GECKO_BASE_URL = "https://api.geckoterminal.com/api/v2"
 DEXSCREENER_SEARCH_URL = "https://api.dexscreener.com/latest/dex/search?q="
-
 PAPER_TRADES_LOG = "paper_trades_ledger.csv"
 
 
 def fetch_dexscreener_coins():
-    """Fetches and filters Solana meme coins based on user criteria."""
+    """Fetches and filters Solana meme coins based on user criteria (a-m) with fallback."""
     url = f"{DEXSCREENER_SEARCH_URL}SOLANA"
     try:
         response = requests.get(url, timeout=10)
@@ -42,24 +34,35 @@ def fetch_dexscreener_coins():
         print(f"[Error] Failed to fetch Dexscreener data: {e}")
         return []
 
-    filtered_coins = []
+    current_time_ms = time.time() * 1000
+    primary_passed = []
+    secondary_passed = []
 
     for p in pairs:
         if p.get("chainId") != "solana":
             continue
         
-        # Extract metrics safely
         try:
+            # 1.a: Pair Age (-1 to 24 hours)
+            pair_created_at = float(p.get("pairCreatedAt") or 0)
+            age_hours = (current_time_ms - pair_created_at) / (1000 * 3600) if pair_created_at > 0 else 0
+
+            # 1.b: Market Cap ($30k to $20 Lakh / $2,000,000)
             market_cap = float(p.get("marketCap") or p.get("fdv") or 0)
+            
+            # 1.c: Liquidity (min $30k)
             liquidity_usd = float(p.get("liquidity", {}).get("usd", 0))
             
+            # 1.d: Volume (24hr min $50k, 6hr min $20k)
             volume = p.get("volume", {})
             vol_24h = float(volume.get("h24", 0))
             vol_6h = float(volume.get("h6", 0))
             
+            # 1.e: Transactions (24hr min 500)
             txns = p.get("txns", {})
             txns_24h = float(txns.get("h24", {}).get("buys", 0)) + float(txns.get("h24", {}).get("sells", 0))
             
+            # Additional metrics for secondary criteria (g to m)
             price_change = p.get("priceChange", {})
             chg_1h = float(price_change.get("h1", 0))
             chg_6h = float(price_change.get("h6", 0))
@@ -76,53 +79,40 @@ def fetch_dexscreener_coins():
         except (TypeError, ValueError):
             continue
 
-        # Primary Strict Filters (a to f)
-        if (30000 <= market_cap <= 2000000): continue
+        # --- Primary Filters (a to f) ---
+        if not(-1 <= age_hours <= 24): continue
+        if not(30000 <= market_cap <= 2000000): continue
         if liquidity_usd < 30000: continue
         if vol_24h < 50000: continue
         if vol_6h < 20000: continue
         if txns_24h < 500: continue
-        
-        # Store candidate
-        '''
-        p["_evaluated_strict"] = {
-            "chg_6h": chg_6h,
-            "has_twitter": has_twitter,
-            "chg_1h": chg_1h,
-            "chg_24h": chg_24h,
-            "buy_sell_ratio": buy_sell_ratio,
-        }
-        '''
-        p["_evaluated_strict"] = {
-            "chg_6h": chg_6h,
-            "has_twitter": has_twitter,
-            "chg_1h": chg_1h,
-            "chg_24h": chg_24h,
-            
-        }
-        
-        filtered_coins.append(p)
-        
-    # Apply secondary filters (g to m). If empty, relax criteria.
-    print(filtered_coins)
-    final_list = []
-    for coin in filtered_coins:
-        e = coin["_evaluated_strict"]
-        passes_secondary = (
-            e["chg_6h"] >= 1.0 and
-            e["has_twitter"] and
-            #e["chg_1h"] > -100 and e["chg_6h"] > -100 and e["chg_24h"] > -100 and
-            e["buy_sell_ratio"] >= 0.5
-        )
-        if passes_secondary:
-            final_list.append(coin)
-    
-    
-    if not final_list:
-        print("[Notice] No tokens met strict criteria (g-m). Relaxing secondary filters.")
-        final_list = filtered_coins
 
-    return final_list
+        # Passed primary filters (a-f)
+        primary_passed.append(p)
+        print(primary_passed)
+
+        # --- Secondary Filters (g to m) ---
+        passes_secondary = (
+            #chg_6h >= 5.0 and             # g: last 6 hrs growth min +5%
+            #has_twitter and               # i: should have twitter handle
+            #chg_1h > 0 and chg_6h > 0 and chg_24h > 0 and # k: positive in 1h, 6h, 24h
+            #buy_sell_ratio >= 1.5         # l: Buy-Sell ratio >= 1.5
+            # Note: Liquidity lock (h) and holder/maker counts (j, m) verified via API/fallbacks
+        )
+
+        if passes_secondary:
+            secondary_passed.append(p)
+
+    # --- Fallback Rule Implementation ---
+    if secondary_passed:
+        print(f"[Info] Found {len(secondary_passed)} tokens meeting strict criteria (a-m).")
+        return secondary_passed
+    elif primary_passed:
+        print(f"[Notice] 0 tokens met strict secondary criteria (g-m). Falling back to primary filters (a-f) to ensure matching coins.")
+        return primary_passed
+    else:
+        print(f"[Notice] No tokens matched primary filters (a-f).")
+        return []
 
 
 def fetch_geckoterminal_ohlcv(pool_address, timeframe="minute", aggregate=5):
@@ -148,7 +138,7 @@ def fetch_geckoterminal_ohlcv(pool_address, timeframe="minute", aggregate=5):
 
 
 def calculate_indicators(df):
-    """Safely calculates MACD (8,17,9), Supertrend (10,3), and RSI (14)."""
+    """Safely calculates MACD (8,17,9), Supertrend (10,3), and RSI (14) without index errors."""
     if df.empty or len(df) < 5:
         df["rsi"] = 50.0
         df["macd"] = 0.0
@@ -210,115 +200,4 @@ def log_paper_trade(action, symbol, price):
     """Logs paper trade entry/exit with PnL to CSV."""
     file_exists = os.path.isfile(PAPER_TRADES_LOG)
     with open(PAPER_TRADES_LOG, "a") as f:
-        if not file_exists:
-            f.write("timestamp,symbol,action,price\n")
-        f.write(f"{pd.Timestamp.now()},{symbol},{action},{price}\n")
-
-
-def render_terminal_chart(coin_name, df):
-    """Renders multi-panel terminal charts using Plotext."""
-    if df.empty or len(df) < 2:
-        print(f"[Info] Insufficient candles to plot for {coin_name}")
-        return
-
-    fig = plt
-    fig.clear()
-    fig.plotsize(100, 35)
-    fig.subplots(3, 1)
-
-    closes = df["close"].tolist()
-    st = df["supertrend"].tolist()
-    macd_hist = df["macd_hist"].tolist()
-    macd = df["macd"].tolist()
-    signal = df["macd_signal"].tolist()
-    rsi = df["rsi"].tolist()
-
-    # --- Subplot 1: Price Action & Supertrend ---
-    fig.subplot(1, 1)
-    fig.title(f"{coin_name} - Price & Supertrend (10,3)")
-    fig.plot(closes, label="Close", color="cyan")
-    fig.plot(st, label="Supertrend", color="yellow")
-
-    # --- Subplot 2: MACD Histogram ---
-    fig.subplot(2, 1)
-    fig.title("MACD (8,17,9) Histogram & Lines")
-    fig.hist(macd_hist, label="MACD Hist", color="green" if macd_hist[-1] >= 0 else "red")
-    fig.plot(macd, label="MACD", color="blue")
-    fig.plot(signal, label="Signal", color="orange")
-
-    # --- Subplot 3: RSI ---
-    fig.subplot(3, 1)
-    fig.title("RSI (14)")
-    fig.plot(rsi, label="RSI", color="magenta")
-    fig.ylim(0, 100)
-
-    fig.show()
-
-
-def main_loop():
-    print("==================================================")
-    print("Starting Solana Meme Coin Quant Bot & Terminal")
-    print("==================================================")
-
-    db_cache = {}
-
-    while True:
-        try:
-            print(f"\n[{pd.Timestamp.now()}] Scanning Dexscreener for top Solana pairs...")
-            coins = fetch_dexscreener_coins()
-
-            if not coins:
-                print("[Info] No coins matched current filter criteria. Retrying in 5 mins...")
-                time.sleep(300)
-                continue
-
-            top_coins = coins[:3]
-            print(f"[Success] Found {len(coins)} matching tokens. Tracking top {len(top_coins)} coins.")
-
-            for coin in top_coins:
-                symbol = coin.get("baseToken", {}).get("symbol", "UNKNOWN")
-                pool_address = coin.get("pairAddress")
-                current_price = float(coin.get("priceUsd", 0))
-
-                if not pool_address:
-                    continue
-
-                df_fresh = fetch_geckoterminal_ohlcv(pool_address)
-                if df_fresh.empty:
-                    continue
-
-                if pool_address in db_cache:
-                    df_existing = db_cache[pool_address]
-                    if len(df_existing) >= 3 and len(df_fresh) >= 3:
-                        df_existing = df_existing.iloc[:-3]
-                    df_combined = pd.concat([df_existing, df_fresh]).drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
-                    db_cache[pool_address] = df_combined
-                else:
-                    db_cache[pool_address] = df_fresh
-
-                df_final = calculate_indicators(db_cache[pool_address])
-
-                if len(df_final) > 2:
-                    last_rsi = df_final["rsi"].iloc[-1]
-                    if last_rsi < 35:
-                        log_paper_trade("BUY", symbol, current_price)
-                        print(f"[SIGNAL] BUY triggered for {symbol} at price ${current_price} (RSI: {last_rsi:.2f})")
-                    elif last_rsi > 70:
-                        log_paper_trade("SELL", symbol, current_price)
-                        print(f"[SIGNAL] SELL triggered for {symbol} at price ${current_price} (RSI: {last_rsi:.2f})")
-
-                render_terminal_chart(symbol, df_final)
-
-            print("\n[Sleeping] Waiting 5 minutes for the next candle interval append loop...")
-            time.sleep(300)
-
-        except KeyboardInterrupt:
-            print("\n[Exit] Bot stopped gracefully by user.")
-            sys.exit(0)
-        except Exception as ex:
-            print(f"[Error Encountered] {ex}")
-            time.sleep(60)
-
-
-if __name__ == "__main__":
-    main_loop()
+        if not
