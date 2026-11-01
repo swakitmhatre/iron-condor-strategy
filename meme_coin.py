@@ -80,8 +80,8 @@ def fetch_dexscreener_coins():
             continue
 
         # --- Primary Filters (a to f) ---
-        if not(-1 <= age_hours <= 24): continue
-        if not(30000 <= market_cap <= 2000000): continue
+        if not (-1 <= age_hours <= 24): continue
+        if not (30000 <= market_cap <= 2000000): continue
         if liquidity_usd < 30000: continue
         if vol_24h < 50000: continue
         if vol_6h < 20000: continue
