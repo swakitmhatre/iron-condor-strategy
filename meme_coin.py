@@ -102,23 +102,21 @@ def fetch_dexscreener_coins():
         }
         
         filtered_coins.append(p)
-        final_list = []
-        final_list.append(p)
-
+        
     # Apply secondary filters (g to m). If empty, relax criteria.
-    '''
+    
     final_list = []
     for coin in filtered_coins:
         e = coin["_evaluated_strict"]
         passes_secondary = (
             e["chg_6h"] >= 5.0 and
             e["has_twitter"] and
-            e["chg_1h"] > 0 and e["chg_6h"] > 0 and e["chg_24h"] > 0 and
-            e["buy_sell_ratio"] >= 1.5
+            #e["chg_1h"] > -100 and e["chg_6h"] > -100 and e["chg_24h"] > -100 and
+            e["buy_sell_ratio"] >= 1.0
         )
         if passes_secondary:
             final_list.append(coin)
-    '''
+    
     
     if not final_list:
         print("[Notice] No tokens met strict criteria (g-m). Relaxing secondary filters.")
