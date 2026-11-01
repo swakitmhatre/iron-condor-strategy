@@ -94,7 +94,7 @@ class TradingEngine:
                 vol_6h >= 20000 and
                 txns_24h >= 500 and
                 buys_24h >= 300 and
-                chg_6h >= 5 
+                
                
                 
             )
