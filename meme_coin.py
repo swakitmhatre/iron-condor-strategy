@@ -16,11 +16,11 @@ INITIAL_CAPITAL = 10000.0  # USD
 MAX_ALLOWED_DRAWDOWN = 0.05  # 5% strict limit
 LEVERAGE = 1.0  # Low leverage setting
 
-
 def fetch_historical_data(symbol):
   """Generates or fetches clean OHLCV time series data for backtesting."""
   np.random.seed(42)  # Ensures deterministic reproducible backtest runs
-  dates = pd.date_range(start='2026-01-01', periods=500, freq='1H')
+  # Changed '1H' to '1h' to comply with Pandas frequency alias standards
+  dates = pd.date_range(start='2026-01-01', periods=500, freq='1h')
 
   # Base price simulation depending on symbol
   base_price = 0.001 if 'PEPE' in symbol else (2.5 if 'WIF' in symbol else 0.00002)
