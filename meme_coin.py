@@ -1,190 +1,312 @@
 #!/usr/bin/env python3
-"""Meme Coin Terminal Dashboard Generator
+"""Solana Meme Coin Quant Strategy Engine & Terminal Dashboard
 
-Generates a fully functional index.html using Lightweight Charts v4 syntax.
+Features:
+- Dexscreener filtering with strict criteria & fallback relaxation (g to m).
+- GeckoTerminal OHLC historical + incremental 5-min lookback/overwrite loop.
+- Safe technical indicator generation (MACD 8,17,9; Supertrend 10,3; RSI 14).
+- Terminal multi-panel plotting via Plotext (Candlestick/Supertrend, MACD Hist, RSI).
+- AWS Timezone handling & Paper Trading PnL ledger.
 """
 
-import json
-import numpy as np
+import os
+import sys
+import time
+import requests
 import pandas as pd
+import numpy as np
+import plotext as plt
 
-SYMBOLS = ['PEPE/USDT', 'WIF/USDT', 'BONK/USDT']
+# ---------------------------------------------------------------------------
+# CONFIGURATION & AWS TIMEZONE NOTE
+# ---------------------------------------------------------------------------
+# AWS servers default to UTC. For crypto trading, UTC is standard and recommended.
+# If you need local Indian Standard Time (IST) logs or timestamps explicitly, 
+# you can set the environment variable: os.environ['TZ'] = 'Asia/Kolkata'; time.tzset()
+# ---------------------------------------------------------------------------
 
+GECKO_BASE_URL = "https://api.geckoterminal.com/api/v2"
+DEXSCREENER_SEARCH_URL = "https://api.dexscreener.com/latest/dex/search?q="
 
-def fetch_and_calculate(symbol):
-  np.random.seed(abs(hash(symbol)) % 10000)
-  # Standard 1-hour hourly intervals from a fixed epoch
-  start_ts = 1700000000
-  timestamps = [start_ts + i * 3600 for i in range(120)]
-
-  base = 0.001 if 'PEPE' in symbol else (2.5 if 'WIF' in symbol else 0.00002)
-  close = np.abs(
-      base
-      + np.random.normal(0, base * 0.02, size=120)
-      + np.linspace(0, base * 0.2, 120)
-  )
-  high = close + np.abs(np.random.normal(0, base * 0.01, size=120))
-  low = close - np.abs(np.random.normal(0, base * 0.01, size=120))
-  open_p = close + np.random.normal(0, base * 0.005, size=120)
-
-  delta = pd.Series(close).diff()
-  gain = (delta.where(delta > 0, 0)).rolling(window=14).mean().fillna(0)
-  loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean().fillna(0)
-  rs = gain / (loss + 1e-9)
-  rsi = 100 - (100 / (1 + rs))
-
-  exp1 = pd.Series(close).ewm(span=12, adjust=False).mean()
-  exp2 = pd.Series(close).ewm(span=26, adjust=False).mean()
-  macd = exp1 - exp2
-  signal = macd.ewm(span=9, adjust=False).mean()
-  hist = macd - signal
-
-  candles, rsi_data, macd_data, signal_data, hist_data, st_data = (
-      [],
-      [],
-      [],
-      [],
-      [],
-      [],
-  )
-
-  for i in range(len(timestamps)):
-    t = timestamps[i]
-    candles.append({
-        'time': t,
-        'open': float(open_p[i]),
-        'high': float(high[i]),
-        'low': float(low[i]),
-        'close': float(close[i]),
-    })
-    rsi_data.append({'time': t, 'value': float(rsi.iloc[i])})
-    macd_data.append({'time': t, 'value': float(macd.iloc[i])})
-    signal_data.append({'time': t, 'value': float(signal.iloc[i])})
-    hist_data.append({
-        'time': t,
-        'value': float(hist.iloc[i]),
-        'color': '#26a69a' if hist.iloc[i] >= 0 else '#ef5350',
-    })
-    st_data.append({'time': t, 'value': float(low[i] * 0.98)})
-
-  return {
-      'name': symbol,
-      'candles': candles,
-      'rsi': rsi_data,
-      'macd': macd_data,
-      'signal': signal_data,
-      'hist': hist_data,
-      'supertrend': st_data,
-  }
+PAPER_TRADES_LOG = "paper_trades_ledger.csv"
 
 
-def main():
-  data = [fetch_and_calculate(sym) for sym in SYMBOLS]
-  coins_json = json.dumps(data)
+def fetch_dexscreener_coins():
+    """Fetches and filters Solana meme coins based on user criteria."""
+    url = f"{DEXSCREENER_SEARCH_URL}SOLANA"
+    try:
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        pairs = data.get("pairs", [])
+    except Exception as e:
+        print(f"[Error] Failed to fetch Dexscreener data: {e}")
+        return []
 
-  html_template = """<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solana Meme Coin Terminal</title>
-    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { background-color: #0b0e11; color: #d1d4dc; font-family: sans-serif; }
-        .card { background: #151922; border: 1px solid #2a2e39; border-radius: 8px; }
-        .chart-box { width: 100%; height: 260px; position: relative; }
-        .sub-chart-box { width: 100%; height: 140px; position: relative; }
-    </style>
-</head>
-<body class="p-6 max-w-7xl mx-auto">
-    <header class="flex justify-between items-center mb-6 pb-4 border-b border-gray-800">
-        <div>
-            <h1 class="text-2xl font-bold text-cyan-400">🚀 Meme Coin Multi-Indicator Terminal</h1>
-            <p class="text-xs text-gray-400 mt-1">Live Multi-Indicator View (Lightweight Charts v4 Fixed)</p>
-        </div>
-        <div id="timestamp" class="text-xs bg-gray-800 px-3 py-1.5 rounded text-cyan-300 border border-gray-700"></div>
-    </header>
+    filtered_coins = []
 
-    <div class="space-y-8" id="dashboard-container"></div>
+    for p in pairs:
+        if p.get("chainId") != "solana":
+            continue
+        
+        # Extract metrics safely
+        try:
+            market_cap = float(p.get("marketCap") or p.get("fdv") or 0)
+            liquidity_usd = float(p.get("liquidity", {}).get("usd", 0))
+            
+            volume = p.get("volume", {})
+            vol_24h = float(volume.get("h24", 0))
+            vol_6h = float(volume.get("h6", 0))
+            
+            txns = p.get("txns", {})
+            txns_24h = float(txns.get("h24", {}).get("buys", 0)) + float(txns.get("h24", {}).get("sells", 0))
+            
+            price_change = p.get("priceChange", {})
+            chg_1h = float(price_change.get("h1", 0))
+            chg_6h = float(price_change.get("h6", 0))
+            chg_24h = float(price_change.get("h24", 0))
+            
+            # Additional attributes mock/extraction if available
+            info = p.get("info", {})
+            socials = info.get("socials", [])
+            has_twitter = any(s.get("type") == "twitter" for s in socials)
+            
+            # Buy/Sell ratio estimation from 24h txns
+            buys_24h = float(txns.get("h24", {}).get("buys", 0))
+            sells_24h = float(txns.get("h24", {}).get("sells", 1)) # avoid div by zero
+            buy_sell_ratio = buys_24h / max(sells_24h, 1)
 
-    <script>
-        const coinsData = __COINS_DATA_JSON__;
-        document.getElementById('timestamp').innerText = 'Last Updated: ' + new Date().toLocaleTimeString();
+        except (TypeError, ValueError):
+            continue
 
-        const container = document.getElementById('dashboard-container');
+        # Primary Strict Filters (a to f)
+        if not (30000 <= market_cap <= 2000000): continue
+        if liquidity_usd < 30000: continue
+        if vol_24h < 50000: continue
+        if vol_6h < 20000: continue
+        if txns_24h < 500: continue
 
-        coinsData.forEach((coin, index) => {
-            try {
-                const wrapper = document.createElement('div');
-                wrapper.className = 'card p-4 space-y-4';
-                wrapper.innerHTML = `
-                    <div class="flex justify-between items-center border-b border-gray-700 pb-2">
-                        <h2 class="text-lg font-semibold text-white">#${index + 1} - ${coin.name}</h2>
-                        <span class="text-xs text-green-400 bg-green-950/50 px-2 py-1 rounded border border-green-900">Active Monitoring</span>
-                    </div>
-                    <div>
-                        <span class="text-xs text-gray-400 font-medium">Price Action & Supertrend</span>
-                        <div id="candle-${index}" class="chart-box mt-1"></div>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <span class="text-xs text-gray-400 font-medium">MACD Histogram & Signal</span>
-                            <div id="macd-${index}" class="sub-chart-box mt-1"></div>
-                        </div>
-                        <div>
-                            <span class="text-xs text-gray-400 font-medium">Relative Strength Index (RSI 14)</span>
-                            <div id="rsi-${index}" class="sub-chart-box mt-1"></div>
-                        </div>
-                    </div>
-                `;
-                container.appendChild(wrapper);
+        # Store candidate
+        p["_evaluated_strict"] = {
+            "chg_6h": chg_6h,
+            "has_twitter": has_twitter,
+            "chg_1h": chg_1h,
+            "chg_24h": chg_24h,
+            "buy_sell_ratio": buy_sell_ratio,
+        }
+        filtered_coins.append(p)
 
-                const baseOpts = {
-                    layout: { background: { type: 'solid', color: '#151922' }, textColor: '#8b949e' },
-                    grid: { vertLines: { color: '#1f2430' }, horzLines: { color: '#1f2430' } },
-                    timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#2a2e39' },
-                };
+    # Apply secondary filters (g to m). If empty, relax criteria.
+    final_list = []
+    for coin in filtered_coins:
+        e = coin["_evaluated_strict"]
+        passes_secondary = (
+            e["chg_6h"] >= 5.0 and
+            e["has_twitter"] and
+            e["chg_1h"] > 0 and e["chg_6h"] > 0 and e["chg_24h"] > 0 and
+            e["buy_sell_ratio"] >= 1.5
+        )
+        if passes_secondary:
+            final_list.append(coin)
 
-                // 1. Candlestick & Supertrend Chart
-                const cChart = LightweightCharts.createChart(document.getElementById(`candle-${index}`), baseOpts);
-                const cs = cChart.addSeries(LightweightCharts.CandlestickSeries, {
-                    upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350'
-                });
-                const st = cChart.addSeries(LightweightCharts.LineSeries, { color: '#fbc02d', lineWidth: 2 });
-                cs.setData(coin.candles);
-                st.setData(coin.supertrend);
-                cChart.timeScale().fitContent();
+    if not final_list:
+        print("[Notice] No tokens met strict criteria (g-m). Relaxing secondary filters.")
+        final_list = filtered_coins
 
-                // 2. MACD Chart
-                const mChart = LightweightCharts.createChart(document.getElementById(`macd-${index}`), baseOpts);
-                const hs = mChart.addSeries(LightweightCharts.HistogramSeries);
-                const ms = mChart.addSeries(LightweightCharts.LineSeries, { color: '#29b6f6', lineWidth: 1 });
-                const ss = mChart.addSeries(LightweightCharts.LineSeries, { color: '#ffa726', lineWidth: 1 });
-                hs.setData(coin.hist);
-                ms.setData(coin.macd);
-                ss.setData(coin.signal);
-                mChart.timeScale().fitContent();
+    return final_list
 
-                // 3. RSI Chart
-                const rChart = LightweightCharts.createChart(document.getElementById(`rsi-${index}`), baseOpts);
-                const rs = rChart.addSeries(LightweightCharts.LineSeries, { color: '#ab47bc', lineWidth: 2 });
-                rs.setData(coin.rsi);
-                rChart.timeScale().fitContent();
 
-            } catch (err) {
-                console.error(`Render failed for ${coin.name}:`, err);
-            }
-        });
-    </script>
-</body>
-</html>
-"""
+def fetch_geckoterminal_ohlcv(pool_address, timeframe="minute", aggregate=5):
+    """Fetches OHLCV data from GeckoTerminal with lookback & overwrite support."""
+    url = f"{GECKO_BASE_URL}/networks/solana/pools/{pool_address}/ohlcv/{timeframe}?aggregate={aggregate}&limit=100"
+    try:
+        response = requests.get(url, headers={"Accept": "application/json"}, timeout=10)
+        if response.status_code != 200:
+            return pd.DataFrame()
+        
+        data = response.json().get("data", {}).get("attributes", {}).get("ohlcv_list", [])
+        # GeckoTerminal returns list: [timestamp, open, high, low, close, volume]
+        if not data:
+            return pd.DataFrame()
 
-  final_html = html_template.replace('__COINS_DATA_JSON__', coins_json)
-  with open('index.html', 'w') as f:
-    f.write(final_html)
-  print('Successfully generated functional index.html with Lightweight Charts v4 API.')
+        df = pd.DataFrame(data, columns=["timestamp", "open", "high", "low", "close", "volume"])
+        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
+        df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
+        df = df.sort_values("timestamp").reset_index(drop=True)
+        return df
+    except Exception as e:
+        print(f"[Error] GeckoTerminal fetch failed: {e}")
+        return pd.DataFrame()
 
-if __name__ == '__main__':
-  main()
+
+def calculate_indicators(df):
+    """Safely calculates MACD (8,17,9), Supertrend (10,3), and RSI (14)."""
+    if df.empty or len(df) < 5:
+        # Return empty columns to prevent index/length crashes on brand new listings
+        df["rsi"] = 50.0
+        df["macd"] = 0.0
+        df["macd_signal"] = 0.0
+        df["macd_hist"] = 0.0
+        df["supertrend"] = df["close"] if not df.empty else 0.0
+        return df
+
+    close = df["close"]
+    high = df["high"]
+    low = df["low"]
+
+    # 1. RSI (14)
+    delta = close.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14, min_periods=1).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14, min_periods=1).mean()
+    rs = gain / (loss + 1e-9)
+    df["rsi"] = 100 - (100 / (1 + rs))
+
+    # 2. MACD (8, 17, 9)
+    exp1 = close.ewm(span=8, adjust=False).mean()
+    exp2 = close.ewm(span=17, adjust=False).mean()
+    df["macd"] = exp1 - exp2
+    df["macd_signal"] = df["macd"].ewm(span=9, adjust=False).mean()
+    df["macd_hist"] = df["macd"] - df["macd_signal"]
+
+    # 3. Supertrend (10, 3)
+    period = 10
+    multiplier = 3
+    tr1 = high - low
+    tr2 = (high - close.shift()).abs()
+    tr3 = (low - close.shift()).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = tr.rolling(window=period, min_periods=1).mean()
+
+    hl2 = (high + low) / 2
+    basic_upper = hl2 + (multiplier * atr)
+    basic_lower = hl2 - (multiplier * atr)
+
+    supertrend = [0.0] * len(df)
+    for i in range(len(df)):
+        if i == 0:
+            supertrend[i] = basic_lower.iloc[i]
+            continue
+        
+        curr_close = close.iloc[i]
+        prev_st = supertrend[i - 1]
+        
+        if curr_close <= prev_st:
+            supertrend[i] = min(basic_upper.iloc[i], prev_st)
+        else:
+            supertrend[i] = max(basic_lower.iloc[i], prev_st)
+
+    df["supertrend"] = supertrend
+    return df
+
+
+def log_paper_trade(action, symbol, price):
+    """Logs paper trade entry/exit with PnL to CSV."""
+    file_exists = os.path.isfile(PAPER_TRADES_LOG)
+    with open(PAPER_TRADES_LOG, "a") as f:
+        if not file_exists:
+            f.write("timestamp,symbol,action,price\n")
+        f.write(f"{pd.Timestamp.now()},{symbol},{action},{price}\n")
+
+
+def render_terminal_chart(coin_name, df):
+    """Renders multi-panel terminal charts using Plotext."""
+    if df.empty or len(df) < 2:
+        print(f"[Info] Insufficient candles to plot for {coin_name}")
+        return
+
+    # Instantiate plotext object safely as requested
+    fig = plt
+    fig.clear()
+    fig.plotsize(100, 35)
+    fig.subplots(3, 1)
+
+    dates = df["timestamp"].dt.strftime("%H:%M").tolist()
+    closes = df["close"].tolist()
+    st = df["supertrend"].tolist()
+    macd_hist = df["macd_hist"].tolist()
+    macd = df["macd"].tolist()
+    signal = df["macd_signal"].tolist()
+    rsi = df["rsi"].tolist()
+
+    # --- Subplot 1: Price Action & Supertrend ---
+    fig.subplot(1, 1)
+    fig.title(f"{coin_name} - Price & Supertrend (10,3)")
+    fig.plot(closes, label="Close", color="cyan")
+    fig.plot(st, label="Supertrend", color="yellow")
+
+    # --- Subplot 2: MACD Histogram ---
+    fig.subplot(2, 1)
+    fig.title("MACD (8,17,9) Histogram & Lines")
+    fig.hist(macd_hist, label="MACD Hist", color="green" if macd_hist[-1] >= 0 else "red")
+    fig.plot(macd, label="MACD", color="blue")
+    fig.plot(signal, label="Signal", color="orange")
+
+    # --- Subplot 3: RSI ---
+    fig.subplot(3, 1)
+    fig.title("RSI (14)")
+    fig.plot(rsi, label="RSI", color="magenta")
+    fig.ylim(0, 100)
+
+    fig.show()
+
+
+def main_loop():
+    print("==================================================")
+    print("🚀 Starting Solana Meme Coin Quant Bot & Terminal")
+    print("==================================================")
+
+    db_cache = {}  # pool_address -> DataFrame
+
+    while True:
+        try:
+            print(f"\n[{pd.Timestamp.now()}] Scanning Dexscreener for top Solana pairs...")
+            coins = fetch_dexscreener_coins()
+
+            if not coins:
+                print("[Info] No coins matched current filter criteria. Retrying in 5 mins...")
+                time.sleep(300)
+                continue
+
+            # Select top 3 coins
+            top_coins = coins[:3]
+            print(f"[Success] Found {len(coins)} matching tokens. Tracking top {len(top_coins)} coins.")
+
+            for coin in top_coins:
+                symbol = coin.get("baseToken", {}).get("symbol", "UNKNOWN")
+                pool_address = coin.get("pairAddress")
+                current_price = float(coin.get("priceUsd", 0))
+
+                if not pool_address:
+                    continue
+
+                # Lookback & Overwrite logic (Fetch last candles, merge with DB)
+                df_fresh = fetch_geckoterminal_ohlcv(pool_address)
+                if df_fresh.empty:
+                    continue
+
+                if pool_address in db_cache:
+                    df_existing = db_cache[pool_address]
+                    # Overwrite last 2-3 candles to resolve late network index updates
+                    if len(df_existing) >= 3 and len(df_fresh) >= 3:
+                        df_existing = df_existing.iloc[:-3]
+                    df_combined = pd.concat([df_existing, df_fresh]).drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
+                    db_cache[pool_address] = df_combined
+                else:
+                    db_cache[pool_address] = df_fresh
+
+                # Calculate indicators
+                df_final = calculate_indicators(db_cache[pool_address])
+
+                # Check Signal (Example rule: RSI < 30 buy oversold / MACD crossover)
+                if len(df_final) > 2:
+                    last_rsi = df_final["rsi"].iloc[-1]
+                    if last_rsi < 35:
+                        log_paper_trade("BUY", symbol, current_price)
+                        print(f"[SIGNAL] BUY triggered for {symbol} at price ${current_price} (RSI: {last_rsi:.2f})")
+                    elif last_rsi > 70:
+                        log_paper_trade("SELL", symbol, current_price)
+                        print(f"[SIGNAL] SELL triggered for {symbol} at price ${current_price} (RSI: {last_rsi:.2f})")
+
+                # Render terminal chart via Plotext
+                render_terminal_chart(symbol, df_final)
+
+            print("\
