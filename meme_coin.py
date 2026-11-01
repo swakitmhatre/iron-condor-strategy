@@ -102,6 +102,7 @@ def fetch_dexscreener_coins():
         }
         
         filtered_coins.append(p)
+        final_list = []
         final_list.append(p)
 
     # Apply secondary filters (g to m). If empty, relax criteria.
