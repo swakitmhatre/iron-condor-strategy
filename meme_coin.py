@@ -95,7 +95,7 @@ class TradingEngine:
                 txns_24h >= 500 and
                 buys_24h >= 300 and
                 chg_6h >= 5 and
-                has_twitter and
+                has_twitter 
                 
             )
             #chg_1h > 0 and chg_6h > 0 and chg_24h > 0 and
