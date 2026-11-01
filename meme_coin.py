@@ -82,8 +82,9 @@ def fetch_dexscreener_coins():
         if vol_24h < 50000: continue
         if vol_6h < 20000: continue
         if txns_24h < 500: continue
-
+        
         # Store candidate
+        '''
         p["_evaluated_strict"] = {
             "chg_6h": chg_6h,
             "has_twitter": has_twitter,
@@ -91,9 +92,20 @@ def fetch_dexscreener_coins():
             "chg_24h": chg_24h,
             "buy_sell_ratio": buy_sell_ratio,
         }
+        '''
+        p["_evaluated_strict"] = {
+            "chg_6h": chg_6h,
+            "has_twitter": has_twitter,
+            "chg_1h": chg_1h,
+            "chg_24h": chg_24h,
+            
+        }
+        
         filtered_coins.append(p)
+        final_list.append(p)
 
     # Apply secondary filters (g to m). If empty, relax criteria.
+    '''
     final_list = []
     for coin in filtered_coins:
         e = coin["_evaluated_strict"]
@@ -105,7 +117,8 @@ def fetch_dexscreener_coins():
         )
         if passes_secondary:
             final_list.append(coin)
-
+    '''
+    
     if not final_list:
         print("[Notice] No tokens met strict criteria (g-m). Relaxing secondary filters.")
         final_list = filtered_coins
