@@ -96,9 +96,10 @@ class TradingEngine:
                 buys_24h >= 300 and
                 chg_6h >= 5 and
                 has_twitter and
-                #chg_1h > 0 and chg_6h > 0 and chg_24h > 0 and
-                #buy_sell_ratio >= 1.2
+                
             )
+            #chg_1h > 0 and chg_6h > 0 and chg_24h > 0 and
+            #buy_sell_ratio >= 1.2
 
             if strict_pass:
                 filtered_coins.append({
