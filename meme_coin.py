@@ -3,6 +3,7 @@
 
 Features:
 - Dexscreener filtering with pair age (-1 to 24 hrs), strict criteria (a-m).
+- Safe dictionary and type extraction to prevent attribute errors.
 - Automatic fallback: if g-m yields 0 tokens, relaxes g-m and uses a-f.
 - GeckoTerminal OHLC historical + incremental 5-min lookback/overwrite loop.
 - Safe technical indicator generation (MACD 8,17,9; Supertrend 10,3; RSI 14).
@@ -39,7 +40,7 @@ def fetch_dexscreener_coins():
     secondary_passed = []
 
     for p in pairs:
-        if p.get("chainId") != "solana":
+        if not isinstance(p, dict) or p.get("chainId") != "solana":
             continue
         
         try:
@@ -51,30 +52,32 @@ def fetch_dexscreener_coins():
             market_cap = float(p.get("marketCap") or p.get("fdv") or 0)
             
             # 1.c: Liquidity (min $30k)
-            liquidity_usd = float(p.get("liquidity", {}).get("usd", 0))
+            liq_dict = p.get("liquidity") or {}
+            liquidity_usd = float(liq_dict.get("usd", 0) if isinstance(liq_dict, dict) else 0)
             
             # 1.d: Volume (24hr min $50k, 6hr min $20k)
-            volume = p.get("volume", {})
-            vol_24h = float(volume.get("h24", 0))
-            vol_6h = float(volume.get("h6", 0))
+            vol_dict = p.get("volume") or {}
+            vol_24h = float(vol_dict.get("h24", 0) if isinstance(vol_dict, dict) else 0)
+            vol_6h = float(vol_dict.get("h6", 0) if isinstance(vol_dict, dict) else 0)
             
             # 1.e: Transactions (24hr min 500)
-            txns = p.get("txns", {})
-            txns_24h = float(txns.get("h24", {}).get("buys", 0)) + float(txns.get("h24", {}).get("sells", 0))
+            txns_dict = p.get("txns") or {}
+            h24_txns = txns_dict.get("h24", {}) if isinstance(txns_dict, dict) else {}
+            buys_24h = float(h24_txns.get("buys", 0) if isinstance(h24_txns, dict) else 0)
+            sells_24h = float(h24_txns.get("sells", 0) if isinstance(h24_txns, dict) else 0)
+            txns_24h = buys_24h + sells_24h
             
             # Additional metrics for secondary criteria (g to m)
-            price_change = p.get("priceChange", {})
-            chg_1h = float(price_change.get("h1", 0))
-            chg_6h = float(price_change.get("h6", 0))
-            chg_24h = float(price_change.get("h24", {}).get("h24", 0))
+            pc_dict = p.get("priceChange") or {}
+            chg_1h = float(pc_dict.get("h1", 0) if isinstance(pc_dict, dict) else 0)
+            chg_6h = float(pc_dict.get("h6", 0) if isinstance(pc_dict, dict) else 0)
+            chg_24h = float(pc_dict.get("h24", 0) if isinstance(pc_dict, dict) else 0)
             
-            info = p.get("info", {})
-            socials = info.get("socials", [])
-            has_twitter = any(s.get("type") == "twitter" for s in socials)
+            info_dict = p.get("info") or {}
+            socials = info_dict.get("socials", []) if isinstance(info_dict, dict) else []
+            has_twitter = any(isinstance(s, dict) and s.get("type") == "twitter" for s in socials)
             
-            buys_24h = float(txns.get("h24", {}).get("buys", 0))
-            sells_24h = float(txns.get("h24", {}).get("sells", 1))
-            buy_sell_ratio = buys_24h / max(sells_24h, 1)
+            buy_sell_ratio = buys_24h / max(sells_24h, 1.0)
 
         except (TypeError, ValueError):
             continue
@@ -95,9 +98,7 @@ def fetch_dexscreener_coins():
 
         # Passed primary filters (a-f)
         primary_passed.append(p)
-
         print(primary_passed)
-
         # --- Secondary Filters (g to m) ---
         passes_secondary = (
             #chg_6h >= 5.0 and             # g: last 6 hrs growth min +5%
@@ -272,7 +273,8 @@ def main_loop():
             print(f"[Success] Found {len(coins)} matching tokens. Tracking top {len(top_coins)} coins.")
 
             for coin in top_coins:
-                symbol = coin.get("baseToken", {}).get("symbol", "UNKNOWN")
+                base_token = coin.get("baseToken", {}) if isinstance(coin, dict) else {}
+                symbol = base_token.get("symbol", "UNKNOWN") if isinstance(base_token, dict) else "UNKNOWN"
                 pool_address = coin.get("pairAddress")
                 current_price = float(coin.get("priceUsd", 0))
 
