@@ -11,17 +11,17 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 HTML_OUTPUT_PATH = os.path.join(BASE_DIR, "index.html")
 TRADE_LOG_PATH = os.path.join(BASE_DIR, "paper_trades_log.csv")
 
-# AWS defaults to UTC. We define IST for local logging & analysis.
 UTC = timezone.utc
 IST = zoneinfo.ZoneInfo("Asia/Kolkata")
 
-# Ensure directory exists
 os.makedirs(BASE_DIR, exist_ok=True)
+
+EXCLUDED_SYMBOLS = {'SOL', 'USDC', 'USDT', 'WBTC', 'ETH', 'JUP', 'RAY', 'BSOL', 'JITOSOL', 'MSOL', 'USDS', 'PYTH'}
 
 class TradingEngine:
     def __init__(self):
         self.active_coins = []
-        self.db_candles = {}  # pool_address -> DataFrame of candles
+        self.db_candles = {}  # pool_address -> DataFrame
         self.paper_trades = []
         self.load_trade_log()
 
@@ -33,28 +33,54 @@ class TradingEngine:
             except Exception:
                 self.paper_trades = []
 
-    def save_trade_log(self):
-        if self.paper_trades:
-            pd.DataFrame(self.paper_trades).to_csv(TRADE_LOG_PATH, index=False)
-
     def fetch_dexscreener_solana_coins(self):
-        """Fetches Solana pairs from Dexscreener and filters them."""
-        print(f"\n[{datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')} IST] Scanning Dexscreener for Solana Meme Coins...")
-        url = "https://api.dexscreener.com/latest/dex/search?q=SOL"
+        """Fetches Solana pairs using multi-source Dexscreener endpoints for maximum coverage."""
+        print(f"\n[{datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')} IST] Scanning Dexscreener via Multiple Endpoints...")
+        
+        seen_pools = set()
+        pairs = []
+
+        # 1. Fetch via Latest Token Profiles (captures newly created/trending tokens)
         try:
-            response = requests.get(url, timeout=10)
-            data = response.json()
-            pairs = data.get('pairs', [])
+            res = requests.get("https://api.dexscreener.com/token-profiles/latest/v1", timeout=10)
+            profiles = res.json()
+            token_addresses = [p['tokenAddress'] for p in profiles if p.get('chainId') == 'solana'][:50]
+            
+            if token_addresses:
+                tokens_url = f"https://api.dexscreener.com/latest/dex/tokens/{','.join(token_addresses)}"
+                t_res = requests.get(tokens_url, timeout=10)
+                for p in t_res.json().get('pairs', []):
+                    if p.get('chainId') == 'solana':
+                        p_addr = p.get('pairAddress')
+                        if p_addr and p_addr not in seen_pools:
+                            seen_pools.add(p_addr)
+                            pairs.append(p)
         except Exception as e:
-            print(f"Error connecting to Dexscreener API: {e}")
-            return []
+            print(f"Error fetching token profiles: {e}")
+
+        # 2. Search fallback queries to widen net
+        search_queries = ['SOL', 'PEPE', 'DOGE', 'AI', 'CAT', 'MOON', 'CHAD', 'SOLANA', 'INU']
+        for q in search_queries:
+            url = f"https://api.dexscreener.com/latest/dex/search?q={q}"
+            try:
+                response = requests.get(url, timeout=10)
+                for p in response.json().get('pairs', []):
+                    if p.get('chainId') == 'solana':
+                        p_addr = p.get('pairAddress')
+                        if p_addr and p_addr not in seen_pools:
+                            seen_pools.add(p_addr)
+                            pairs.append(p)
+            except Exception as e:
+                print(f"Error querying Dexscreener search '{q}': {e}")
+
+        print(f"Total unique Solana pairs gathered for filtering: {len(pairs)}")
 
         filtered_coins = []
         for p in pairs:
-            if p.get('chainId') != 'solana':
+            symbol = str(p.get('baseToken', {}).get('symbol', '')).upper()
+            if symbol in EXCLUDED_SYMBOLS:
                 continue
-            
-            # Extract metrics safely
+
             try:
                 market_cap = float(p.get('marketCap', 0) or p.get('fdv', 0) or 0)
                 liquidity = float(p.get('liquidity', {}).get('usd', 0) or 0)
@@ -64,47 +90,31 @@ class TradingEngine:
                 txns = p.get('txns', {})
                 txns_24h = int(txns.get('h24', {}).get('buys', 0) + txns.get('h24', {}).get('sells', 0))
                 buys_24h = int(txns.get('h24', {}).get('buys', 0))
-                sells_24h = int(txns.get('h24', {}).get('sells', 0))
                 
-                price_change = p.get('priceChange', {})
-                chg_1h = float(price_change.get('h1', 0) or 0)
-                chg_6h = float(price_change.get('h6', 0) or 0)
-                chg_24h = float(price_change.get('h24', 0) or 0)
-                
-                # Pair age estimation via pairCreatedAt if available
                 created_at = p.get('pairCreatedAt', 0)
                 if created_at:
                     age_hours = (time.time() - (created_at / 1000)) / 3600
                 else:
-                    age_hours = 12  # default assumption if missing
+                    age_hours = 12  # default fallback if missing timestamp
 
-                socials = p.get('info', {}).get('socials', [])
-                has_twitter = any(s.get('type') == 'twitter' for s in socials)
-                
-                buy_sell_ratio = (buys_24h / max(sells_24h, 1))
             except Exception:
                 continue
 
-            # Strict Filtering criteria (1a to 1m)
-            strict_pass = (
+            # Your relaxed filter criteria
+            pass_criteria = (
                 1 <= age_hours <= 48 and
                 30000 <= market_cap <= 2000000 and
                 liquidity >= 30000 and
                 vol_24h >= 50000 and
                 vol_6h >= 20000 and
                 txns_24h >= 500 and
-                buys_24h >= 300 
-                
-               
-                
+                buys_24h >= 300
             )
-            #chg_1h > 0 and chg_6h > 0 and chg_24h > 0 and
-            #buy_sell_ratio >= 1.2
 
-            if strict_pass:
+            if pass_criteria:
                 filtered_coins.append({
                     'name': p.get('baseToken', {}).get('name', 'UNKNOWN'),
-                    'symbol': p.get('baseToken', {}).get('symbol', 'MEME'),
+                    'symbol': symbol,
                     'address': p.get('baseToken', {}).get('address'),
                     'pool_address': p.get('pairAddress'),
                     'liquidity': liquidity,
@@ -112,20 +122,20 @@ class TradingEngine:
                     'score': vol_24h + liquidity
                 })
 
-        # Fallback mechanism: if strict criteria yield no coins, loosen g-m criteria
+        # Absolute fallback if strict filters still return nothing in this cycle
         if not filtered_coins:
-            print("No coins met strict criteria (g to m). Loosening filter parameters...")
+            print("No coins met the criteria. Applying emergency fallback to capture top active micro-caps...")
             for p in pairs:
-                if p.get('chainId') != 'solana':
+                symbol = str(p.get('baseToken', {}).get('symbol', '')).upper()
+                if symbol in EXCLUDED_SYMBOLS:
                     continue
                 try:
-                    market_cap = float(p.get('marketCap', 0) or p.get('fdv', 0) or 0)
                     liquidity = float(p.get('liquidity', {}).get('usd', 0) or 0)
                     vol_24h = float(p.get('volume', {}).get('h24', 0) or 0)
-                    if 30000 <= market_cap <= 2000000 and liquidity >= 30000 and vol_24h >= 20000:
+                    if liquidity >= 10000 and vol_24h >= 10000:
                         filtered_coins.append({
                             'name': p.get('baseToken', {}).get('name', 'UNKNOWN'),
-                            'symbol': p.get('baseToken', {}).get('symbol', 'MEME'),
+                            'symbol': symbol,
                             'address': p.get('baseToken', {}).get('address'),
                             'pool_address': p.get('pairAddress'),
                             'liquidity': liquidity,
@@ -135,23 +145,20 @@ class TradingEngine:
                 except Exception:
                     continue
 
-        # Sort by liquidity/volume score and pick top 3
         filtered_coins = sorted(filtered_coins, key=lambda x: x['score'], reverse=True)
         top_3 = filtered_coins[:3]
-        print(f"Selected Top Coins for Dashboard: {[c['symbol'] for c in top_3]}")
+        print(f"Selected Top Coins for Dashboard: {[(c['symbol'], c['pool_address']) for c in top_3]}")
         return top_3
 
     def fetch_geckoterminal_ohlcv(self, pool_address, is_genesis=False):
-        """Fetches OHLCV data from GeckoTerminal API with smart lookback overwrite."""
         url = f"https://api.geckoterminal.com/api/v2/networks/solana/pools/{pool_address}/ohlcv/minute?aggregate=5&limit=100"
         try:
             res = requests.get(url, headers={"Accept": "application/json"}, timeout=10)
             data = res.json()
             raw_candles = data.get('data', {}).get('attributes', {}).get('ohlcv_list', [])
             
-            # Format: [timestamp, open, high, low, close, volume]
             formatted = []
-            for c in reversed(raw_candles):  # Chronological order
+            for c in reversed(raw_candles):
                 formatted.append({
                     'time': int(c[0]),
                     'open': float(c[1]),
@@ -167,7 +174,6 @@ class TradingEngine:
 
             if not is_genesis and pool_address in self.db_candles:
                 existing_df = self.db_candles[pool_address]
-                # Look-back overwrite: replace last 3 candles to account for late indexer updates
                 existing_df = existing_df.iloc[:-3] if len(existing_df) >= 3 else existing_df
                 df = pd.concat([existing_df, df]).drop_duplicates(subset=['time']).reset_index(drop=True)
 
@@ -178,9 +184,7 @@ class TradingEngine:
             return self.db_candles.get(pool_address, pd.DataFrame())
 
     def calculate_indicators(self, df):
-        """Safely computes MACD(8,17,9), Supertrend(10,3), and RSI(14) without failing on short arrays."""
         if len(df) < 20:
-            # Fallback dummy values if candlestick count is too low
             df['macd'] = 0.0
             df['signal'] = 0.0
             df['hist'] = 0.0
@@ -239,7 +243,6 @@ class TradingEngine:
         return df
 
     def generate_html_dashboard(self, top_coins):
-        """Generates a single HTML file containing charts and indicators for top 3 meme coins."""
         charts_js_data = []
 
         for idx, coin in enumerate(top_coins):
@@ -300,8 +303,11 @@ class TradingEngine:
 
     <script>
         const coinsData = {charts_js_data};
-
         const container = document.getElementById('dashboard-container');
+
+        if (coinsData.length === 0) {{
+            container.innerHTML = '<div class="card p-6 text-center text-gray-400">No meme coins currently match the filter criteria. Waiting for next cycle...</div>';
+        }}
 
         coinsData.forEach((coin, index) => {{
             const wrapper = document.createElement('div');
@@ -332,14 +338,12 @@ class TradingEngine:
                 timeScale: {{ timeVisible: true, borderColor: '#2a2e39' }},
             }};
 
-            // 1. Candlestick + Supertrend
             const cChart = LightweightCharts.createChart(document.getElementById(`candle-${{index}}`), chartOpts);
             const candleSeries = cChart.addCandlestickSeries();
             const stSeries = cChart.addLineSeries({{ color: '#fbc02d', lineWidth: 2 }});
             candleSeries.setData(coin.candles);
             stSeries.setData(coin.supertrend);
 
-            // 2. MACD
             const mChart = LightweightCharts.createChart(document.getElementById(`macd-${{index}}`), chartOpts);
             const macdSeries = mChart.addLineSeries({{ color: '#29b6f6', lineWidth: 1 }});
             const signalSeries = mChart.addLineSeries({{ color: '#ffa726', lineWidth: 1 }});
@@ -348,7 +352,6 @@ class TradingEngine:
             signalSeries.setData(coin.signal);
             histSeries.setData(coin.hist);
 
-            // 3. RSI
             const rChart = LightweightCharts.createChart(document.getElementById(`rsi-${{index}}`), chartOpts);
             const rsiSeries = rChart.addLineSeries({{ color: '#ab47bc', lineWidth: 2 }});
             rsiSeries.setData(coin.rsi);
@@ -369,13 +372,13 @@ class TradingEngine:
                 if top_3:
                     for coin in top_3:
                         pool = coin['pool_address']
-                        # Perform genesis fetch or 5-min incremental append with lookback overwrite
                         is_genesis = pool not in self.db_candles
                         self.fetch_geckoterminal_ohlcv(pool, is_genesis=is_genesis)
                     
                     self.generate_html_dashboard(top_3)
                 else:
-                    print("No matching coins found in this cycle. Retrying in 5 minutes...")
+                    print("No matching meme coins found in this cycle. Retrying in 5 minutes...")
+                    self.generate_html_dashboard([])
             except Exception as e:
                 print(f"Error in main execution loop: {e}")
 
