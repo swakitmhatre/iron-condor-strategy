@@ -38,7 +38,7 @@ def fetch_dexscreener_coins():
     current_time_ms = time.time() * 1000
     primary_passed = []
     secondary_passed = []
-    print("solana paires fetched----->",pairs)
+    #print("solana paires fetched----->",pairs)
     for p in pairs:
         if not isinstance(p, dict) or p.get("chainId") != "solana":
             continue
@@ -47,6 +47,7 @@ def fetch_dexscreener_coins():
             # 1.a: Pair Age (-1 to 24 hours)
             pair_created_at = float(p.get("pairCreatedAt") or 0)
             age_hours = (current_time_ms - pair_created_at) / (1000 * 3600) if pair_created_at > 0 else 0
+            print("############age_hours############",age_hours)
 
             # 1.b: Market Cap ($30k to $2,000,000 / $20 Lakh)
             market_cap = float(p.get("marketCap") or p.get("fdv") or 0)
@@ -98,7 +99,7 @@ def fetch_dexscreener_coins():
 
         # Passed primary filters (a-f)
         primary_passed.append(p)
-        print(primary_passed)
+        print("primary passed-------->",primary_passed)
         # --- Secondary Filters (g to m) ---
         passes_secondary = (
             #chg_6h >= 5.0 and             # g: last 6 hrs growth min +5%
