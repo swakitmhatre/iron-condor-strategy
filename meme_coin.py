@@ -222,10 +222,15 @@ def log_paper_trade(action, symbol, price):
 
 
 def render_terminal_chart(coin_name, df):
-    """Renders clean, individual sequential charts for terminal display."""
+    """Renders multi-panel terminal charts using Plotext v6 figure object and official histogram API."""
     if df.empty or len(df) < 2:
         print(f"[Info] Insufficient candles to plot for {coin_name}")
         return
+
+    fig = plt.figure
+    fig.clear()
+    fig.plot_size(100, 35)
+    fig.subplots(3, 1)
 
     closes = df["close"].tolist()
     st = df["supertrend"].tolist()
@@ -233,50 +238,59 @@ def render_terminal_chart(coin_name, df):
     macd = df["macd"].tolist()
     signal = df["macd_signal"].tolist()
     rsi = df["rsi"].tolist()
-    x_indices = list(range(len(closes)))
 
     print("\n" + "="*50)
     print(f">>> TERMINAL CHARTS FOR: {coin_name} [{pd.Timestamp.now()}]")
     print("="*50)
 
-    # --- Chart 1: Price Action & Supertrend ---
-    fig1 = plt.figure
-    fig1.clear()
-    fig1.plot_size(90, 15)
-    fig1.title(f"{coin_name} - Price vs Supertrend (10,3)")
-    fig1.plot(x_indices, closes, label="Close Price", color="cyan")
-    fig1.plot(x_indices, st, label="Supertrend", color="yellow")
-    fig1.show()
+    # --- Subplot 1: Price Action & Supertrend ---
+    fig.subplot(1, 1)
+    fig.title(f"{coin_name} - Price & Supertrend (10,3)")
+    sig_close = fig.signal(closes)
+    sig_close.lines()
+    fig.draw(sig_close)
+    fig.label("Close Price", 0)
+
+    sig_st = fig.signal(st)
+    sig_st.lines()
+    fig.draw(sig_st)
+    fig.label("Supertrend", 1)
 
     print("-" * 50)
-
-    # --- Chart 2: MACD Histogram & Lines ---
-    fig2 = plt.figure
-    fig2.clear()
-    fig2.plot_size(90, 12)
-    fig2.title(f"{coin_name} - MACD (8,17,9)")
+    # --- Subplot 2: MACD Histogram & Lines ---
+    fig.subplot(2, 1)
+    fig.title("MACD (8,17,9) Histogram & Lines")
     
+    # Official Plotext v6 histogram handling using hist_data
     if len(macd_hist) > 0:
-        binx, biny = hist_data(macd_hist, bins=8)
-        fig2.axes(False)
-        bar_sig = fig2.bar(binx, biny, orientation="vertical", marker="brick", width=0.6)
-        fig2.draw(bar_sig)
-        
-    fig2.plot(x_indices, macd, label="MACD", color="blue")
-    fig2.plot(x_indices, signal, label="Signal", color="orange")
-    fig2.show()
+        binx, biny = hist_data(macd_hist, bins=10)
+        fig.axes(False)
+        fig.ruler("x").lim(0, max(biny) * 1.01 if max(biny) > 0 else 1)
+        bar_sig = fig.bar(binx, biny, orientation="horizontal", marker="brick", width=0, lines=True)
+        fig.draw(bar_sig)
+    
+    sig_macd = fig.signal(macd)
+    sig_macd.lines()
+    fig.draw(sig_macd)
+    fig.label("MACD Line", 1)
+
+    sig_sig = fig.signal(signal)
+    sig_sig.lines()
+    fig.draw(sig_sig)
+    fig.label("Signal Line", 2)
 
     print("-" * 50)
-
-    # --- Chart 3: RSI (14) ---
-    fig3 = plt.figure
-    fig3.clear()
-    fig3.plot_size(90, 10)
-    fig3.title(f"{coin_name} - RSI (14)")
-    fig3.plot(x_indices, rsi, label="RSI", color="magenta")
-    fig3.ylim(0, 100)
-    fig3.show()
+    # --- Subplot 3: RSI ---
+    fig.subplot(3, 1)
+    fig.title("RSI (14)")
+    sig_rsi = fig.signal(rsi)
+    sig_rsi.lines()
+    fig.draw(sig_rsi)
+    fig.ruler("y").lim(0, 100)
+    fig.label("RSI Value", 0)
     print("="*50 + "\n")
+
+    fig.show()
 
 
 def main_loop():
