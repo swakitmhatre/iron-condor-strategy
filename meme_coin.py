@@ -16,7 +16,8 @@ import time
 import requests
 import pandas as pd
 import numpy as np
-import plotext as plt
+import plotext as fig
+plt = fig.figure
 
 GECKO_BASE_URL = "https://api.geckoterminal.com/api/v2"
 PAPER_TRADES_LOG = "paper_trades_ledger.csv"
@@ -226,7 +227,7 @@ def render_terminal_chart(coin_name, df):
         print(f"[Info] Insufficient candles to plot for {coin_name}")
         return
 
-    plt.clf()
+    plt.clear()
     plt.plot_size(100, 35)
     plt.subplots(3, 1)
 
