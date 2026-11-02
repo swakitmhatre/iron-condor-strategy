@@ -280,10 +280,12 @@ def render_terminal_chart(coin_name, df):
     fig.label("Signal Line", 2)
 
     # --- Subplot 3: RSI ---
-    fig.subplots(3, 1)
+    fig.subplot(3, 1)
     fig.title("RSI (14)")
-    fig.draw(rsi)
-    fig.ylim(0, 100)
+    sig_rsi = fig.signal(rsi)
+    sig_rsi.lines()
+    fig.draw(sig_rsi)
+    fig.ruler("y").lim(0, 100)
     fig.label("RSI Value", 0)
 
     fig.show()
