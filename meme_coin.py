@@ -42,6 +42,17 @@ def fetch_geckoterminal_pools():
     print(f"[Info] Fetched a total of {len(all_pools)} pools across multiple pages for filtering.")
     return all_pools
 
+def fetch_geckoterminal_ohlcv_with_retry(pool_address, timeframe="minute", aggregate=5, retries=2):
+    """Fetches OHLCV data with built-in retry logic for newly minted pools."""
+    for attempt in range(retries):
+        df = fetch_geckoterminal_ohlcv(pool_address, timeframe, aggregate)
+        if not df.empty and len(df) >= 5:
+            return df
+        if attempt < retries - 1:
+            time.sleep(3) # Wait 3 seconds for node sync
+    return pd.DataFrame()
+    
+
 def filter_meme_coins(pools):
     """Filters Solana meme coins based on user criteria (a-m) with 1-24 hr age check & fallback."""
     current_time_ms = time.time() * 1000
@@ -351,16 +362,21 @@ def main_loop():
             for coin in top_coins:
                 symbol = coin.get("baseToken", {}).get("symbol", "UNKNOWN")
                 pool_address = coin.get("pairAddress")
-                current_price = float(coin.get("priceUsd", 0))
+                #current_price = float(coin.get("priceUsd", 0))
+                current_price = float(coin.get("priceUsd") or df_final["close"].iloc[-1] or 0)
+                if current_price <= 0:
+                    print(f"[Warning] Invalid price ($0.0) for {symbol}. Bypassing signal check.")
+                    continue
 
                 if not pool_address:
                     continue
 
-                df_fresh = fetch_geckoterminal_ohlcv(pool_address)
-                if df_fresh.empty:
-                    print(f"[Info] Empty OHLCV data returned for {symbol} ({pool_address})")
+                #df_fresh = fetch_geckoterminal_ohlcv(pool_address)
+                df_fresh = fetch_geckoterminal_ohlcv_with_retry(pool_address)
+                if df_fresh.empty or len(df_fresh) < 5:
+                    print(f"[Warning] Skipping {symbol}: Insufficient or empty OHLCV candles returned.")
                     continue
-
+                    
                 if pool_address in db_cache:
                     df_existing = db_cache[pool_address]
                     if len(df_existing) >= 3 and len(df_fresh) >= 3:
