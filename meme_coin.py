@@ -17,6 +17,7 @@ import requests
 import pandas as pd
 import numpy as np
 import plotext as plt
+from plotext._methods.bar import hist_data
 
 GECKO_BASE_URL = "https://api.geckoterminal.com/api/v2"
 PAPER_TRADES_LOG = "paper_trades_ledger.csv"
