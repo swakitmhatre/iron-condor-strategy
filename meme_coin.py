@@ -2,9 +2,8 @@
 """Solana Meme Coin Quant Strategy Engine & Terminal Dashboard
 
 Features:
-- Dexscreener filtering with pair age (-1 to 24 hrs), strict criteria (a-m).
-- Safe dictionary and type extraction to prevent attribute errors.
-- Automatic fallback: if g-m yields 0 tokens, relaxes g-m and uses a-f.
+- GeckoTerminal New Pools endpoint for true Solana meme coins (age -1 to 24 hrs).
+- Strict criteria filtering (a-m) with automatic fallback (g-m relaxation).
 - GeckoTerminal OHLC historical + incremental 5-min lookback/overwrite loop.
 - Safe technical indicator generation (MACD 8,17,9; Supertrend 10,3; RSI 14).
 - Terminal multi-panel plotting via Plotext.
@@ -20,105 +19,109 @@ import numpy as np
 import plotext as plt
 
 GECKO_BASE_URL = "https://api.geckoterminal.com/api/v2"
-DEXSCREENER_SEARCH_URL = "https://api.dexscreener.com/latest/dex/search?q="
 PAPER_TRADES_LOG = "paper_trades_ledger.csv"
 
 
-def fetch_dexscreener_coins():
-    """Fetches and filters Solana meme coins based on user criteria (a-m) with fallback."""
-    url = f"{DEXSCREENER_SEARCH_URL}SOLANA"
+def fetch_geckoterminal_new_pools():
+    """Fetches newly created Solana pools from GeckoTerminal (guaranteeing age <= 24 hrs)."""
+    url = f"{GECKO_BASE_URL}/networks/solana/new_pools?page=1"
     try:
-        response = requests.get(url, timeout=10)
-        data = response.json()
-        pairs = data.get("pairs", [])
+        response = requests.get(url, headers={"Accept": "application/json"}, timeout=10)
+        if response.status_code != 200:
+            print(f"[Error] GeckoTerminal returned status code {response.status_code}")
+            return []
+        
+        data = response.json().get("data", [])
+        return data
     except Exception as e:
-        print(f"[Error] Failed to fetch Dexscreener data: {e}")
+        print(f"[Error] Failed to fetch GeckoTerminal new pools: {e}")
         return []
 
+
+def filter_meme_coins(pools):
+    """Filters Solana meme coins based on user criteria (a-m) with fallback."""
     current_time_ms = time.time() * 1000
     primary_passed = []
     secondary_passed = []
-    #print("solana paires fetched----->",pairs)
-    for p in pairs:
-        if p.get("chainId") == "solana":
-            print("solana meme coin-->",p)
-        if p.get("chainId") != "solana":
+
+    for pool in pools:
+        if not isinstance(pool, dict):
             continue
+        
+        attrs = pool.get("attributes", {})
         
         try:
             # 1.a: Pair Age (-1 to 24 hours)
-            pair_created_at = float(p.get("pairCreatedAt") or 0)
-            if pair_created_at == 0:
+            # GeckoTerminal provides pool_created_at string/timestamp
+            created_at_str = attrs.get("pool_created_at")
+            if not created_at_str:
                 continue
-                
-            age_hours = (current_time_ms - pair_created_at) / (1000 * 3600)
             
-            # Must be created within the last 24 hours
-            if not (0 <= age_hours <= 24):
+            # Convert ISO string or timestamp to milliseconds
+            pair_created_at = pd.to_datetime(created_at_str).timestamp() * 1000
+            age_hours = (current_time_ms - pair_created_at) / (1000 * 3600)
+
+            if not (-1 <= age_hours <= 24):
                 continue
-            print("############age_hours############",age_hours)
 
             # 1.b: Market Cap ($30k to $2,000,000 / $20 Lakh)
-            market_cap = float(p.get("marketCap") or p.get("fdv") or 0)
+            market_cap = float(attrs.get("market_cap_usd") or attrs.get("fdv_usd") or 0)
             
             # 1.c: Liquidity (min $30k)
-            liq_dict = p.get("liquidity") or {}
-            liquidity_usd = float(liq_dict.get("usd", 0) if isinstance(liq_dict, dict) else 0)
+            liquidity_usd = float(attrs.get("reserve_in_usd", 0))
             
             # 1.d: Volume (24hr min $50k, 6hr min $20k)
-            vol_dict = p.get("volume") or {}
-            vol_24h = float(vol_dict.get("h24", 0) if isinstance(vol_dict, dict) else 0)
-            vol_6h = float(vol_dict.get("h6", 0) if isinstance(vol_dict, dict) else 0)
+            volume_dict = attrs.get("volume_usd", {})
+            vol_24h = float(volume_dict.get("h24", 0) if isinstance(volume_dict, dict) else 0)
+            vol_6h = float(volume_dict.get("h6", 0) if isinstance(volume_dict, dict) else 0)
             
             # 1.e: Transactions (24hr min 500)
-            txns_dict = p.get("txns") or {}
+            txns_dict = attrs.get("transactions", {})
             h24_txns = txns_dict.get("h24", {}) if isinstance(txns_dict, dict) else {}
-            buys_24h = float(h24_txns.get("buys", 0) if isinstance(h24_txns, dict) else 0)
-            sells_24h = float(h24_txns.get("sells", 0) if isinstance(h24_txns, dict) else 0)
+            buys_24h = int(h24_txns.get("buys", 0) if isinstance(h24_txns, dict) else 0)
+            sells_24h = int(h24_txns.get("sells", 0) if isinstance(h24_txns, dict) else 0)
             txns_24h = buys_24h + sells_24h
             
             # Additional metrics for secondary criteria (g to m)
-            pc_dict = p.get("priceChange") or {}
-            chg_1h = float(pc_dict.get("h1", 0) if isinstance(pc_dict, dict) else 0)
-            chg_6h = float(pc_dict.get("h6", 0) if isinstance(pc_dict, dict) else 0)
-            chg_24h = float(pc_dict.get("h24", 0) if isinstance(pc_dict, dict) else 0)
+            price_change_dict = attrs.get("price_change_percentage", {})
+            chg_1h = float(price_change_dict.get("h1", 0) if isinstance(price_change_dict, dict) else 0)
+            chg_6h = float(price_change_dict.get("h6", 0) if isinstance(price_change_dict, dict) else 0)
+            chg_24h = float(price_change_dict.get("h24", 0) if isinstance(price_change_dict, dict) else 0)
             
-            info_dict = p.get("info") or {}
-            socials = info_dict.get("socials", []) if isinstance(info_dict, dict) else []
-            has_twitter = any(isinstance(s, dict) and s.get("type") == "twitter" for s in socials)
-            
-            buy_sell_ratio = buys_24h / max(sells_24h, 1.0)
+            buy_sell_ratio = buys_24h / max(sells_24h, 1)
+
+            # Map fields to structure expected in main loop
+            pool_address = attrs.get("address")
+            name = attrs.get("name", "UNKNOWN")
 
         except (TypeError, ValueError):
             continue
 
         # --- Primary Filters (a to f) ---
-        if age_hours < -1 or age_hours > 24:
-            continue
-        if market_cap < 30000 or market_cap > 2000000:
-            continue
-        if liquidity_usd < 30000:
-            continue
-        if vol_24h < 50000:
-            continue
-        if vol_6h < 20000:
-            continue
-        if txns_24h < 500:
-            continue
+        if not (30000 <= market_cap <= 2000000): continue
+        if liquidity_usd < 30000: continue
+        if vol_24h < 50000: continue
+        if vol_6h < 20000: continue
+        if txns_24h < 500: continue
 
-        # Passed primary filters (a-f)
-        primary_passed.append(p)
-        print("primary passed-------->",primary_passed)
+        # Format custom object for main execution
+        formatted_coin = {
+            "pairAddress": pool_address,
+            "baseToken": {"symbol": name.split("/")[0] if "/" in name else name},
+            "priceUsd": attrs.get("price_to_usd", 0)
+        }
+
+        primary_passed.append(formatted_coin)
+
         # --- Secondary Filters (g to m) ---
         passes_secondary = (
-            #chg_6h >= 5.0 and             # g: last 6 hrs growth min +5%
-            #has_twitter and               # i: should have twitter handle
-            #chg_1h > 0 and chg_6h > 0 and chg_24h > 0 and # k: positive in 1h, 6h, 24h
-            #buy_sell_ratio >= 1.5         # l: Buy-Sell ratio >= 1.5
+            chg_6h >= 5.0 and             # g: last 6 hrs growth min +5%
+            chg_1h > 0 and chg_6h > 0 and chg_24h > 0 and # k: positive in 1h, 6h, 24h
+            buy_sell_ratio >= 1.5         # l: Buy-Sell ratio >= 1.5
         )
 
         if passes_secondary:
-            secondary_passed.append(p)
+            secondary_passed.append(formatted_coin)
 
     # --- Fallback Rule Implementation ---
     if secondary_passed:
@@ -128,7 +131,6 @@ def fetch_dexscreener_coins():
         print(f"[Notice] 0 tokens met strict secondary criteria (g-m). Falling back to primary filters (a-f).")
         return primary_passed
     else:
-        print(f"[Notice] No tokens matched primary filters (a-f).")
         return []
 
 
@@ -150,7 +152,7 @@ def fetch_geckoterminal_ohlcv(pool_address, timeframe="minute", aggregate=5):
         df = df.sort_values("timestamp").reset_index(drop=True)
         return df
     except Exception as e:
-        print(f"[Error] GeckoTerminal fetch failed: {e}")
+        print(f"[Error] GeckoTerminal OHLC fetch failed: {e}")
         return pd.DataFrame()
 
 
@@ -264,18 +266,19 @@ def render_terminal_chart(coin_name, df):
 
 def main_loop():
     print("==================================================")
-    print("Starting Solana Meme Coin Quant Bot & Terminal")
+    print("Starting Solana New Meme Coin Bot & Terminal")
     print("==================================================")
 
     db_cache = {}
 
     while True:
         try:
-            print(f"\n[{pd.Timestamp.now()}] Scanning Dexscreener for Solana pairs...")
-            coins = fetch_dexscreener_coins()
+            print(f"\n[{pd.Timestamp.now()}] Fetching new Solana pools from GeckoTerminal...")
+            pools = fetch_geckoterminal_new_pools()
+            coins = filter_meme_coins(pools)
 
             if not coins:
-                print("[Info] No coins matched current filter criteria. Retrying in 5 mins...")
+                print("[Info] No new pools matched current filter criteria. Retrying in 5 mins...")
                 time.sleep(300)
                 continue
 
@@ -283,8 +286,7 @@ def main_loop():
             print(f"[Success] Found {len(coins)} matching tokens. Tracking top {len(top_coins)} coins.")
 
             for coin in top_coins:
-                base_token = coin.get("baseToken", {}) if isinstance(coin, dict) else {}
-                symbol = base_token.get("symbol", "UNKNOWN") if isinstance(base_token, dict) else "UNKNOWN"
+                symbol = coin.get("baseToken", {}).get("symbol", "UNKNOWN")
                 pool_address = coin.get("pairAddress")
                 current_price = float(coin.get("priceUsd", 0))
 
@@ -293,6 +295,7 @@ def main_loop():
 
                 df_fresh = fetch_geckoterminal_ohlcv(pool_address)
                 if df_fresh.empty:
+                    print(f"[Info] Empty OHLCV data returned for {symbol} ({pool_address})")
                     continue
 
                 if pool_address in db_cache:
