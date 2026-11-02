@@ -244,7 +244,7 @@ def render_terminal_chart(coin_name, df):
         print(f"[Info] Insufficient candles to plot for {coin_name}")
         return
 
-    fig = plt
+    fig = plt.figure
     fig.clear()
     fig.plotsize(100, 35)
     fig.subplots(3, 1)
