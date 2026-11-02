@@ -2,11 +2,11 @@
 """Solana Meme Coin Quant Strategy Engine & Terminal Dashboard
 
 Features:
-- GeckoTerminal general pools endpoint targeting Solana pairs strictly 1 to 24 hours old.
-- Strict criteria filtering (a-m) with automatic fallback (g-m relaxation).
-- GeckoTerminal OHLC historical + incremental 5-min lookback/overwrite loop.
+- Multi-page GeckoTerminal fetching for robust coin discovery (1-24 hrs old).
+- Strict primary filtering with expanded mid-cap allowance.
+- OHLCV historical retry logic & empty candle bypass.
 - Safe technical indicator generation (MACD 8,17,9; Supertrend 10,3; RSI 14).
-- Terminal multi-panel plotting via Plotext v6 standard object-oriented API.
+- Terminal multi-panel plotting via Plotext.
 - Paper Trading PnL ledger.
 """
 
@@ -17,7 +17,6 @@ import requests
 import pandas as pd
 import numpy as np
 import plotext as plt
-from plotext._methods.bar import hist_data
 
 GECKO_BASE_URL = "https://api.geckoterminal.com/api/v2"
 PAPER_TRADES_LOG = "paper_trades_ledger.csv"
@@ -26,7 +25,6 @@ PAPER_TRADES_LOG = "paper_trades_ledger.csv"
 def fetch_geckoterminal_pools():
     """Fetches multiple pages of Solana pools from GeckoTerminal to ensure a robust sample size."""
     all_pools = []
-    # Fetching pages 1, 2, and 3 to capture ~60-90 recent pools
     for page in range(1, 4):
         url = f"{GECKO_BASE_URL}/networks/solana/pools?page={page}"
         try:
@@ -35,26 +33,16 @@ def fetch_geckoterminal_pools():
                 data = response.json().get("data", [])
                 if data:
                     all_pools.extend(data)
-            time.sleep(0.2) # Gentle rate-limiting delay between pages
+            time.sleep(0.2)
         except Exception as e:
             print(f"[Error] Failed to fetch page {page}: {e}")
             
     print(f"[Info] Fetched a total of {len(all_pools)} pools across multiple pages for filtering.")
     return all_pools
 
-def fetch_geckoterminal_ohlcv_with_retry(pool_address, timeframe="minute", aggregate=5, retries=2):
-    """Fetches OHLCV data with built-in retry logic for newly minted pools."""
-    for attempt in range(retries):
-        df = fetch_geckoterminal_ohlcv(pool_address, timeframe, aggregate)
-        if not df.empty and len(df) >= 5:
-            return df
-        if attempt < retries - 1:
-            time.sleep(3) # Wait 3 seconds for node sync
-    return pd.DataFrame()
-    
 
 def filter_meme_coins(pools):
-    """Filters Solana meme coins based on user criteria (a-m) with 1-24 hr age check & fallback."""
+    """Filters Solana meme coins based on user criteria with 1-24 hr age check."""
     current_time_ms = time.time() * 1000
     primary_passed = []
     secondary_passed = []
@@ -67,39 +55,29 @@ def filter_meme_coins(pools):
         attrs = pool.get("attributes", {})
         
         try:
-            # 1.a: Pair Age (Strictly 1 to 24 hours)
             created_at_str = attrs.get("pool_created_at")
             if not created_at_str:
                 continue
             
-            pair_created_at = pd.to_datetime(created_at_str).timestamp() * 1000
+            pair_created_at = pd.to_datetime(created_at_str, utc=True).timestamp() * 1000
             age_hours = (current_time_ms - pair_created_at) / (1000 * 3600)
 
-            # Debug print to observe filtering bounds
-            if 1.0 <= age_hours <= 24.0:
-                print(f"[Age OK] {attrs.get('name')} | Age: {age_hours:.2f} hrs")
-            else:
+            if not (1.0 <= age_hours <= 24.0):
                 continue
 
-            # 1.b: Market Cap (Adjusted upper bound to $15M to capture active 1-24h momentum coins)
             market_cap = float(attrs.get("market_cap_usd") or attrs.get("fdv_usd") or 0)
-            
-            # 1.c: Liquidity (min $30k)
             liquidity_usd = float(attrs.get("reserve_in_usd", 0))
             
-            # 1.d: Volume (24hr min $50k, 6hr min $20k)
             volume_dict = attrs.get("volume_usd", {})
             vol_24h = float(volume_dict.get("h24", 0) if isinstance(volume_dict, dict) else 0)
             vol_6h = float(volume_dict.get("h6", 0) if isinstance(volume_dict, dict) else 0)
             
-            # 1.e: Transactions (24hr min 500)
             txns_dict = attrs.get("transactions", {})
             h24_txns = txns_dict.get("h24", {}) if isinstance(txns_dict, dict) else {}
             buys_24h = int(h24_txns.get("buys", 0) if isinstance(h24_txns, dict) else 0)
             sells_24h = int(h24_txns.get("sells", 0) if isinstance(h24_txns, dict) else 0)
             txns_24h = buys_24h + sells_24h
             
-            # Additional metrics for secondary criteria (g to m)
             price_change_dict = attrs.get("price_change_percentage", {})
             chg_1h = float(price_change_dict.get("h1", 0) if isinstance(price_change_dict, dict) else 0)
             chg_6h = float(price_change_dict.get("h6", 0) if isinstance(price_change_dict, dict) else 0)
@@ -113,25 +91,12 @@ def filter_meme_coins(pools):
         except (TypeError, ValueError):
             continue
 
-        # --- Primary Filters (a to f) ---
-        # Expanded market cap upper limit to $15M to match actual active pool metrics seen in logs
-        if not (30000 <= market_cap <= 2000000): 
-            print(f"  [Rejected MCap] {name} | MCap: ${market_cap:,.2f}")
-            continue
-        if liquidity_usd < 30000: 
-            print(f"  [Rejected Liq] {name} | Liq: ${liquidity_usd:,.2f}")
-            continue
-        if vol_24h < 50000: 
-            print(f"  [Rejected Vol24] {name} | Vol24: ${vol_24h:,.2f}")
-            continue
-        if vol_6h < 20000: 
-            print(f"  [Rejected Vol6] {name} | Vol6: ${vol_6h:,.2f}")
-            continue
-        if txns_24h < 500: 
-            print(f"  [Rejected Txns] {name} | Txns: {txns_24h}")
-            continue
-
-        print(f"  [PASSED PRIMARY] {name} | MCap: ${market_cap:,.2f} | Liq: ${liquidity_usd:,.2f} | Vol24: ${vol_24h:,.2f}")
+        # --- Primary Filters (Expanded MCap up to $50M to catch strong runners) ---
+        if not (30000 <= market_cap <= 50000000): continue
+        if liquidity_usd < 30000: continue
+        if vol_24h < 50000: continue
+        if vol_6h < 20000: continue
+        if txns_24h < 500: continue
 
         formatted_coin = {
             "pairAddress": pool_address,
@@ -141,11 +106,10 @@ def filter_meme_coins(pools):
 
         primary_passed.append(formatted_coin)
 
-        # --- Secondary Filters (g to m) ---
         passes_secondary = (
-            chg_6h >= 5.0 and             # g: last 6 hrs growth min +5%
-            chg_1h > 0 and chg_6h > 0 and chg_24h > 0 and # k: positive in 1h, 6h, 24h
-            buy_sell_ratio >= 1.5         # l: Buy-Sell ratio >= 1.5
+            chg_6h >= 5.0 and 
+            chg_1h > 0 and chg_6h > 0 and chg_24h > 0 and 
+            buy_sell_ratio >= 1.5
         )
 
         if passes_secondary:
@@ -153,25 +117,16 @@ def filter_meme_coins(pools):
 
     print(f"--- Filter Pass Complete: {len(primary_passed)} primary passed, {len(secondary_passed)} secondary passed ---")
 
-    # --- Fallback Rule Implementation ---
     if secondary_passed:
-        print(f"[Info] Found {len(secondary_passed)} tokens meeting strict criteria (a-m).")
         return secondary_passed
     elif primary_passed:
-        print(f"[Notice] 0 tokens met strict secondary criteria (g-m). Falling back to primary filters (a-f).")
         return primary_passed
     else:
         return []
 
-        
-
-      
-
-   
-
 
 def fetch_geckoterminal_ohlcv(pool_address, timeframe="minute", aggregate=5):
-    """Fetches OHLCV data from GeckoTerminal with lookback & overwrite support."""
+    """Fetches OHLCV data from GeckoTerminal."""
     url = f"{GECKO_BASE_URL}/networks/solana/pools/{pool_address}/ohlcv/{timeframe}?aggregate={aggregate}&limit=100"
     try:
         response = requests.get(url, headers={"Accept": "application/json"}, timeout=10)
@@ -188,12 +143,22 @@ def fetch_geckoterminal_ohlcv(pool_address, timeframe="minute", aggregate=5):
         df = df.sort_values("timestamp").reset_index(drop=True)
         return df
     except Exception as e:
-        print(f"[Error] GeckoTerminal OHLC fetch failed: {e}")
         return pd.DataFrame()
 
 
+def fetch_geckoterminal_ohlcv_with_retry(pool_address, timeframe="minute", aggregate=5, retries=2):
+    """Fetches OHLCV data with retry logic for newly minted pools."""
+    for attempt in range(retries):
+        df = fetch_geckoterminal_ohlcv(pool_address, timeframe, aggregate)
+        if not df.empty and len(df) >= 5:
+            return df
+        if attempt < retries - 1:
+            time.sleep(3)
+    return pd.DataFrame()
+
+
 def calculate_indicators(df):
-    """Safely calculates MACD (8,17,9), Supertrend (10,3), and RSI (14) without index errors."""
+    """Safely calculates MACD, Supertrend, and RSI."""
     if df.empty or len(df) < 5:
         df["rsi"] = 50.0
         df["macd"] = 0.0
@@ -206,21 +171,18 @@ def calculate_indicators(df):
     high = df["high"]
     low = df["low"]
 
-    # 1. RSI (14)
     delta = close.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14, min_periods=1).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14, min_periods=1).mean()
     rs = gain / (loss + 1e-9)
     df["rsi"] = 100 - (100 / (1 + rs))
 
-    # 2. MACD (8, 17, 9)
     exp1 = close.ewm(span=8, adjust=False).mean()
     exp2 = close.ewm(span=17, adjust=False).mean()
     df["macd"] = exp1 - exp2
     df["macd_signal"] = df["macd"].ewm(span=9, adjust=False).mean()
     df["macd_hist"] = df["macd"] - df["macd_signal"]
 
-    # 3. Supertrend (10, 3)
     period = 10
     multiplier = 3
     tr1 = high - low
@@ -252,7 +214,7 @@ def calculate_indicators(df):
 
 
 def log_paper_trade(action, symbol, price):
-    """Logs paper trade entry/exit with PnL to CSV."""
+    """Logs paper trade to CSV."""
     file_exists = os.path.isfile(PAPER_TRADES_LOG)
     with open(PAPER_TRADES_LOG, "a") as f:
         if not file_exists:
@@ -261,9 +223,8 @@ def log_paper_trade(action, symbol, price):
 
 
 def render_terminal_chart(coin_name, df):
-    """Renders clean individual terminal charts using Plotext v6 syntax standards."""
+    """Renders clean individual terminal charts."""
     if df.empty or len(df) < 2:
-        print(f"[Info] Insufficient candles to plot for {coin_name}")
         return
 
     closes = df["close"].tolist()
@@ -278,63 +239,34 @@ def render_terminal_chart(coin_name, df):
     print(f">>> TERMINAL CHARTS FOR: {coin_name} [{pd.Timestamp.now()}]")
     print("="*50)
 
-    # --- Chart 1: Price Action & Supertrend ---
-    fig1 = plt.figure
-    fig1.clear()
-    fig1.plot_size(90, 14)
-    fig1.title(f"{coin_name} - Price vs Supertrend (10,3)")
-    
-    sig_close = fig1.signal(x_indices, closes)
-    sig_close.lines()
-    fig1.draw(sig_close)
-    fig1.label("Close Price", 0)
+    # Chart 1: Price & Supertrend
+    plt.clf()
+    plt.plotsize(90, 14)
+    plt.title(f"{coin_name} - Price vs Supertrend (10,3)")
+    plt.plot(x_indices, closes, label="Close Price")
+    plt.plot(x_indices, st, label="Supertrend")
+    plt.show()
 
-    sig_st = fig1.signal(x_indices, st)
-    sig_st.lines()
-    fig1.draw(sig_st)
-    fig1.label("Supertrend", 1)
-    
-    fig1.show()
     print("-" * 50)
 
-    # --- Chart 2: MACD Histogram & Lines ---
-    fig2 = plt.figure
-    fig2.clear()
-    fig2.plot_size(90, 12)
-    fig2.title(f"{coin_name} - MACD (8,17,9)")
-    
-    if len(macd_hist) > 0:
-        binx, biny = hist_data(macd_hist, bins=8)
-        fig2.axes(False)
-        bar_sig = fig2.bar(binx, biny, orientation="vertical", marker="brick", width=0.6)
-        fig2.draw(bar_sig)
+    # Chart 2: MACD Histogram & Lines
+    plt.clf()
+    plt.plotsize(90, 12)
+    plt.title(f"{coin_name} - MACD (8,17,9)")
+    plt.bar(x_indices, macd_hist, label="MACD Hist")
+    plt.plot(x_indices, macd, label="MACD Line")
+    plt.plot(x_indices, signal, label="Signal Line")
+    plt.show()
 
-    sig_macd = fig2.signal(x_indices, macd)
-    sig_macd.lines()
-    fig2.draw(sig_macd)
-    fig2.label("MACD Line", 1)
-
-    sig_sig = fig2.signal(x_indices, signal)
-    sig_sig.lines()
-    fig2.draw(sig_sig)
-    fig2.label("Signal Line", 2)
-
-    fig2.show()
     print("-" * 50)
 
-    # --- Chart 3: RSI (14) ---
-    fig3 = plt.figure
-    fig3.clear()
-    fig3.plot_size(90, 10)
-    fig3.title(f"{coin_name} - RSI (14)")
-    
-    sig_rsi = fig3.signal(x_indices, rsi)
-    sig_rsi.lines()
-    fig3.draw(sig_rsi)
-    fig3.label("RSI Value", 0)
-    
-    fig3.ruler("y").lim(0, 100)
-    fig3.show()
+    # Chart 3: RSI
+    plt.clf()
+    plt.plotsize(90, 10)
+    plt.title(f"{coin_name} - RSI (14)")
+    plt.plot(x_indices, rsi, label="RSI")
+    plt.ylim(0, 100)
+    plt.show()
     print("="*50 + "\n")
 
 
@@ -352,7 +284,7 @@ def main_loop():
             coins = filter_meme_coins(pools)
 
             if not coins:
-                print("[Info] No pools matched criteria (1-24 hrs age). Retrying in 5 mins...")
+                print("[Info] No pools matched criteria. Retrying in 5 mins...")
                 time.sleep(300)
                 continue
 
@@ -362,21 +294,16 @@ def main_loop():
             for coin in top_coins:
                 symbol = coin.get("baseToken", {}).get("symbol", "UNKNOWN")
                 pool_address = coin.get("pairAddress")
-                #current_price = float(coin.get("priceUsd", 0))
-                current_price = float(coin.get("priceUsd") or df_final["close"].iloc[-1] or 0)
-                if current_price <= 0:
-                    print(f"[Warning] Invalid price ($0.0) for {symbol}. Bypassing signal check.")
-                    continue
 
                 if not pool_address:
                     continue
 
-                #df_fresh = fetch_geckoterminal_ohlcv(pool_address)
+                # Fetch OHLCV data with retry & skip check
                 df_fresh = fetch_geckoterminal_ohlcv_with_retry(pool_address)
                 if df_fresh.empty or len(df_fresh) < 5:
                     print(f"[Warning] Skipping {symbol}: Insufficient or empty OHLCV candles returned.")
                     continue
-                    
+
                 if pool_address in db_cache:
                     df_existing = db_cache[pool_address]
                     if len(df_existing) >= 3 and len(df_fresh) >= 3:
@@ -388,6 +315,11 @@ def main_loop():
 
                 df_final = calculate_indicators(db_cache[pool_address])
 
+                current_price = float(coin.get("priceUsd") or df_final["close"].iloc[-1] or 0)
+                if current_price <= 0:
+                    print(f"[Warning] Invalid price ($0.0) for {symbol}. Bypassing signal check.")
+                    continue
+
                 if len(df_final) > 2:
                     last_rsi = df_final["rsi"].iloc[-1]
                     if last_rsi < 35:
@@ -397,7 +329,7 @@ def main_loop():
                         log_paper_trade("SELL", symbol, current_price)
                         print(f"[SIGNAL] SELL triggered for {symbol} at price ${current_price} (RSI: {last_rsi:.2f})")
 
-                #render_terminal_chart(symbol, df_final)
+                render_terminal_chart(symbol, df_final)
 
             print("\n[Sleeping] Waiting 5 minutes for the next candle interval append loop...")
             time.sleep(300)
