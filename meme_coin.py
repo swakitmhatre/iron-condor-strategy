@@ -104,7 +104,7 @@ def filter_meme_coins(pools):
 
         # --- Primary Filters (a to f) ---
         # Expanded market cap upper limit to $15M to match actual active pool metrics seen in logs
-        if not (30000 <= market_cap <= 15000000): 
+        if not (30000 <= market_cap <= 50000000): 
             print(f"  [Rejected MCap] {name} | MCap: ${market_cap:,.2f}")
             continue
         if liquidity_usd < 30000: 
