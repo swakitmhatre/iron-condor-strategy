@@ -65,14 +65,18 @@ def filter_meme_coins(pools):
             print("pair age(1---24)----->",age_hours)
             # 1.b: Market Cap ($30k to $2,000,000 / $20 Lakh)
             market_cap = float(attrs.get("market_cap_usd") or attrs.get("fdv_usd") or 0)
+            print("market cap-------->",market_cap)
             
             # 1.c: Liquidity (min $30k)
             liquidity_usd = float(attrs.get("reserve_in_usd", 0))
+            print("liquidity used------->",liquidity_usd)
             
             # 1.d: Volume (24hr min $50k, 6hr min $20k)
             volume_dict = attrs.get("volume_usd", {})
             vol_24h = float(volume_dict.get("h24", 0) if isinstance(volume_dict, dict) else 0)
             vol_6h = float(volume_dict.get("h6", 0) if isinstance(volume_dict, dict) else 0)
+            print("vol_24h-------->",vol_24h)
+            print("vol_6h--------->",vol_6h)
             
             # 1.e: Transactions (24hr min 500)
             txns_dict = attrs.get("transactions", {})
@@ -80,6 +84,7 @@ def filter_meme_coins(pools):
             buys_24h = int(h24_txns.get("buys", 0) if isinstance(h24_txns, dict) else 0)
             sells_24h = int(h24_txns.get("sells", 0) if isinstance(h24_txns, dict) else 0)
             txns_24h = buys_24h + sells_24h
+            print("txns_24h--------->",txns_24h)
             
             # Additional metrics for secondary criteria (g to m)
             price_change_dict = attrs.get("price_change_percentage", {})
