@@ -168,15 +168,26 @@ def fetch_geckoterminal_ohlcv(pool_address, timeframe="minute", aggregate=5):
         return pd.DataFrame()
 
 
-def fetch_geckoterminal_ohlcv_with_retry(pool_address, timeframe="minute", aggregate=5, retries=2):
-    """Fetches OHLCV data with retry logic for newly minted pools."""
+def fetch_geckoterminal_ohlcv_with_retry(pool_address, timeframe="minute", aggregate=5, retries=3):
+    """Fetches OHLCV data and verifies that the latest 5m candle is fresh."""
     for attempt in range(retries):
         df = fetch_geckoterminal_ohlcv(pool_address, timeframe, aggregate)
+        
         if not df.empty and len(df) >= 5:
-            return df
+            latest_candle_time = df["timestamp"].iloc[-1].timestamp()
+            now = time.time()
+            age_seconds = now - latest_candle_time
+            
+            # 5-minute candle (300s) + 120s buffer for API indexing lag
+            if age_seconds <= 420: 
+                return df
+            else:
+                print(f"  [Notice] Latest candle is {int(age_seconds/60)}m old. Retrying API indexer ({attempt+1}/{retries})...")
+
         if attempt < retries - 1:
-            time.sleep(3)
-    return pd.DataFrame()
+            time.sleep(6) # Wait 6s for GeckoTerminal node sync
+            
+    return df if not df.empty else pd.DataFrame()
 
 
 def calculate_indicators(df):
