@@ -2,7 +2,7 @@
 """Solana Meme Coin Quant Strategy Engine & Terminal Dashboard
 
 Features:
-- GeckoTerminal New Pools endpoint for true Solana meme coins (age -1 to 24 hrs).
+- GeckoTerminal general pools endpoint targeting Solana pairs strictly 1 to 24 hours old.
 - Strict criteria filtering (a-m) with automatic fallback (g-m relaxation).
 - GeckoTerminal OHLC historical + incremental 5-min lookback/overwrite loop.
 - Safe technical indicator generation (MACD 8,17,9; Supertrend 10,3; RSI 14).
@@ -22,9 +22,9 @@ GECKO_BASE_URL = "https://api.geckoterminal.com/api/v2"
 PAPER_TRADES_LOG = "paper_trades_ledger.csv"
 
 
-def fetch_geckoterminal_new_pools():
-    """Fetches newly created Solana pools from GeckoTerminal (guaranteeing age <= 24 hrs)."""
-    url = f"{GECKO_BASE_URL}/networks/solana/new_pools?page=1"
+def fetch_geckoterminal_pools():
+    """Fetches general Solana pools from GeckoTerminal to capture pools 1-24 hrs old."""
+    url = f"{GECKO_BASE_URL}/networks/solana/pools?page=1"
     try:
         response = requests.get(url, headers={"Accept": "application/json"}, timeout=10)
         if response.status_code != 200:
@@ -34,16 +34,16 @@ def fetch_geckoterminal_new_pools():
         data = response.json().get("data", [])
         return data
     except Exception as e:
-        print(f"[Error] Failed to fetch GeckoTerminal new pools: {e}")
+        print(f"[Error] Failed to fetch GeckoTerminal pools: {e}")
         return []
 
 
 def filter_meme_coins(pools):
-    """Filters Solana meme coins based on user criteria (a-m) with fallback."""
+    """Filters Solana meme coins based on user criteria (a-m) with 1-24 hr age check & fallback."""
     current_time_ms = time.time() * 1000
     primary_passed = []
     secondary_passed = []
-    print("pool meme coin-------------->",pools)
+
     for pool in pools:
         if not isinstance(pool, dict):
             continue
@@ -51,21 +51,17 @@ def filter_meme_coins(pools):
         attrs = pool.get("attributes", {})
         
         try:
-            # 1.a: Pair Age (-1 to 24 hours)
-            # GeckoTerminal provides pool_created_at string/timestamp
+            # 1.a: Pair Age (Strictly 1 to 24 hours)
             created_at_str = attrs.get("pool_created_at")
             if not created_at_str:
                 continue
             
-            # Convert ISO string or timestamp to milliseconds
             pair_created_at = pd.to_datetime(created_at_str).timestamp() * 1000
             age_hours = (current_time_ms - pair_created_at) / (1000 * 3600)
 
-            print("solana paired  coin pair age(all)--------->",age_hours)
-
-            if not (-1 <= age_hours <= 24):
+            if not (1.0 <= age_hours <= 24.0):
                 continue
-            print("solana paired coin pair age(1-24)--------->",age_hours)
+
             # 1.b: Market Cap ($30k to $2,000,000 / $20 Lakh)
             market_cap = float(attrs.get("market_cap_usd") or attrs.get("fdv_usd") or 0)
             
@@ -92,7 +88,6 @@ def filter_meme_coins(pools):
             
             buy_sell_ratio = buys_24h / max(sells_24h, 1)
 
-            # Map fields to structure expected in main loop
             pool_address = attrs.get("address")
             name = attrs.get("name", "UNKNOWN")
 
@@ -106,7 +101,6 @@ def filter_meme_coins(pools):
         if vol_6h < 20000: continue
         if txns_24h < 500: continue
 
-        # Format custom object for main execution
         formatted_coin = {
             "pairAddress": pool_address,
             "baseToken": {"symbol": name.split("/")[0] if "/" in name else name},
@@ -268,19 +262,19 @@ def render_terminal_chart(coin_name, df):
 
 def main_loop():
     print("==================================================")
-    print("Starting Solana New Meme Coin Bot & Terminal")
+    print("Starting Solana Meme Coin Quant Bot & Terminal")
     print("==================================================")
 
     db_cache = {}
 
     while True:
         try:
-            print(f"\n[{pd.Timestamp.now()}] Fetching new Solana pools from GeckoTerminal...")
-            pools = fetch_geckoterminal_new_pools()
+            print(f"\n[{pd.Timestamp.now()}] Fetching Solana pools from GeckoTerminal...")
+            pools = fetch_geckoterminal_pools()
             coins = filter_meme_coins(pools)
 
             if not coins:
-                print("[Info] No new pools matched current filter criteria. Retrying in 5 mins...")
+                print("[Info] No pools matched criteria (1-24 hrs age). Retrying in 5 mins...")
                 time.sleep(300)
                 continue
 
