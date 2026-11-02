@@ -227,7 +227,7 @@ def render_terminal_chart(coin_name, df):
         return
 
     # Plotext v6 API standards
-    plt.clf()
+    plt.clear()
     plt.plot_size(100, 35)
     plt.subplots(3, 1)
 
