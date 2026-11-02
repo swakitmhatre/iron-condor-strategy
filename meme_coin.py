@@ -40,13 +40,20 @@ def fetch_dexscreener_coins():
     secondary_passed = []
     #print("solana paires fetched----->",pairs)
     for p in pairs:
-        if not isinstance(p, dict) or p.get("chainId") != "solana":
+        if p.get("chainId") != "solana":
             continue
         
         try:
             # 1.a: Pair Age (-1 to 24 hours)
             pair_created_at = float(p.get("pairCreatedAt") or 0)
-            age_hours = (current_time_ms - pair_created_at) / (1000 * 3600) if pair_created_at > 0 else 0
+            if pair_created_at == 0:
+                continue
+                
+            age_hours = (current_time_ms - pair_created_at) / (1000 * 3600)
+            
+            # Must be created within the last 24 hours
+            if not (0 <= age_hours <= 24):
+                continue
             print("############age_hours############",age_hours)
 
             # 1.b: Market Cap ($30k to $2,000,000 / $20 Lakh)
