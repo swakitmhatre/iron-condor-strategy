@@ -246,7 +246,7 @@ def render_terminal_chart(coin_name, df):
 
     fig = plt.figure
     fig.clear()
-    fig.plotsize(100, 35)
+    #fig.plotsize(100, 35)
     fig.subplots(3, 1)
 
     closes = df["close"].tolist()
