@@ -43,7 +43,7 @@ def filter_meme_coins(pools):
     current_time_ms = time.time() * 1000
     primary_passed = []
     secondary_passed = []
-
+    print("pool meme coin-------------->",pools)
     for pool in pools:
         if not isinstance(pool, dict):
             continue
@@ -61,9 +61,11 @@ def filter_meme_coins(pools):
             pair_created_at = pd.to_datetime(created_at_str).timestamp() * 1000
             age_hours = (current_time_ms - pair_created_at) / (1000 * 3600)
 
+            print("solana paired  coin pair age(all)--------->",age_hours)
+
             if not (-1 <= age_hours <= 24):
                 continue
-
+            print("solana paired coin pair age(1-24)--------->",age_hours)
             # 1.b: Market Cap ($30k to $2,000,000 / $20 Lakh)
             market_cap = float(attrs.get("market_cap_usd") or attrs.get("fdv_usd") or 0)
             
