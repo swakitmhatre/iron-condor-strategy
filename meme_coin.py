@@ -24,19 +24,23 @@ PAPER_TRADES_LOG = "paper_trades_ledger.csv"
 
 
 def fetch_geckoterminal_pools():
-    """Fetches general Solana pools from GeckoTerminal to capture pools 1-24 hrs old."""
-    url = f"{GECKO_BASE_URL}/networks/solana/pools?page=1"
-    try:
-        response = requests.get(url, headers={"Accept": "application/json"}, timeout=10)
-        if response.status_code != 200:
-            print(f"[Error] GeckoTerminal returned status code {response.status_code}")
-            return []
-        
-        data = response.json().get("data", [])
-        return data
-    except Exception as e:
-        print(f"[Error] Failed to fetch GeckoTerminal pools: {e}")
-        return []
+    """Fetches multiple pages of Solana pools from GeckoTerminal to ensure a robust sample size."""
+    all_pools = []
+    # Fetching pages 1, 2, and 3 to capture ~60-90 recent pools
+    for page in range(1, 4):
+        url = f"{GECKO_BASE_URL}/networks/solana/pools?page={page}"
+        try:
+            response = requests.get(url, headers={"Accept": "application/json"}, timeout=10)
+            if response.status_code == 200:
+                data = response.json().get("data", [])
+                if data:
+                    all_pools.extend(data)
+            time.sleep(0.2) # Gentle rate-limiting delay between pages
+        except Exception as e:
+            print(f"[Error] Failed to fetch page {page}: {e}")
+            
+    print(f"[Info] Fetched a total of {len(all_pools)} pools across multiple pages for filtering.")
+    return all_pools
 
 def filter_meme_coins(pools):
     """Filters Solana meme coins based on user criteria (a-m) with 1-24 hr age check & fallback."""
