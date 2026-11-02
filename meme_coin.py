@@ -104,7 +104,7 @@ def filter_meme_coins(pools):
 
         # --- Primary Filters (a to f) ---
         # Expanded market cap upper limit to $15M to match actual active pool metrics seen in logs
-        if not (30000 <= market_cap <= 50000000): 
+        if not (30000 <= market_cap <= 2000000): 
             print(f"  [Rejected MCap] {name} | MCap: ${market_cap:,.2f}")
             continue
         if liquidity_usd < 30000: 
@@ -381,7 +381,7 @@ def main_loop():
                         log_paper_trade("SELL", symbol, current_price)
                         print(f"[SIGNAL] SELL triggered for {symbol} at price ${current_price} (RSI: {last_rsi:.2f})")
 
-                render_terminal_chart(symbol, df_final)
+                #render_terminal_chart(symbol, df_final)
 
             print("\n[Sleeping] Waiting 5 minutes for the next candle interval append loop...")
             time.sleep(300)
