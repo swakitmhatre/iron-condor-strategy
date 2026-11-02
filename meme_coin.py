@@ -351,23 +351,31 @@ def main_loop():
                 if not pool_address:
                     continue
 
-                # Fetch OHLCV data with retry & skip check
+                # Fetch OHLCV data with retry logic
                 df_fresh = fetch_geckoterminal_ohlcv_with_retry(pool_address)
+                
                 if df_fresh.empty or len(df_fresh) < 5:
-                    print(f"[Warning] Skipping {symbol}: Insufficient or empty OHLCV candles returned.")
-                    continue
-
-                if pool_address in db_cache:
-                    df_existing = db_cache[pool_address]
-                    if len(df_existing) >= 3 and len(df_fresh) >= 3:
-                        df_existing = df_existing.iloc[:-3]
-                    df_combined = pd.concat([df_existing, df_fresh]).drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
-                    db_cache[pool_address] = df_combined
+                    print(f"[Warning] Empty candles returned for {symbol}. Falling back to cached history.")
+                    if pool_address in db_cache and not db_cache[pool_address].empty:
+                        # Use existing cached data so indicators can still calculate
+                        df_final = calculate_indicators(db_cache[pool_address])
+                    else:
+                        print(f"[Warning] No cache available for {symbol}. Skipping.")
+                        continue
                 else:
-                    db_cache[pool_address] = df_fresh
+                    # Normal append and cache update logic
+                    if pool_address in db_cache:
+                        df_existing = db_cache[pool_address]
+                        if len(df_existing) >= 3 and len(df_fresh) >= 3:
+                            df_existing = df_existing.iloc[:-3]
+                        df_combined = pd.concat([df_existing, df_fresh]).drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
+                        db_cache[pool_address] = df_combined
+                    else:
+                        db_cache[pool_address] = df_fresh
 
-                df_final = calculate_indicators(db_cache[pool_address])
+                    df_final = calculate_indicators(db_cache[pool_address])
 
+                
                 current_price = float(coin.get("priceUsd") or df_final["close"].iloc[-1] or 0)
                 if current_price <= 0:
                     print(f"[Warning] Invalid price ($0.0) for {symbol}. Bypassing signal check.")
