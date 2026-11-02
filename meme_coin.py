@@ -16,8 +16,8 @@ import time
 import requests
 import pandas as pd
 import numpy as np
-import plotext as plt
-
+import plotext as fig
+plt=fig.figure()
 GECKO_BASE_URL = "https://api.geckoterminal.com/api/v2"
 PAPER_TRADES_LOG = "paper_trades_ledger.csv"
 
