@@ -247,6 +247,7 @@ def render_terminal_chart(coin_name, df):
     fig.label("Supertrend", 1)
 
     # --- Subplot 2: MACD Histogram ---
+    '''
     fig.subplots(2, 1)
     fig.title("MACD (8,17,9) Histogram & Lines")
     fig.bar(list(range(len(macd_hist))), macd_hist)
@@ -255,6 +256,28 @@ def render_terminal_chart(coin_name, df):
     fig.label("MACD Hist", 0)
     fig.label("MACD Line", 1)
     fig.label("Signal", 2)
+
+    '''
+    fig.subplot(2, 1)
+    fig.title("MACD (8,17,9) Histogram & Lines")
+    
+    # Official Plotext v6 histogram handling using hist_data
+    if len(macd_hist) > 0:
+        binx, biny = hist_data(macd_hist, bins=10)
+        fig.axes(False)
+        fig.ruler("x").lim(0, max(biny) * 1.01 if max(biny) > 0 else 1)
+        bar_sig = fig.bar(binx, biny, orientation="horizontal", marker="brick", width=0, lines=True)
+        fig.draw(bar_sig)
+    
+    sig_macd = fig.signal(macd)
+    sig_macd.lines()
+    fig.draw(sig_macd)
+    fig.label("MACD Line", 1)
+
+    sig_sig = fig.signal(signal)
+    sig_sig.lines()
+    fig.draw(sig_sig)
+    fig.label("Signal Line", 2)
 
     # --- Subplot 3: RSI ---
     fig.subplots(3, 1)
