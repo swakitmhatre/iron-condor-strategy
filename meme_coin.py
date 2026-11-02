@@ -17,6 +17,7 @@ import requests
 import pandas as pd
 import numpy as np
 import plotext as plt
+from plotext._methods.bar import hist_data
 
 GECKO_BASE_URL = "https://api.geckoterminal.com/api/v2"
 PAPER_TRADES_LOG = "paper_trades_ledger.csv"
@@ -221,7 +222,7 @@ def log_paper_trade(action, symbol, price):
 
 
 def render_terminal_chart(coin_name, df):
-    """Renders multi-panel terminal charts using Plotext v6 figure object and label syntax."""
+    """Renders multi-panel terminal charts using Plotext v6 figure object and official histogram API."""
     if df.empty or len(df) < 2:
         print(f"[Info] Insufficient candles to plot for {coin_name}")
         return
@@ -239,25 +240,19 @@ def render_terminal_chart(coin_name, df):
     rsi = df["rsi"].tolist()
 
     # --- Subplot 1: Price Action & Supertrend ---
-    fig.subplots(1, 1)
+    fig.subplot(1, 1)
     fig.title(f"{coin_name} - Price & Supertrend (10,3)")
-    fig.draw(closes)
-    fig.draw(st)
+    sig_close = fig.signal(closes)
+    sig_close.lines()
+    fig.draw(sig_close)
     fig.label("Close Price", 0)
+
+    sig_st = fig.signal(st)
+    sig_st.lines()
+    fig.draw(sig_st)
     fig.label("Supertrend", 1)
 
-    # --- Subplot 2: MACD Histogram ---
-    '''
-    fig.subplots(2, 1)
-    fig.title("MACD (8,17,9) Histogram & Lines")
-    fig.bar(list(range(len(macd_hist))), macd_hist)
-    fig.draw(macd)
-    fig.draw(signal)
-    fig.label("MACD Hist", 0)
-    fig.label("MACD Line", 1)
-    fig.label("Signal", 2)
-
-    '''
+    # --- Subplot 2: MACD Histogram & Lines ---
     fig.subplot(2, 1)
     fig.title("MACD (8,17,9) Histogram & Lines")
     
