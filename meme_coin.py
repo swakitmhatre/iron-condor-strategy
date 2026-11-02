@@ -6,7 +6,7 @@ Features:
 - Strict criteria filtering (a-m) with automatic fallback (g-m relaxation).
 - GeckoTerminal OHLC historical + incremental 5-min lookback/overwrite loop.
 - Safe technical indicator generation (MACD 8,17,9; Supertrend 10,3; RSI 14).
-- Terminal multi-panel plotting via Plotext v6 syntax standards.
+- Terminal multi-panel plotting via Plotext v6 standard methods.
 - Paper Trading PnL ledger.
 """
 
@@ -16,8 +16,8 @@ import time
 import requests
 import pandas as pd
 import numpy as np
-import plotext as fig
-plt=fig.figure
+import plotext as plt
+
 GECKO_BASE_URL = "https://api.geckoterminal.com/api/v2"
 PAPER_TRADES_LOG = "paper_trades_ledger.csv"
 
@@ -221,13 +221,12 @@ def log_paper_trade(action, symbol, price):
 
 
 def render_terminal_chart(coin_name, df):
-    """Renders multi-panel terminal charts using Plotext v6 standard syntax."""
+    """Renders multi-panel terminal charts using Plotext syntax standards."""
     if df.empty or len(df) < 2:
         print(f"[Info] Insufficient candles to plot for {coin_name}")
         return
 
-    # Plotext v6 API standards
-    plt.clear()
+    plt.clf()
     plt.plot_size(100, 35)
     plt.subplots(3, 1)
 
@@ -241,20 +240,20 @@ def render_terminal_chart(coin_name, df):
     # --- Subplot 1: Price Action & Supertrend ---
     plt.subplot(1, 1)
     plt.title(f"{coin_name} - Price & Supertrend (10,3)")
-    plt.plot(closes, label="Close", color="cyan")
-    plt.plot(st, label="Supertrend", color="yellow")
+    plt.plot(closes, label="Close")
+    plt.plot(st, label="Supertrend")
 
     # --- Subplot 2: MACD Histogram ---
     plt.subplot(2, 1)
     plt.title("MACD (8,17,9) Histogram & Lines")
-    plt.bar(range(len(macd_hist)), macd_hist, label="MACD Hist", color="green" if macd_hist[-1] >= 0 else "red")
-    plt.plot(macd, label="MACD", color="blue")
-    plt.plot(signal, label="Signal", color="orange")
+    plt.bar(list(range(len(macd_hist))), macd_hist, label="MACD Hist")
+    plt.plot(macd, label="MACD")
+    plt.plot(signal, label="Signal")
 
     # --- Subplot 3: RSI ---
     plt.subplot(3, 1)
     plt.title("RSI (14)")
-    plt.plot(rsi, label="RSI", color="magenta")
+    plt.plot(rsi, label="RSI")
     plt.ylim(0, 100)
 
     plt.show()
