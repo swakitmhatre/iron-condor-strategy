@@ -112,14 +112,14 @@ def filter_meme_coins(pools):
 
         # --- Secondary Filters (g to m) ---
         passes_secondary = (
-            chg_6h >= 5.0 and             # g: last 6 hrs growth min +5%
-            chg_1h > 0 and chg_6h > 0 and chg_24h > 0 and # k: positive in 1h, 6h, 24h
-            buy_sell_ratio >= 1.5         # l: Buy-Sell ratio >= 1.5
+            #chg_6h >= 5.0 and             # g: last 6 hrs growth min +5%
+            #chg_1h > 0 and chg_6h > 0 and chg_24h > 0 and # k: positive in 1h, 6h, 24h
+            #buy_sell_ratio >= 1.5         # l: Buy-Sell ratio >= 1.5
         )
 
         if passes_secondary:
             secondary_passed.append(formatted_coin)
-
+    print("filtered output after first pass---------->",secondary_passed)
     # --- Fallback Rule Implementation ---
     if secondary_passed:
         print(f"[Info] Found {len(secondary_passed)} tokens meeting strict criteria (a-m).")
