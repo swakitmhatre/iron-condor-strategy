@@ -6,7 +6,7 @@ Features:
 - Strict criteria filtering (a-m) with automatic fallback (g-m relaxation).
 - GeckoTerminal OHLC historical + incremental 5-min lookback/overwrite loop.
 - Safe technical indicator generation (MACD 8,17,9; Supertrend 10,3; RSI 14).
-- Terminal multi-panel plotting via Plotext v6 standard methods.
+- Terminal multi-panel plotting via Plotext v6 standard object-oriented API.
 - Paper Trading PnL ledger.
 """
 
@@ -16,8 +16,7 @@ import time
 import requests
 import pandas as pd
 import numpy as np
-import plotext as fig
-plt = fig.figure
+import plotext as plt
 
 GECKO_BASE_URL = "https://api.geckoterminal.com/api/v2"
 PAPER_TRADES_LOG = "paper_trades_ledger.csv"
@@ -222,14 +221,15 @@ def log_paper_trade(action, symbol, price):
 
 
 def render_terminal_chart(coin_name, df):
-    """Renders multi-panel terminal charts using Plotext syntax standards."""
+    """Renders multi-panel terminal charts using Plotext v6 figure object and label syntax."""
     if df.empty or len(df) < 2:
         print(f"[Info] Insufficient candles to plot for {coin_name}")
         return
 
-    plt.clear()
-    plt.plot_size(100, 35)
-    plt.subplots(3, 1)
+    fig = plt.figure
+    fig.clear()
+    fig.plot_size(100, 35)
+    fig.multiple_plots(3, 1)
 
     closes = df["close"].tolist()
     st = df["supertrend"].tolist()
@@ -239,25 +239,31 @@ def render_terminal_chart(coin_name, df):
     rsi = df["rsi"].tolist()
 
     # --- Subplot 1: Price Action & Supertrend ---
-    plt.subplot(1, 1)
-    plt.title(f"{coin_name} - Price & Supertrend (10,3)")
-    plt.plot(closes, label="Close")
-    plt.plot(st, label="Supertrend")
+    fig.subplot(1, 1)
+    fig.title(f"{coin_name} - Price & Supertrend (10,3)")
+    fig.draw(closes)
+    fig.draw(st)
+    fig.label("Close Price", 0)
+    fig.label("Supertrend", 1)
 
     # --- Subplot 2: MACD Histogram ---
-    plt.subplot(2, 1)
-    plt.title("MACD (8,17,9) Histogram & Lines")
-    plt.bar(list(range(len(macd_hist))), macd_hist, label="MACD Hist")
-    plt.plot(macd, label="MACD")
-    plt.plot(signal, label="Signal")
+    fig.subplot(2, 1)
+    fig.title("MACD (8,17,9) Histogram & Lines")
+    fig.bar(list(range(len(macd_hist))), macd_hist)
+    fig.draw(macd)
+    fig.draw(signal)
+    fig.label("MACD Hist", 0)
+    fig.label("MACD Line", 1)
+    fig.label("Signal", 2)
 
     # --- Subplot 3: RSI ---
-    plt.subplot(3, 1)
-    plt.title("RSI (14)")
-    plt.plot(rsi, label="RSI")
-    plt.ylim(0, 100)
+    fig.subplot(3, 1)
+    fig.title("RSI (14)")
+    fig.draw(rsi)
+    fig.ylim(0, 100)
+    fig.label("RSI Value", 0)
 
-    plt.show()
+    fig.show()
 
 
 def main_loop():
