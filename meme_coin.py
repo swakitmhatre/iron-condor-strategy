@@ -40,6 +40,8 @@ def fetch_dexscreener_coins():
     secondary_passed = []
     #print("solana paires fetched----->",pairs)
     for p in pairs:
+        if p.get("chainId") == "solana":
+            print("solana meme coin-->",p)
         if p.get("chainId") != "solana":
             continue
         
