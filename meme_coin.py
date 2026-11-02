@@ -229,7 +229,7 @@ def render_terminal_chart(coin_name, df):
     fig = plt.figure
     fig.clear()
     fig.plot_size(100, 35)
-    fig.multiple_plots(3, 1)
+    #fig.multiple_plots(3, 1)
 
     closes = df["close"].tolist()
     st = df["supertrend"].tolist()
@@ -239,7 +239,7 @@ def render_terminal_chart(coin_name, df):
     rsi = df["rsi"].tolist()
 
     # --- Subplot 1: Price Action & Supertrend ---
-    fig.subplot(1, 1)
+    fig.subplots(1, 1)
     fig.title(f"{coin_name} - Price & Supertrend (10,3)")
     fig.draw(closes)
     fig.draw(st)
@@ -247,7 +247,7 @@ def render_terminal_chart(coin_name, df):
     fig.label("Supertrend", 1)
 
     # --- Subplot 2: MACD Histogram ---
-    fig.subplot(2, 1)
+    fig.subplots(2, 1)
     fig.title("MACD (8,17,9) Histogram & Lines")
     fig.bar(list(range(len(macd_hist))), macd_hist)
     fig.draw(macd)
@@ -257,7 +257,7 @@ def render_terminal_chart(coin_name, df):
     fig.label("Signal", 2)
 
     # --- Subplot 3: RSI ---
-    fig.subplot(3, 1)
+    fig.subplots(3, 1)
     fig.title("RSI (14)")
     fig.draw(rsi)
     fig.ylim(0, 100)
