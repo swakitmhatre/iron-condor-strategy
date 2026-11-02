@@ -229,7 +229,7 @@ def render_terminal_chart(coin_name, df):
     fig = plt.figure
     fig.clear()
     fig.plot_size(100, 35)
-    #fig.multiple_plots(3, 1)
+    fig.multiple_plots(3, 1)
 
     closes = df["close"].tolist()
     st = df["supertrend"].tolist()
