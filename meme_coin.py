@@ -38,7 +38,7 @@ def fetch_dexscreener_coins():
     current_time_ms = time.time() * 1000
     primary_passed = []
     secondary_passed = []
-
+    print("solana paires fetched----->",pairs)
     for p in pairs:
         if not isinstance(p, dict) or p.get("chainId") != "solana":
             continue
