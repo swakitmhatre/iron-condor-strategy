@@ -109,6 +109,7 @@ def filter_meme_coins(pools):
         }
 
         primary_passed.append(formatted_coin)
+        print("primary passed-================>",primary_passed)
 
         # --- Secondary Filters (g to m) ---
         passes_secondary = (
