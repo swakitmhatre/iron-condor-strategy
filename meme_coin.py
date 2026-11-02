@@ -119,6 +119,8 @@ def filter_meme_coins(pools):
 
         if passes_secondary:
             secondary_passed.append(formatted_coin)
+    print("primary_passed----------------->",primary_passed)   
+    print("passes_secondary--------------->",passes_secondary)
 
     # --- Fallback Rule Implementation ---
     if secondary_passed:
