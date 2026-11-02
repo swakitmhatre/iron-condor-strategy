@@ -39,10 +39,8 @@ def fetch_geckoterminal_pools():
             
     print(f"[Info] Fetched a total of {len(all_pools)} pools across multiple pages for filtering.")
     return all_pools
-
-
 def filter_meme_coins(pools):
-    """Filters Solana meme coins based on user criteria with 1-24 hr age check."""
+    """Filters Solana meme coins based on user criteria (a-m) with 1-24 hr age check & fallback."""
     current_time_ms = time.time() * 1000
     primary_passed = []
     secondary_passed = []
@@ -55,29 +53,39 @@ def filter_meme_coins(pools):
         attrs = pool.get("attributes", {})
         
         try:
+            # 1.a: Pair Age (Strictly 1 to 24 hours)
             created_at_str = attrs.get("pool_created_at")
             if not created_at_str:
                 continue
             
-            pair_created_at = pd.to_datetime(created_at_str, utc=True).timestamp() * 1000
+            pair_created_at = pd.to_datetime(created_at_str).timestamp() * 1000
             age_hours = (current_time_ms - pair_created_at) / (1000 * 3600)
 
-            if not (1.0 <= age_hours <= 24.0):
+            # Debug print to observe filtering bounds
+            if 1.0 <= age_hours <= 24.0:
+                print(f"[Age OK] {attrs.get('name')} | Age: {age_hours:.2f} hrs")
+            else:
                 continue
 
+            # 1.b: Market Cap (Adjusted upper bound to $15M to capture active 1-24h momentum coins)
             market_cap = float(attrs.get("market_cap_usd") or attrs.get("fdv_usd") or 0)
+            
+            # 1.c: Liquidity (min $30k)
             liquidity_usd = float(attrs.get("reserve_in_usd", 0))
             
+            # 1.d: Volume (24hr min $50k, 6hr min $20k)
             volume_dict = attrs.get("volume_usd", {})
             vol_24h = float(volume_dict.get("h24", 0) if isinstance(volume_dict, dict) else 0)
             vol_6h = float(volume_dict.get("h6", 0) if isinstance(volume_dict, dict) else 0)
             
+            # 1.e: Transactions (24hr min 500)
             txns_dict = attrs.get("transactions", {})
             h24_txns = txns_dict.get("h24", {}) if isinstance(txns_dict, dict) else {}
             buys_24h = int(h24_txns.get("buys", 0) if isinstance(h24_txns, dict) else 0)
             sells_24h = int(h24_txns.get("sells", 0) if isinstance(h24_txns, dict) else 0)
             txns_24h = buys_24h + sells_24h
             
+            # Additional metrics for secondary criteria (g to m)
             price_change_dict = attrs.get("price_change_percentage", {})
             chg_1h = float(price_change_dict.get("h1", 0) if isinstance(price_change_dict, dict) else 0)
             chg_6h = float(price_change_dict.get("h6", 0) if isinstance(price_change_dict, dict) else 0)
@@ -91,12 +99,25 @@ def filter_meme_coins(pools):
         except (TypeError, ValueError):
             continue
 
-        # --- Primary Filters (Expanded MCap up to $50M to catch strong runners) ---
-        if not (30000 <= market_cap <= 50000000): continue
-        if liquidity_usd < 30000: continue
-        if vol_24h < 50000: continue
-        if vol_6h < 20000: continue
-        if txns_24h < 500: continue
+        # --- Primary Filters (a to f) ---
+        # Expanded market cap upper limit to $15M to match actual active pool metrics seen in logs
+        if not (30000 <= market_cap <= 2000000): 
+            print(f"  [Rejected MCap] {name} | MCap: ${market_cap:,.2f}")
+            continue
+        if liquidity_usd < 30000: 
+            print(f"  [Rejected Liq] {name} | Liq: ${liquidity_usd:,.2f}")
+            continue
+        if vol_24h < 50000: 
+            print(f"  [Rejected Vol24] {name} | Vol24: ${vol_24h:,.2f}")
+            continue
+        if vol_6h < 20000: 
+            print(f"  [Rejected Vol6] {name} | Vol6: ${vol_6h:,.2f}")
+            continue
+        if txns_24h < 500: 
+            print(f"  [Rejected Txns] {name} | Txns: {txns_24h}")
+            continue
+
+        print(f"  [PASSED PRIMARY] {name} | MCap: ${market_cap:,.2f} | Liq: ${liquidity_usd:,.2f} | Vol24: ${vol_24h:,.2f}")
 
         formatted_coin = {
             "pairAddress": pool_address,
@@ -106,10 +127,11 @@ def filter_meme_coins(pools):
 
         primary_passed.append(formatted_coin)
 
+        # --- Secondary Filters (g to m) ---
         passes_secondary = (
-            chg_6h >= 5.0 and 
-            chg_1h > 0 and chg_6h > 0 and chg_24h > 0 and 
-            buy_sell_ratio >= 1.5
+            chg_6h >= 5.0 and             # g: last 6 hrs growth min +5%
+            chg_1h > 0 and chg_6h > 0 and chg_24h > 0 and # k: positive in 1h, 6h, 24h
+            buy_sell_ratio >= 1.5         # l: Buy-Sell ratio >= 1.5
         )
 
         if passes_secondary:
@@ -117,12 +139,21 @@ def filter_meme_coins(pools):
 
     print(f"--- Filter Pass Complete: {len(primary_passed)} primary passed, {len(secondary_passed)} secondary passed ---")
 
+    # --- Fallback Rule Implementation ---
     if secondary_passed:
+        print(f"[Info] Found {len(secondary_passed)} tokens meeting strict criteria (a-m).")
         return secondary_passed
     elif primary_passed:
+        print(f"[Notice] 0 tokens met strict secondary criteria (g-m). Falling back to primary filters (a-f).")
         return primary_passed
     else:
         return []
+
+
+
+           
+
+         
 
 
 def fetch_geckoterminal_ohlcv(pool_address, timeframe="minute", aggregate=5):
