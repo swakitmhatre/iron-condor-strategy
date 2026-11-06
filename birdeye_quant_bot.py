@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Solana Meme Coin Quant Bot & Dual Tabular Crossover Engine (Birdeye API)"""
+"""Solana Meme Coin Quant Bot & Quality Gate Engine (Birdeye API)"""
+BIRDEYE_API_KEY = "00bc545b80924d7c8d3d100e07323ddf"
+
 
 import os
 import sys
@@ -8,8 +10,7 @@ import requests
 import pandas as pd
 import numpy as np
 
-# --- CONFIGURATION ---
-BIRDEYE_API_KEY = "00bc545b80924d7c8d3d100e07323ddf"  # Replace with your Birdeye API Key
+BIRDEYE_API_KEY = "00bc545b80924d7c8d3d100e07323ddf"
 BASE_URL = "https://public-api.birdeye.so"
 HEADERS = {
     "X-API-KEY": BIRDEYE_API_KEY,
@@ -18,78 +19,80 @@ HEADERS = {
 }
 
 PAPER_TRADES_LOG = "paper_trades_ledger.csv"
-DB_CACHE = {}  # {token_address: pd.DataFrame}
-ACTIVE_TRADES = {} # {token_address: {"entry_price": float, "entry_time": str}}
+DB_CACHE = {}
+ACTIVE_TRADES = {}
 
-def fetch_birdeye_token_list():
-    """Fetches trending/market tokens list from Birdeye using the correct endpoint."""
-    # Using Birdeye's Trending endpoint which returns a bulk list of active tokens safely
-    url = f"{BASE_URL}/defi/token_trending"  # Alternative: f"{BASE_URL}/defi/v3/token/market-data-list"
-    params = {"sort_by": "rank", "sort_type": "asc", "offset": 0, "limit": 50}
+def fetch_high_volume_tokens_paginated():
+    """Performs server-side pagination across multiple pages to fetch 250+ active tokens."""
+    all_tokens = []
+    endpoint = f"{BASE_URL}/defi/v3/token/list"
     
+    # Crawl 5 pages (50 items each = 250 tokens per cycle) using server-side offset
+    for page in range(5):
+        offset = page * 50
+        params = {
+            "sort_by": "v24hUSD",
+            "sort_type": "desc",
+            "offset": offset,
+            "limit": 50
+        }
+        try:
+            response = requests.get(endpoint, headers=HEADERS, params=params, timeout=10)
+            if response.status_code == 200:
+                items = response.json().get("data", {}).get("items", [])
+                if items:
+                    all_tokens.extend(items)
+            time.sleep(0.1) # Rate limit courtesy pause
+        except Exception as e:
+            print(f"[Error] Pagination offset {offset} failed: {e}")
+            
+    print(f"[Info] Aggregated {len(all_tokens)} raw tokens via server-side pagination.")
+    return all_tokens
+
+
+def verify_token_security_gate(token_address):
+    """Queries Birdeye token security endpoint to guarantee mint/freeze safety."""
+    url = f"{BASE_URL}/defi/token_security"
+    params = {"address": token_address}
     try:
-        response = requests.get(url, headers=HEADERS, params=params, timeout=10)
-        print(f"[Debug] Birdeye API Status Code: {response.status_code}")
-        
-        if response.status_code != 200:
-            print(f"[Error Response] {response.text}")
-            return []
+        response = requests.get(url, headers=HEADERS, params=params, timeout=5)
+        if response.status_code == 200:
+            data = response.json().get("data", {})
             
-        data_json = response.json()
-        
-        # Safely parse items across different Birdeye response schemas
-        items = data_json.get("data", {}).get("tokens", [])
-        if not items and isinstance(data_json.get("data"), list):
-            items = data_json.get("data")
-        if not items and isinstance(data_json.get("data", {}).get("items"), list):
-            items = data_json.get("data", {}).get("items")
+            owner_address = data.get("ownerAddress")
+            freezeable = data.get("freezeable", True)
+            top10_pct = float(data.get("top10HolderPercent", 1.0))
             
-        print(f"[Info] Successfully fetched {len(items)} raw tokens from Birdeye.")
-        return items
+            # Security Rule Gate: Mint authority renounced, not freezeable, top 10 holders < 30%
+            is_safe = (owner_address is None) and (not freezeable) and (top10_pct <= 0.30)
+            return is_safe
+    except Exception:
+        pass
+    return False
 
-    except Exception as e:
-        print(f"[Error] Failed to connect to Birdeye API: {e}")
-        return []
 
+def filter_quality_meme_coins(tokens):
+    """Filters paginated tokens through liquidity, volume, and security gates."""
+    quality_passed = []
 
-def filter_meme_coins(tokens):
-    """Applies criteria a-q with fallback if g-q yields 0 tokens."""
-    primary_passed = []
-    fully_filtered = []
-
-    print(f"\n[{pd.Timestamp.now(tz='Asia/Kolkata').strftime('%Y-%m-%d %H:%M:%S')}] Running Token Filter Pipeline...")
+    print(f"\n[{pd.Timestamp.now(tz='Asia/Kolkata').strftime('%Y-%m-%d %H:%M:%S')}] Evaluating Quality Gate Pipeline...")
 
     for token in tokens:
         try:
             address = token.get("address")
-            market_cap = float(token.get("marketCap", 0) or 0)
+            market_cap = float(token.get("marketCap", 0) or token.get("mc", 0) or 0)
             liquidity = float(token.get("liquidity", 0) or 0)
-            vol_24h = float(token.get("v24hUSD", 0) or 0)
-            vol_6h = float(token.get("v6hUSD", 0) or 0)
+            vol_24h = float(token.get("v24hUSD", 0) or token.get("volume24h", 0) or 0)
+            vol_6h = float(token.get("v6hUSD", 0) or token.get("volume6h", 0) or 0)
             
             created_at = token.get("listingTimestamp", 0)
             age_hours = (time.time() - created_at) / 3600 if created_at else 12.0
-
-            chg_1h = float(token.get("priceChange1hPercent", 0) or 0)
-            chg_6h = float(token.get("priceChange6hPercent", 0) or 0)
-            chg_24h = float(token.get("priceChange24hPercent", 0) or 0)
-
+            
             txns_24h = int(token.get("trade24h", 0) or 600)
-            buyers_24h = int(token.get("buy24hCount", 0) or 350)
-            buyers_6h = int(token.get("buy6hCount", 0) or 60)
-            buyers_1h = int(token.get("buy1hCount", 0) or 25)
-            sells_24h = int(token.get("sell24hCount", 0) or 200)
-            buy_sell_ratio = buyers_24h / max(sells_24h, 1)
-
-            mint_authority = token.get("mintAuthority", None)
-            freeze_authority = token.get("freezeAuthority", None)
-            lp_burned = token.get("lpBurnedPercent", 100) >= 99.0
-            twitter_exists = bool(token.get("twitter", None))
-            top_holder_pct = float(token.get("top1HolderPercent", 5.0))
         except (TypeError, ValueError):
             continue
 
-        # Primary Filters (a to f)
+        # Core Metrics Filter Check
         if not (1.0 <= age_hours <= 24.0): continue
         if not (30000 <= market_cap <= 2000000): continue
         if liquidity < 30000: continue
@@ -97,42 +100,19 @@ def filter_meme_coins(tokens):
         if vol_6h < 20000: continue
         if txns_24h < 500: continue
 
-        primary_passed.append(token)
-        print("primary_passed-------->",primary_passed)
+        # Deep Security Gate Check (Mint/Freeze/Concentration)
+        if address and verify_token_security_gate(address):
+            quality_passed.append(token)
 
-        # Strict Secondary Filters (g to q)
-        passes_g_to_q = (
-            buyers_24h >= 300 and
-            buyers_6h >= 50 and
-            buyers_1h >= 20 and
-            chg_6h >= 5.0 and
-            lp_burned and
-            twitter_exists and
-            top_holder_pct <= 10.0 and
-            chg_1h > 0 and chg_6h > 0 and chg_24h > 0 and
-            buy_sell_ratio >= 1.5 and
-            (liquidity / max(market_cap, 1)) > 0.05 and
-            (mint_authority is None or mint_authority == "") and
-            (freeze_authority is None or freeze_authority == "")
-        )
-
-        if passes_g_to_q:
-            fully_filtered.append(token)
-
-    if not fully_filtered and primary_passed:
-        print("[Notice] 0 tokens met strict criteria (g-q). Falling back to primary filters (a-f).")
-        return primary_passed
-
-    return fully_filtered if fully_filtered else primary_passed
+    print(f"[Filter Stats] Quality tokens cleared security and volume gates: {len(quality_passed)}")
+    return quality_passed
 
 
 def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
-    """Genesis fetch or 5-min look-back overwrite."""
     resolution = "5m"
     limit = 100 if is_genesis else 3  
     url = f"{BASE_URL}/defi/ohlcv"
     params = {"address": token_address, "type": resolution, "limit": limit}
-    
     try:
         response = requests.get(url, headers=HEADERS, params=params, timeout=10)
         if response.status_code == 200:
@@ -143,13 +123,12 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
             df["timestamp"] = pd.to_datetime(df["time"], unit="s")
             df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
             return df.sort_values("timestamp").drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
-    except Exception as e:
-        print(f"[Error fetching OHLCV for {token_address}]: {e}")
+    except Exception:
+        pass
     return pd.DataFrame()
 
 
 def calculate_indicators(df):
-    """Calculates MACD(8,17,9), Supertrend(10,3), and RSI safely."""
     if df.empty or len(df) < 17:
         df["rsi"] = 50.0
         df["macd"] = 0.0
@@ -162,20 +141,17 @@ def calculate_indicators(df):
     high = df["high"]
     low = df["low"]
 
-    # RSI
     delta = close.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14, min_periods=1).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14, min_periods=1).mean()
     df["rsi"] = 100 - (100 / (1 + (gain / (loss + 1e-9))))
 
-    # MACD (8, 17, 9)
     exp1 = close.ewm(span=8, adjust=False).mean()
     exp2 = close.ewm(span=17, adjust=False).mean()
     df["macd"] = exp1 - exp2
     df["macd_signal"] = df["macd"].ewm(span=9, adjust=False).mean()
     df["macd_hist"] = df["macd"] - df["macd_signal"]
 
-    # Supertrend (10, 3)
     period, multiplier = 10, 3
     tr = pd.concat([high - low, (high - close.shift()).abs(), (low - close.shift()).abs()], axis=1).max(axis=1)
     atr = tr.rolling(window=period, min_periods=1).mean()
@@ -197,7 +173,6 @@ def calculate_indicators(df):
 
 
 def check_positive_crossover(df, idx):
-    """Positive crossover: ALL conditions met."""
     if idx < 2 or idx >= len(df):
         return False
     macd, signal, hist = df["macd"].iloc[idx], df["macd_signal"].iloc[idx], df["macd_hist"].iloc[idx]
@@ -214,7 +189,6 @@ def check_positive_crossover(df, idx):
 
 
 def check_negative_crossover(df, idx):
-    """Negative crossover: ANY condition met."""
     if idx < 2 or idx >= len(df):
         return False
     macd, signal, hist = df["macd"].iloc[idx], df["macd_signal"].iloc[idx], df["macd_hist"].iloc[idx]
@@ -241,33 +215,27 @@ def log_paper_trade(action, symbol, price):
 
 def run_bot_cycle():
     print("==================================================")
-    print("Solana Meme Coin Quant Engine Running...")
+    print("Solana Quality Quant Bot Engine Running...")
     print("==================================================")
 
-    tokens = fetch_birdeye_token_list()
-    print(f"[Info] Total raw tokens fetched from Birdeye: {len(tokens)}")
+    tokens = fetch_high_volume_tokens_paginated()
+    quality_coins = filter_quality_meme_coins(tokens)
 
-    filtered_coins = filter_meme_coins(tokens)
-    total_filtered = len(filtered_coins)
-
-    print(f"\n[Info] Total Meme Coins Passed Filter Criteria: {total_filtered}")
-
-    if total_filtered == 0:
-        print("[Info] No coins passed filters.")
+    if not quality_coins:
+        print("[Info] No quality coins passed security & filter criteria.")
         return
 
-    print(f"[Success] Processing all {total_filtered} filtered meme coins...")
+    print(f"[Success] Processing {len(quality_coins)} verified quality tokens...")
 
-    for idx, coin in enumerate(filtered_coins, 1):
+    for idx, coin in enumerate(quality_coins, 1):
         address = coin.get("address")
         symbol = coin.get("symbol", "UNKNOWN")
 
-        print(f"\nProcessing Token [{idx}/{total_filtered}]: {symbol} ({address})")
+        print(f"\nProcessing Token [{idx}/{len(quality_coins)}]: {symbol} ({address})")
 
         if address not in DB_CACHE:
             df_hist = fetch_ohlcv_with_lookback(address, is_genesis=True)
             if df_hist.empty:
-                print(f"  [Warning] Empty historical candles for {symbol}. Skipping.")
                 continue
             DB_CACHE[address] = df_hist
         else:
@@ -280,47 +248,31 @@ def run_bot_cycle():
 
         df_final = calculate_indicators(DB_CACHE[address])
         if len(df_final) < 5:
-            print(f"  [Warning] Insufficient indicators calculation length for {symbol}. Skipping.")
             continue
 
         current_price = df_final["close"].iloc[-1]
 
-        # --- TABULAR DATA 1: PREVIOUS / HISTORICAL POSITIVE CROSSOVER TABLE ---
-        print(f"\n--------------------------------------------------")
-        print(f"TABULAR DATA 1: Previous Positive MACD Crossovers ({symbol})")
-        print(f"--------------------------------------------------")
-        
+        # Tabular Data 1: Previous Crossovers
+        print(f"--- TABULAR DATA 1: Previous MACD Crossovers ({symbol}) ---")
         historical_trades = []
         for i in range(2, len(df_final) - 1):
             if check_positive_crossover(df_final, i):
                 entry_time = df_final["timestamp"].iloc[i]
                 entry_price = df_final["close"].iloc[i]
                 exit_time, pnl = "OPEN", 0.0
-                
                 for j in range(i + 1, len(df_final)):
                     if check_negative_crossover(df_final, j):
                         exit_time = df_final["timestamp"].iloc[j]
                         exit_price = df_final["close"].iloc[j]
                         pnl = ((exit_price - entry_price) / entry_price) * 100
                         break
-                
-                historical_trades.append({
-                    "Entry Timestamp": entry_time,
-                    "Exit Timestamp": exit_time,
-                    "PnL (%)": round(pnl, 2)
-                })
+                historical_trades.append({"Entry Timestamp": entry_time, "Exit Timestamp": exit_time, "PnL (%)": round(pnl, 2)})
 
         df_trades = pd.DataFrame(historical_trades)
-        if not df_trades.empty:
-            print(df_trades.to_string(index=False))
-        else:
-            print("[Info] No historical/previous positive crossovers completed in current candle buffer.")
+        print(df_trades.to_string(index=False) if not df_trades.empty else "[Info] No prior completed crossovers.")
 
-        # --- TABULAR DATA 2: CURRENT POSITIVE MACD CROSSOVER STATUS (Last 6 Rows) ---
-        print(f"\n--------------------------------------------------")
-        print(f"TABULAR DATA 2: Current Positive MACD Crossover Status - Last 6 Candles ({symbol})")
-        print(f"--------------------------------------------------")
-
+        # Tabular Data 2: Current Status (Last 6 Rows)
+        print(f"\n--- TABULAR DATA 2: Current Status - Last 6 Candles ({symbol}) ---")
         latest_idx = len(df_final) - 1
         is_current_cross = check_positive_crossover(df_final, latest_idx)
         
@@ -334,18 +286,15 @@ def run_bot_cycle():
                 entry_price = ACTIVE_TRADES[address]["entry_price"]
                 pnl = ((current_price - entry_price) / entry_price) * 100
                 log_paper_trade("SELL", symbol, current_price)
-                print(f"[SIGNAL] SELL Exit triggered for {symbol} at ${current_price:.6f} | Trade PnL: {pnl:+.2f}%")
+                print(f"[SIGNAL] SELL Exit triggered for {symbol} at ${current_price:.6f} | PnL: {pnl:+.2f}%")
                 del ACTIVE_TRADES[address]
                 signal_status = "SELL (Exit Triggered)"
             else:
                 signal_status = "IN POSITION (Bullish Hold)"
 
-        # Extract the last 6 rows of the indicator dataframe for easy display
         tail_df = df_final.tail(6).copy()
-        
         display_data = []
         for idx_row, row in tail_df.iterrows():
-            # Tag the absolute latest row with the current signal status, older rows marked as historical/neutral in tail
             row_status = signal_status if idx_row == latest_idx else "Recent History"
             display_data.append({
                 "Timestamp": row["timestamp"],
@@ -356,9 +305,7 @@ def run_bot_cycle():
                 "Supertrend": round(row["supertrend"], 6),
                 "Status": row_status
             })
-
-        df_display = pd.DataFrame(display_data)
-        print(df_display.to_string(index=False))
+        print(pd.DataFrame(display_data).to_string(index=False))
         print("=" * 50)
 
 
@@ -368,6 +315,5 @@ if __name__ == "__main__":
             run_bot_cycle()
         except Exception as ex:
             print(f"[Error in main loop]: {ex}")
-        
-        print("\n[Sleeping] Waiting 5 minutes for next candle interval loop...")
+        print("\n[Sleeping] Waiting 5 minutes for next cycle...")
         time.sleep(300)
