@@ -20,16 +20,15 @@ PAPER_TRADES_LOG = "paper_trades_ledger.csv"
 DB_CACHE = {}  # {token_address: pd.DataFrame}
 ACTIVE_TRADES = {} # {token_address: {"entry_price": float, "entry_time": str}}
 
-
 def fetch_birdeye_token_list():
-    """Fetches tokens using Birdeye's standard V3 Token List endpoint with server-side pagination."""
+    """Fetches tokens using Birdeye's standard V3 Token List endpoint with safe sorting and rate limiting."""
     all_tokens = []
     endpoint = f"{BASE_URL}/defi/v3/token/list"
     
-    # Paginate across 4 offsets (0, 50, 100, 150) to pull 200 tokens per loop cycle
+    # Paginate across offsets safely with conservative rate-limit pacing
     for offset in [0, 50, 100, 150]:
         params = {
-            "sort_by": "v24hUSD",
+            "sort_by": "liquidity",  # Valid Birdeye V3 sort parameter
             "sort_type": "desc",
             "offset": offset,
             "limit": 50,
@@ -41,6 +40,7 @@ def fetch_birdeye_token_list():
             
             if response.status_code != 200:
                 print(f"[API Error {response.status_code}] Offset {offset}: {response.text}")
+                time.sleep(1.0) # Back off on error
                 continue
                 
             data_json = response.json()
@@ -53,7 +53,7 @@ def fetch_birdeye_token_list():
             if items:
                 all_tokens.extend(items)
                 
-            time.sleep(0.2) # Rate limit courtesy pause
+            time.sleep(0.5) # Required delay to prevent 429 Too Many Requests
         except Exception as e:
             print(f"[Error] Failed connection during pagination offset {offset}: {e}")
             
@@ -64,6 +64,8 @@ def fetch_birdeye_token_list():
     print(f"[Info] Total raw tokens fetched & deduplicated from Birdeye: {len(token_list)}")
     return token_list
 
+                
+   
 
 def verify_token_security_gate(token_address):
     """Queries Birdeye token security endpoint to verify mint/freeze safety."""
