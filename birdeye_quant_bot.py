@@ -21,16 +21,14 @@ PAPER_TRADES_LOG = "paper_trades_ledger.csv"
 DB_CACHE = {}  # {token_address: pd.DataFrame}
 ACTIVE_TRADES = {} # {token_address: {"entry_price": float, "entry_time": str}}
 
-
 def fetch_birdeye_token_list():
-    """Fetches Solana token market data from Birdeye with connection diagnostics."""
-    url = f"{BASE_URL}/defi/v3/token/market-data"
-    params = {"sort_by": "v24hUSD", "sort_type": "desc", "offset": 0, "limit": 50}
+    """Fetches trending/market tokens list from Birdeye using the correct endpoint."""
+    # Using Birdeye's Trending endpoint which returns a bulk list of active tokens safely
+    url = f"{BASE_URL}/defi/token_trending"  # Alternative: f"{BASE_URL}/defi/v3/token/market-data-list"
+    params = {"sort_by": "rank", "sort_type": "asc", "offset": 0, "limit": 50}
     
     try:
         response = requests.get(url, headers=HEADERS, params=params, timeout=10)
-        
-        # --- DIAGNOSTIC PRINTS ---
         print(f"[Debug] Birdeye API Status Code: {response.status_code}")
         
         if response.status_code != 200:
@@ -39,12 +37,14 @@ def fetch_birdeye_token_list():
             
         data_json = response.json()
         
-        # Handle different possible JSON list structures safely
-        items = data_json.get("data", {}).get("items", [])
+        # Safely parse items across different Birdeye response schemas
+        items = data_json.get("data", {}).get("tokens", [])
         if not items and isinstance(data_json.get("data"), list):
             items = data_json.get("data")
+        if not items and isinstance(data_json.get("data", {}).get("items"), list):
+            items = data_json.get("data", {}).get("items")
             
-        print(f"[Info] Successfully parsed {len(items)} tokens from Birdeye.")
+        print(f"[Info] Successfully fetched {len(items)} raw tokens from Birdeye.")
         return items
 
     except Exception as e:
