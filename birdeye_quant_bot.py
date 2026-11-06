@@ -23,16 +23,33 @@ ACTIVE_TRADES = {} # {token_address: {"entry_price": float, "entry_time": str}}
 
 
 def fetch_birdeye_token_list():
-    """Fetches Solana token market data from Birdeye."""
+    """Fetches Solana token market data from Birdeye with connection diagnostics."""
     url = f"{BASE_URL}/defi/v3/token/market-data"
     params = {"sort_by": "v24hUSD", "sort_type": "desc", "offset": 0, "limit": 50}
+    
     try:
         response = requests.get(url, headers=HEADERS, params=params, timeout=10)
-        if response.status_code == 200:
-            return response.json().get("data", {}).get("items", [])
+        
+        # --- DIAGNOSTIC PRINTS ---
+        print(f"[Debug] Birdeye API Status Code: {response.status_code}")
+        
+        if response.status_code != 200:
+            print(f"[Error Response] {response.text}")
+            return []
+            
+        data_json = response.json()
+        
+        # Handle different possible JSON list structures safely
+        items = data_json.get("data", {}).get("items", [])
+        if not items and isinstance(data_json.get("data"), list):
+            items = data_json.get("data")
+            
+        print(f"[Info] Successfully parsed {len(items)} tokens from Birdeye.")
+        return items
+
     except Exception as e:
-        print(f"[Error] Failed to fetch Birdeye token list: {e}")
-    return []
+        print(f"[Error] Failed to connect to Birdeye API: {e}")
+        return []
 
 
 def filter_meme_coins(tokens):
