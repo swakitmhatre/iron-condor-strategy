@@ -22,37 +22,39 @@ ACTIVE_TRADES = {} # {token_address: {"entry_price": float, "entry_time": str}}
 
 
 def fetch_high_volume_tokens_paginated():
-    """Performs server-side pagination across Birdeye token list to aggregate active tokens."""
+    """Fetches active market and trending tokens from Birdeye via stable REST endpoints."""
     all_tokens = []
-    endpoint = f"{BASE_URL}/defi/v3/token/list"
     
-    # Crawl 4 pages (50 items each = 200 tokens per cycle) using correct sort parameters
-    for page in range(4):
-        offset = page * 50
-        params = {
-            "sort_by": "v24hUSD",
-            "sort_type": "desc",
-            "offset": offset,
-            "limit": 50
-        }
+    # Query both Trending and New Listings endpoints to maximize token discovery pool
+    endpoints = [
+        f"{BASE_URL}/defi/token_trending",
+        f"{BASE_URL}/defi/v2/tokens/new_listing"
+    ]
+    
+    for endpoint in endpoints:
+        params = {"sort_by": "rank", "sort_type": "asc", "offset": 0, "limit": 50}
         try:
             response = requests.get(endpoint, headers=HEADERS, params=params, timeout=10)
             if response.status_code == 200:
                 data_json = response.json()
-                # Safely parse items across standard Birdeye v3 schemas
-                items = data_json.get("data", {}).get("items", [])
+                items = data_json.get("data", {}).get("tokens", [])
                 if not items and isinstance(data_json.get("data"), list):
                     items = data_json.get("data")
+                if not items and isinstance(data_json.get("data", {}).get("items"), list):
+                    items = data_json.get("data", {}).get("items")
                 
                 if items:
                     all_tokens.extend(items)
-            
-            time.sleep(0.2) # Rate-limit buffer between pagination requests
+            time.sleep(0.1)
         except Exception as e:
-            print(f"[Error] Pagination offset {offset} failed: {e}")
+            print(f"[Error fetching endpoint {endpoint}]: {e}")
             
-    print(f"[Info] Aggregated {len(all_tokens)} raw tokens via server-side pagination.")
-    return all_tokens
+    # Deduplicate tokens by address
+    unique_tokens = {t.get("address"): t for t in all_tokens if t.get("address")}
+    token_list = list(unique_tokens.values())
+    
+    print(f"[Info] Successfully aggregated {len(token_list)} unique raw tokens.")
+    return token_list
 
 
 def verify_token_security_gate(token_address):
@@ -63,7 +65,6 @@ def verify_token_security_gate(token_address):
         response = requests.get(url, headers=HEADERS, params=params, timeout=5)
         if response.status_code == 200:
             data = response.json().get("data", {})
-            
             owner_address = data.get("ownerAddress")
             freezeable = data.get("freezeable", True)
             top10_pct = float(data.get("top10HolderPercent", 1.0) or 1.0)
@@ -73,11 +74,11 @@ def verify_token_security_gate(token_address):
             return is_safe
     except Exception:
         pass
-    return True  # Fallback to true if security endpoint rate-limits temporarily
+    return True  # Fallback pass if security endpoint rate-limits temporarily
 
 
 def filter_quality_meme_coins(tokens):
-    """Filters paginated tokens through liquidity, volume, and security gates."""
+    """Filters tokens through basic liquidity, volume, and security gates."""
     quality_passed = []
 
     print(f"\n[{pd.Timestamp.now(tz='Asia/Kolkata').strftime('%Y-%m-%d %H:%M:%S')}] Evaluating Quality Gate Pipeline...")
@@ -88,18 +89,12 @@ def filter_quality_meme_coins(tokens):
             market_cap = float(token.get("marketCap", 0) or token.get("mc", 0) or 0)
             liquidity = float(token.get("liquidity", 0) or 0)
             vol_24h = float(token.get("v24hUSD", 0) or token.get("volume24h", 0) or 0)
-            vol_6h = float(token.get("v6hUSD", 0) or token.get("volume6h", 0) or 0)
-            
-            created_at = token.get("listingTimestamp", 0)
-            age_hours = (time.time() - created_at) / 3600 if created_at else 12.0
-            
-            txns_24h = int(token.get("trade24h", 0) or 600)
         except (TypeError, ValueError):
             continue
 
-        # Core Metrics Filter Check (Adjusted for general liquid tokens if strict bounds return zero)
-        if liquidity < 10000: continue
-        if vol_24h < 20000: continue
+        # Softened flexible bounds to ensure initial tokens pass through to indicator tables
+        if liquidity < 5000: continue
+        if vol_24h < 10000: continue
 
         # Deep Security Gate Check
         if address and verify_token_security_gate(address):
