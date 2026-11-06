@@ -21,39 +21,56 @@ DB_CACHE = {}  # {token_address: pd.DataFrame}
 ACTIVE_TRADES = {} # {token_address: {"entry_price": float, "entry_time": str}}
 
 
-def fetch_high_volume_tokens_paginated():
-    """Fetches active market and trending tokens from Birdeye via stable REST endpoints."""
+def fetch_birdeye_token_list():
+    """Fetches hundreds of tokens using Birdeye's New Listing and Token List V3 endpoints."""
     all_tokens = []
     
-    # Query both Trending and New Listings endpoints to maximize token discovery pool
-    endpoints = [
-        f"{BASE_URL}/defi/token_trending",
-        f"{BASE_URL}/defi/v2/tokens/new_listing"
-    ]
-    
-    for endpoint in endpoints:
-        params = {"sort_by": "rank", "sort_type": "asc", "offset": 0, "limit": 50}
-        try:
-            response = requests.get(endpoint, headers=HEADERS, params=params, timeout=10)
-            if response.status_code == 200:
-                data_json = response.json()
-                items = data_json.get("data", {}).get("tokens", [])
-                if not items and isinstance(data_json.get("data"), list):
-                    items = data_json.get("data")
-                if not items and isinstance(data_json.get("data", {}).get("items"), list):
-                    items = data_json.get("data", {}).get("items")
-                
+    # 1. Fetch via New Listings endpoint (captures fresh meme coin launches with meme platform enabled)
+    try:
+        url_new = f"{BASE_URL}/defi/v2/tokens/new_listing"
+        now_ts = int(time.time())
+        params_new = {
+            "time_to": now_ts,
+            "limit": 50,
+            "meme_platform_enabled": True
+        }
+        resp = requests.get(url_new, headers=HEADERS, params=params_new, timeout=10)
+        if resp.status_code == 200:
+            items = resp.json().get("data", {}).get("items", [])
+            if not items and isinstance(resp.json().get("data"), list):
+                items = resp.json().get("data")
+            if items:
+                all_tokens.extend(items)
+    except Exception as e:
+        print(f"[Warning] New listing fetch error: {e}")
+
+    # 2. Fetch via Token List V3 with a minimum liquidity filter to grab active quality tokens
+    try:
+        url_v3 = f"{BASE_URL}/defi/v3/token/list"
+        for offset in [0, 50, 100]:
+            params_v3 = {
+                "sort_by": "v24hUSD",
+                "sort_type": "desc",
+                "offset": offset,
+                "limit": 50,
+                "min_liquidity": 5000
+            }
+            resp = requests.get(url_v3, headers=HEADERS, params=params_v3, timeout=10)
+            if resp.status_code == 200:
+                items = resp.json().get("data", {}).get("items", [])
+                if not items and isinstance(resp.json().get("data"), list):
+                    items = resp.json().get("data")
                 if items:
                     all_tokens.extend(items)
             time.sleep(0.1)
-        except Exception as e:
-            print(f"[Error fetching endpoint {endpoint}]: {e}")
-            
-    # Deduplicate tokens by address
+    except Exception as e:
+        print(f"[Warning] Token list v3 fetch error: {e}")
+
+    # Deduplicate by token address
     unique_tokens = {t.get("address"): t for t in all_tokens if t.get("address")}
     token_list = list(unique_tokens.values())
     
-    print(f"[Info] Successfully aggregated {len(token_list)} unique raw tokens.")
+    print(f"[Info] Successfully aggregated {len(token_list)} unique raw tokens from multi-source endpoints.")
     return token_list
 
 
@@ -217,7 +234,9 @@ def run_bot_cycle():
     print("Solana Quality Quant Bot Engine Running...")
     print("==================================================")
 
-    tokens = fetch_high_volume_tokens_paginated()
+    tokens = fetch_birdeye_token_list()
+    print(f"[Info] Total raw tokens fetched from Birdeye: {len(tokens)}")
+
     quality_coins = filter_quality_meme_coins(tokens)
 
     if not quality_coins:
