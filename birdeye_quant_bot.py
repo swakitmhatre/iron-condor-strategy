@@ -81,6 +81,7 @@ def filter_meme_coins(tokens):
         if txns_24h < 500: continue
 
         primary_passed.append(token)
+        print("primary_passed-------->",primary_passed)
 
         # Strict Secondary Filters (g to q)
         passes_g_to_q = (
