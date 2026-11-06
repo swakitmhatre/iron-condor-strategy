@@ -22,55 +22,46 @@ ACTIVE_TRADES = {} # {token_address: {"entry_price": float, "entry_time": str}}
 
 
 def fetch_birdeye_token_list():
-    """Fetches hundreds of tokens using Birdeye's New Listing and Token List V3 endpoints."""
+    """Fetches tokens using Birdeye's standard V3 Token List endpoint with server-side pagination."""
     all_tokens = []
+    endpoint = f"{BASE_URL}/defi/v3/token/list"
     
-    # 1. Fetch via New Listings endpoint (captures fresh meme coin launches with meme platform enabled)
-    try:
-        url_new = f"{BASE_URL}/defi/v2/tokens/new_listing"
-        now_ts = int(time.time())
-        params_new = {
-            "time_to": now_ts,
+    # Paginate across 4 offsets (0, 50, 100, 150) to pull 200 tokens per loop cycle
+    for offset in [0, 50, 100, 150]:
+        params = {
+            "sort_by": "v24hUSD",
+            "sort_type": "desc",
+            "offset": offset,
             "limit": 50,
-            "meme_platform_enabled": True
+            "min_liquidity": 1000
         }
-        resp = requests.get(url_new, headers=HEADERS, params=params_new, timeout=10)
-        if resp.status_code == 200:
-            items = resp.json().get("data", {}).get("items", [])
-            if not items and isinstance(resp.json().get("data"), list):
-                items = resp.json().get("data")
+        
+        try:
+            response = requests.get(endpoint, headers=HEADERS, params=params, timeout=10)
+            
+            if response.status_code != 200:
+                print(f"[API Error {response.status_code}] Offset {offset}: {response.text}")
+                continue
+                
+            data_json = response.json()
+            
+            # Parse standard V3 items response schema safely
+            items = data_json.get("data", {}).get("items", [])
+            if not items and isinstance(data_json.get("data"), list):
+                items = data_json.get("data")
+                
             if items:
                 all_tokens.extend(items)
-    except Exception as e:
-        print(f"[Warning] New listing fetch error: {e}")
-
-    # 2. Fetch via Token List V3 with a minimum liquidity filter to grab active quality tokens
-    try:
-        url_v3 = f"{BASE_URL}/defi/v3/token/list"
-        for offset in [0, 50, 100]:
-            params_v3 = {
-                "sort_by": "v24hUSD",
-                "sort_type": "desc",
-                "offset": offset,
-                "limit": 50,
-                "min_liquidity": 5000
-            }
-            resp = requests.get(url_v3, headers=HEADERS, params=params_v3, timeout=10)
-            if resp.status_code == 200:
-                items = resp.json().get("data", {}).get("items", [])
-                if not items and isinstance(resp.json().get("data"), list):
-                    items = resp.json().get("data")
-                if items:
-                    all_tokens.extend(items)
-            time.sleep(0.1)
-    except Exception as e:
-        print(f"[Warning] Token list v3 fetch error: {e}")
-
+                
+            time.sleep(0.2) # Rate limit courtesy pause
+        except Exception as e:
+            print(f"[Error] Failed connection during pagination offset {offset}: {e}")
+            
     # Deduplicate by token address
     unique_tokens = {t.get("address"): t for t in all_tokens if t.get("address")}
     token_list = list(unique_tokens.values())
     
-    print(f"[Info] Successfully aggregated {len(token_list)} unique raw tokens from multi-source endpoints.")
+    print(f"[Info] Total raw tokens fetched & deduplicated from Birdeye: {len(token_list)}")
     return token_list
 
 
@@ -86,8 +77,8 @@ def verify_token_security_gate(token_address):
             freezeable = data.get("freezeable", True)
             top10_pct = float(data.get("top10HolderPercent", 1.0) or 1.0)
             
-            # Security Rule Gate: Mint authority renounced, not freezeable, top 10 holders <= 30%
-            is_safe = (owner_address is None) and (not freezeable) and (top10_pct <= 0.30)
+            # Security Rule Gate: Mint authority renounced, not freezeable, top 10 holders <= 40%
+            is_safe = (owner_address is None) and (not freezeable) and (top10_pct <= 0.40)
             return is_safe
     except Exception:
         pass
@@ -103,15 +94,14 @@ def filter_quality_meme_coins(tokens):
     for token in tokens:
         try:
             address = token.get("address")
-            market_cap = float(token.get("marketCap", 0) or token.get("mc", 0) or 0)
             liquidity = float(token.get("liquidity", 0) or 0)
             vol_24h = float(token.get("v24hUSD", 0) or token.get("volume24h", 0) or 0)
         except (TypeError, ValueError):
             continue
 
         # Softened flexible bounds to ensure initial tokens pass through to indicator tables
-        if liquidity < 5000: continue
-        if vol_24h < 10000: continue
+        if liquidity < 2000: continue
+        if vol_24h < 5000: continue
 
         # Deep Security Gate Check
         if address and verify_token_security_gate(address):
@@ -235,7 +225,10 @@ def run_bot_cycle():
     print("==================================================")
 
     tokens = fetch_birdeye_token_list()
-    print(f"[Info] Total raw tokens fetched from Birdeye: {len(tokens)}")
+    
+    if not tokens:
+        print("[Warning] 0 raw tokens returned. Check network or IP whitelist restrictions.")
+        return
 
     quality_coins = filter_quality_meme_coins(tokens)
 
