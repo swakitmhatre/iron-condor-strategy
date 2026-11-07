@@ -26,13 +26,14 @@ def fetch_birdeye_token_list():
     endpoint = f"{BASE_URL}/defi/v3/token/list"
     
     # Paginate across offsets safely with conservative rate-limit pacing
-    for offset in [0, 50, 100, 150]:
+    #for offset in [0, 50, 100, 150,200,250,300]:
+    for offset in [0, 100, 200, 300,400,500]:
         params = {
             "sort_by": "liquidity",  # Valid Birdeye V3 sort parameter
             "sort_type": "desc",
             "offset": offset,
-            "limit": 50,
-            "min_liquidity": 1000
+            "limit": 100,
+            "min_liquidity": 100000
         }
         
         try:
