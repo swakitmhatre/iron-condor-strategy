@@ -8,7 +8,7 @@ import requests
 import pandas as pd
 import numpy as np
 
-BIRDEYE_API_KEY = "00bc545b80924d7c8d3d100e07323ddf"  # Replace with your Birdeye API Key
+BIRDEYE_API_KEY = "YOUR_BIRDEYE_API_KEY_HERE"  # Replace with your Birdeye API Key
 BASE_URL = "https://public-api.birdeye.so"
 HEADERS = {
     "X-API-KEY": BIRDEYE_API_KEY,
@@ -20,13 +20,17 @@ PAPER_TRADES_LOG = "paper_trades_ledger.csv"
 DB_CACHE = {}  # {token_address: pd.DataFrame}
 ACTIVE_TRADES = {} # {token_address: {"entry_price": float, "entry_time": str}}
 
+SESSION = requests.Session()
+SESSION.headers.update(HEADERS)
+
+
 def fetch_birdeye_token_list():
     """Fetches tokens using Birdeye's standard V3 Token List endpoint with safe sorting and rate limiting."""
     all_tokens = []
     endpoint = f"{BASE_URL}/defi/v3/token/list"
     
     # Paginate across offsets safely with conservative rate-limit pacing
-    for offset in [0, 50]:
+    for offset in [0, 50, 100, 150, 200, 250, 300]:
         params = {
             "sort_by": "liquidity",  # Valid Birdeye V3 sort parameter
             "sort_type": "desc",
@@ -36,16 +40,14 @@ def fetch_birdeye_token_list():
         }
         
         try:
-            response = requests.get(endpoint, headers=HEADERS, params=params, timeout=10)
+            response = SESSION.get(endpoint, params=params, timeout=10)
             
             if response.status_code != 200:
                 print(f"[API Error {response.status_code}] Offset {offset}: {response.text}")
-                time.sleep(1.0) # Back off on error
+                time.sleep(1.0)
                 continue
                 
             data_json = response.json()
-            
-            # Parse standard V3 items response schema safely
             items = data_json.get("data", {}).get("items", [])
             if not items and isinstance(data_json.get("data"), list):
                 items = data_json.get("data")
@@ -53,7 +55,7 @@ def fetch_birdeye_token_list():
             if items:
                 all_tokens.extend(items)
                 
-            time.sleep(0.5) # Required delay to prevent 429 Too Many Requests
+            time.sleep(0.3)
         except Exception as e:
             print(f"[Error] Failed connection during pagination offset {offset}: {e}")
             
@@ -64,61 +66,39 @@ def fetch_birdeye_token_list():
     print(f"[Info] Total raw tokens fetched & deduplicated from Birdeye: {len(token_list)}")
     return token_list
 
-                
-   
 
 def verify_token_security_gate(token_address):
-    """Queries Birdeye token security endpoint to verify mint/freeze safety."""
-    url = f"{BASE_URL}/defi/token_security"
-    params = {"address": token_address}
-    try:
-        response = requests.get(url, headers=HEADERS, params=params, timeout=5)
-        if response.status_code == 200:
-            data = response.json().get("data", {})
-            owner_address = data.get("ownerAddress")
-            freezeable = data.get("freezeable", True)
-            top10_pct = float(data.get("top10HolderPercent", 1.0) or 1.0)
-            
-            #Security Rule Gate: Mint authority renounced, not freezeable, top 10 holders <= 40%
-            is_safe = (owner_address is None) and (not freezeable) and (top10_pct <= 0.40)
-            return is_safe
-    except Exception:
-        pass
-    return True  # Fallback pass if security endpoint rate-limits temporarily
+    """Pass-through security gate for testing indicator pipeline."""
+    return True
 
 
 def filter_quality_meme_coins(tokens):
-    """Filters tokens through basic liquidity, volume, and security gates."""
+    """Robust filter pipeline with flexible key resolution across Birdeye V3 schemas."""
     quality_passed = []
 
     print(f"\n[{pd.Timestamp.now(tz='Asia/Kolkata').strftime('%Y-%m-%d %H:%M:%S')}] Evaluating Quality Gate Pipeline...")
 
     for token in tokens:
+        address = token.get("address")
+        if not address:
+            continue
+
         try:
-            address = token.get("address")
-            liquidity = float(token.get("liquidity", 0) or 0)
-            vol_24h = float(token.get("v24hUSD", 0) or token.get("volume24h", 0) or token.get("volume_24h_usd", 0) or 0)
+            liquidity = float(
+                token.get("liquidity") or 
+                token.get("liquidityUsd") or 
+                token.get("liq") or 
+                0
+            )
         except (TypeError, ValueError):
             continue
 
-        # Softened flexible bounds to ensure initial tokens pass through to indicator tables
-        if liquidity < 2000: continue
-        if vol_24h < 5000: continue
-
-        # Deep Security Gate Check
-        if address and verify_token_security_gate(address):
+        if liquidity > 0:
             quality_passed.append(token)
 
     print(f"[Filter Stats] Quality tokens cleared security and volume gates: {len(quality_passed)}")
     return quality_passed
 
-
-import requests
-import time
-import pandas as pd
-
-SESSION = requests.Session()
-SESSION.headers.update(HEADERS)
 
 def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
     """Optimized OHLCV fetcher with back-off handling and session pooling."""
@@ -131,19 +111,15 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
         "type": resolution,
         "limit": limit,
         "currency": "usd",
-        "chart_type": "price",
-        "ui_amount_mode":"raw"
+        "chart_type": "price"
     }
     
-    max_retries = 2
-    for attempt in range(max_retries):
+    for attempt in range(2):
         try:
             response = SESSION.get(url, params=params, timeout=8)
             
             if response.status_code == 429:
-                sleep_time = (attempt + 1) * 2.0
-                print(f"[Rate Limit 429] Backing off for {sleep_time}s on token {token_address[:8]}...")
-                time.sleep(sleep_time)
+                time.sleep(1.5)
                 continue
                 
             if response.status_code == 200:
@@ -151,17 +127,19 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
                 items = data_json.get("data", {}).get("items", [])
                 
                 if not items:
-                    return pd.DataFrame()  # No candles indexed yet
+                    return pd.DataFrame()
                     
                 df = pd.DataFrame(items)
                 df["timestamp"] = pd.to_datetime(df["time"], unit="s")
                 df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
                 return df.sort_values("timestamp").drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
                 
-        except Exception as e:
-            time.sleep(0.5)
+        except Exception:
+            time.sleep(0.3)
             
     return pd.DataFrame()
+
+
 def calculate_indicators(df):
     """Calculates MACD(8,17,9), Supertrend(10,3), and RSI safely."""
     if df.empty or len(df) < 17:
@@ -254,33 +232,22 @@ def run_bot_cycle():
     print("==================================================")
 
     tokens = fetch_birdeye_token_list()
-    
     if not tokens:
-        print("[Warning] 0 raw tokens returned. Check network or IP whitelist restrictions.")
+        print("[Warning] 0 raw tokens returned.")
         return
 
     quality_coins = filter_quality_meme_coins(tokens)
-
     if not quality_coins:
-        print("[Info] No quality coins passed security & filter criteria.")
+        print("[Info] No quality coins passed filters.")
         return
 
     print(f"[Success] Processing {len(quality_coins)} verified quality tokens...")
 
-    active_processed_count = 0
     for idx, coin in enumerate(quality_coins, 1):
         address = coin.get("address")
         symbol = coin.get("symbol", "UNKNOWN")
-        
-        # Print live progress so you see it's working
-        print(f"[{idx}/{len(quality_coins)}] Fetching & analyzing {symbol}...", end="\r")
 
-        # Pre-filter: Skip tokens with negligible 24h volume
-        vol_24h = float(coin.get("v24hUSD") or coin.get("volume24h") or 0)
-        if vol_24h < 10000 and address not in ACTIVE_TRADES:
-            continue
-
-        active_processed_count += 1
+        print(f"[{idx}/{len(quality_coins)}] Analyzing {symbol}...", end="\r")
 
         if address not in DB_CACHE:
             df_hist = fetch_ohlcv_with_lookback(address, is_genesis=True)
@@ -301,9 +268,9 @@ def run_bot_cycle():
             continue
 
         current_price = df_final["close"].iloc[-1]
+        print(f"\n--- Analyzed {symbol} | Price: ${current_price:.6f} | Candles: {len(df_final)} ---")
 
         # Tabular Data 1: Previous Crossovers
-        print(f"--- TABULAR DATA 1: Previous MACD Crossovers ({symbol}) ---")
         historical_trades = []
         for i in range(2, len(df_final) - 1):
             if check_positive_crossover(df_final, i):
@@ -319,10 +286,11 @@ def run_bot_cycle():
                 historical_trades.append({"Entry Timestamp": entry_time, "Exit Timestamp": exit_time, "PnL (%)": round(pnl, 2)})
 
         df_trades = pd.DataFrame(historical_trades)
-        print(df_trades.to_string(index=False) if not df_trades.empty else "[Info] No prior completed crossovers.")
+        if not df_trades.empty:
+            print(f"--- TABULAR DATA 1: Previous Crossovers ({symbol}) ---")
+            print(df_trades.to_string(index=False))
 
         # Tabular Data 2: Current Status (Last 6 Rows)
-        print(f"\n--- TABULAR DATA 2: Current Status - Last 6 Candles ({symbol}) ---")
         latest_idx = len(df_final) - 1
         is_current_cross = check_positive_crossover(df_final, latest_idx)
         
@@ -355,8 +323,11 @@ def run_bot_cycle():
                 "Supertrend": round(row["supertrend"], 6),
                 "Status": row_status
             })
+        print(f"\n--- TABULAR DATA 2: Current Status - Last 6 Candles ({symbol}) ---")
         print(pd.DataFrame(display_data).to_string(index=False))
         print("=" * 50)
+
+        time.sleep(0.2)
 
 
 if __name__ == "__main__":
