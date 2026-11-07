@@ -133,6 +133,7 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
                 print("++++++++++++++++++++++++++++++++++++++=")
                 data_json = response.json()
                 items = data_json.get("data", {}).get("items", [])
+                print(items)
                 print("df------->",df)
                 if not items:
                     print("df not items------->",df)
