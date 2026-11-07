@@ -272,18 +272,20 @@ def run_bot_cycle():
         address = coin.get("address")
         symbol = coin.get("symbol", "UNKNOWN")
         
-        # Pre-filter: Skip tokens with negligible 24h volume to save API requests and avoid empty items[]
+        # Print live progress so you see it's working
+        print(f"[{idx}/{len(quality_coins)}] Fetching & analyzing {symbol}...", end="\r")
+
+        # Pre-filter: Skip tokens with negligible 24h volume
         vol_24h = float(coin.get("v24hUSD") or coin.get("volume24h") or 0)
         if vol_24h < 10000 and address not in ACTIVE_TRADES:
             continue
 
         active_processed_count += 1
-        print(f"\nProcessing Active Token [{active_processed_count}]: {symbol} ({address[:8]}...)")
 
         if address not in DB_CACHE:
             df_hist = fetch_ohlcv_with_lookback(address, is_genesis=True)
             if df_hist.empty:
-                time.sleep(0.1) # Brief pause even on empty skip
+                time.sleep(0.1)
                 continue
             DB_CACHE[address] = df_hist
         else:
