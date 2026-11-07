@@ -258,7 +258,7 @@ def run_bot_cycle():
                 if len(existing_df) >= 3:
                     existing_df = existing_df.iloc[:-3]
                 DB_CACHE[address] = pd.concat([existing_df, df_recent]).drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
-
+        print("table value--->",DB_CACHE[address])
         df_final = calculate_indicators(DB_CACHE[address])
         if len(df_final) < 5:
             continue
