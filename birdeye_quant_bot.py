@@ -97,7 +97,7 @@ def filter_quality_meme_coins(tokens):
         try:
             address = token.get("address")
             liquidity = float(token.get("liquidity", 0) or 0)
-            vol_24h = float(token.get("v24hUSD", 0) or token.get("volume24h", 0) or 0)
+            vol_24h = float(token.get("v24hUSD", 0) or token.get("volume24h", 0) or token.get("volume_24h_usd", 0) or 0)
         except (TypeError, ValueError):
             continue
 
