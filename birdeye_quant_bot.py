@@ -123,7 +123,7 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
     for attempt in range(2):
         try:
             response = SESSION.get(url, params=params, timeout=8)
-            print("response 1--------->",response)
+            print("response 1--------->",response.json())
             
             if response.status_code == 429:
                 time.sleep(1.5)
