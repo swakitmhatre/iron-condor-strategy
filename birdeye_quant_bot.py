@@ -94,7 +94,7 @@ def filter_quality_meme_coins(tokens):
 
             market_cap=float(token.get("market_cap") or 0)
             volume_24h_usd=float(token.get("volume_24h_usd") or 0)
-            l/mc=float((liquidity/market_cap) or 0)
+            l/mc=float(liquidity/market_cap or 0)
         except (TypeError, ValueError):
             continue
 
