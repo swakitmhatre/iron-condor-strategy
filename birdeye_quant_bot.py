@@ -36,7 +36,8 @@ def fetch_birdeye_token_list():
             "sort_type": "desc",
             "offset": offset,
             "limit": 50,
-            "min_liquidity": 100000
+            "min_liquidity": 100000,
+            "market_cap":1000000
         }
         
         try:
@@ -133,6 +134,7 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
                 df = pd.DataFrame(items)
                 df["timestamp"] = pd.to_datetime(df["time"], unit="s")
                 df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
+                print("df--->",df)
                 return df.sort_values("timestamp").drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
                 
         except Exception:
