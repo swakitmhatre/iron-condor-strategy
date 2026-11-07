@@ -132,7 +132,7 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
         "limit": limit,
         "currency": "usd",
         "chart_type": "price",
-        "ui_amount_mode"="raw"
+        "ui_amount_mode":"raw"
     }
     
     max_retries = 2
