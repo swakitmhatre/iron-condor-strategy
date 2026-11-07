@@ -111,7 +111,7 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
     resolution = "5m"
     limit = 100 if is_genesis else 3  
     #url = f"{BASE_URL}/defi/ohlcv"
-    url = f"{BASE_URL}/defi/v3/ohlcv/pair"
+    url = f"{BASE_URL}/defi/ohlcv/base_quote"
     #url = f"{BASE_URL}/defi/price"
     
     params = {
@@ -119,7 +119,8 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
         "type": resolution,
         "limit": limit,
         "currency": "usd",
-        "chart_type": "price"
+        "chart_type": "price",
+        "ui_amount_mode":"raw"
     }
     
     for attempt in range(2):
