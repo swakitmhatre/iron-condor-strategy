@@ -75,13 +75,13 @@ def verify_token_security_gate(token_address):
         response = requests.get(url, headers=HEADERS, params=params, timeout=5)
         if response.status_code == 200:
             data = response.json().get("data", {})
-            #owner_address = data.get("ownerAddress")
-            #freezeable = data.get("freezeable", True)
-            #top10_pct = float(data.get("top10HolderPercent", 1.0) or 1.0)
+            owner_address = data.get("ownerAddress")
+            freezeable = data.get("freezeable", True)
+            top10_pct = float(data.get("top10HolderPercent", 1.0) or 1.0)
             
-            # Security Rule Gate: Mint authority renounced, not freezeable, top 10 holders <= 40%
-            #is_safe = (owner_address is None) and (not freezeable) and (top10_pct <= 0.40)
-            #return is_safe
+            Security Rule Gate: Mint authority renounced, not freezeable, top 10 holders <= 40%
+            is_safe = (owner_address is None) and (not freezeable) and (top10_pct <= 0.40)
+            return is_safe
     except Exception:
         pass
     return True  # Fallback pass if security endpoint rate-limits temporarily
