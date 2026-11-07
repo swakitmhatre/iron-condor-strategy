@@ -110,7 +110,8 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
     """Optimized OHLCV fetcher with back-off handling and session pooling."""
     resolution = "5m"
     limit = 100 if is_genesis else 3  
-    url = f"{BASE_URL}/defi/ohlcv"
+    #url = f"{BASE_URL}/defi/ohlcv"
+    url = f"{BASE_URL}/defi/v3/ohlcv"
     
     params = {
         "address": token_address,
@@ -133,8 +134,8 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
                 print("++++++++++++++++++++++++++++++++++++++=")
                 data_json = response.json()
                 items = data_json.get("data", {}).get("items", [])
-                print(items)
-                print("df------->",df)
+                
+               
                 if not items:
                     print("df not items------->",df)
                     return pd.DataFrame()
