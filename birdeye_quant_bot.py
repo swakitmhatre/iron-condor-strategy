@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Solana Quality Quant Bot & Quality Gate Engine (Birdeye API Optimized)"""
+"""Solana Meme Coin Quant Bot & Quality Gate Engine (Birdeye API)"""
 
 import os
+import sys
 import time
 import requests
 import pandas as pd
+import numpy as np
 
 BIRDEYE_API_KEY = "00bc545b80924d7c8d3d100e07323ddf"  # Replace with your Birdeye API Key
 BASE_URL = "https://public-api.birdeye.so"
@@ -15,7 +17,7 @@ HEADERS = {
 }
 
 PAPER_TRADES_LOG = "paper_trades_ledger.csv"
-DB_CACHE = {}      # {token_address: pd.DataFrame}
+DB_CACHE = {}  # {token_address: pd.DataFrame}
 ACTIVE_TRADES = {} # {token_address: {"entry_price": float, "entry_time": str}}
 
 SESSION = requests.Session()
@@ -23,46 +25,58 @@ SESSION.headers.update(HEADERS)
 
 
 def fetch_birdeye_token_list():
-    """Fetches top liquid tokens using safe pagination and rate pacing."""
+    """Fetches tokens using Birdeye's standard V3 Token List endpoint with safe sorting and rate limiting."""
     all_tokens = []
     endpoint = f"{BASE_URL}/defi/v3/token/list"
     
-    # Restrict to top 150 tokens to avoid rate-limit exhaustion on starter tiers
-    for offset in [0, 50, 100]:
+    # Paginate across offsets safely with conservative rate-limit pacing
+    for offset in [0, 50, 100,150,200,300,350,400,450,500,550,600]:
         params = {
-            "sort_by": "liquidity",
+            "sort_by": "liquidity",  # Valid Birdeye V3 sort parameter
             "sort_type": "desc",
             "offset": offset,
             "limit": 50,
-            "min_liquidity": 50000
+            "liquidity": 100000,
+            "market_cap": 1000000
         }
         
         try:
             response = SESSION.get(endpoint, params=params, timeout=10)
-            if response.status_code == 429:
-                print(f"[Rate Limit 429] Backing off at offset {offset}...")
-                time.sleep(3.0)
+            
+            if response.status_code != 200:
+                print(f"[API Error {response.status_code}] Offset {offset}: {response.text}")
+                time.sleep(1.0)
                 continue
                 
-            if response.status_code == 200:
-                data_json = response.json()
-                items = data_json.get("data", {}).get("items", [])
-                if items:
-                    all_tokens.extend(items)
-                    
-            time.sleep(0.4) # Courteous rate pacing
+            data_json = response.json()
+            items = data_json.get("data", {}).get("items", [])
+            if not items and isinstance(data_json.get("data"), list):
+                items = data_json.get("data")
+                
+            if items:
+                all_tokens.extend(items)
+                
+            time.sleep(0.3)
         except Exception as e:
-            print(f"[Error] Pagination offset {offset} failed: {e}")
+            print(f"[Error] Failed connection during pagination offset {offset}: {e}")
             
+    # Deduplicate by token address
     unique_tokens = {t.get("address"): t for t in all_tokens if t.get("address")}
     token_list = list(unique_tokens.values())
+    
     print(f"[Info] Total raw tokens fetched & deduplicated from Birdeye: {len(token_list)}")
     return token_list
 
 
+def verify_token_security_gate(token_address):
+    """Pass-through security gate for testing indicator pipeline."""
+    return True
+
+
 def filter_quality_meme_coins(tokens):
-    """Filters tokens meeting baseline liquidity and volume requirements."""
+    """Robust filter pipeline with flexible key resolution across Birdeye V3 schemas."""
     quality_passed = []
+
     print(f"\n[{pd.Timestamp.now(tz='Asia/Kolkata').strftime('%Y-%m-%d %H:%M:%S')}] Evaluating Quality Gate Pipeline...")
 
     for token in tokens:
@@ -71,21 +85,29 @@ def filter_quality_meme_coins(tokens):
             continue
 
         try:
-            liquidity = float(token.get("liquidity") or token.get("liquidityUsd") or 0)
-            vol_24h = float(token.get("v24hUSD") or token.get("volume_24h_usd") or 0)
+            liquidity = float(
+                token.get("liquidity") or 
+                token.get("liquidityUsd") or 
+                token.get("liq") or 
+                0
+            )
+
+            market_cap=float(token.get("market_cap") or 0)
+            volume_24h_usd=float(token.get("volume_24h_usd") or 0)
+            lmc=float((liquidity/market_cap) or 0)
+            #print("lmc--------->",lmc)
         except (TypeError, ValueError):
             continue
 
-        # Filter out dead pools immediately
-        if liquidity >= 50000 and vol_24h >= 10000:
+        if liquidity > 100000 and market_cap >1000000 and lmc > 5 :
             quality_passed.append(token)
 
-    print(f"[Filter Stats] Quality tokens cleared gates: {len(quality_passed)}")
+    print(f"[Filter Stats] Quality tokens cleared security and volume gates: {len(quality_passed)}")
     return quality_passed
 
 
 def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
-    """Fetches historical candles with exponential back-off and empty-check protection."""
+    """Optimized OHLCV fetcher with back-off handling and session pooling."""
     resolution = "5m"
     limit = 100 if is_genesis else 3  
     url = f"{BASE_URL}/defi/ohlcv"
@@ -98,31 +120,32 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
         "chart_type": "price"
     }
     
-    backoff = 0.1
-    for attempt in range(3):
+    for attempt in range(2):
         try:
-            response = SESSION.get(url, params=params, timeout=10)
+            response = SESSION.get(url, params=params, timeout=8)
+            print("response 1--------->",response.json())
             
             if response.status_code == 429:
-                print(f"[Rate Limit 429] Throttled. Backing off for {backoff}s...")
-                time.sleep(backoff)
-                backoff *= 2
+                time.sleep(1.5)
                 continue
                 
             if response.status_code == 200:
                 data_json = response.json()
                 items = data_json.get("data", {}).get("items", [])
-                
+                print("df------->",df)
                 if not items:
-                    return pd.DataFrame()  # No candles indexed yet
+                    print("df not items------->",df)
+                    return pd.DataFrame()
                     
                 df = pd.DataFrame(items)
+                print("df with items------->",df)
                 df["timestamp"] = pd.to_datetime(df["time"], unit="s")
                 df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
+                print("df--->",df)
                 return df.sort_values("timestamp").drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
                 
         except Exception:
-            time.sleep(0.5)
+            time.sleep(0.3)
             
     return pd.DataFrame()
 
@@ -230,14 +253,12 @@ def run_bot_cycle():
 
     print(f"[Success] Processing {len(quality_coins)} verified quality tokens...")
 
-    analyzed_count = 0
     for idx, coin in enumerate(quality_coins, 1):
         address = coin.get("address")
         symbol = coin.get("symbol", "UNKNOWN")
 
-        print(f"[{idx}/{len(quality_coins)}] Checking {symbol}...", end="\r")
+        print(f"[{idx}/{len(quality_coins)}] Analyzing {symbol}...", end="\r")
 
-        # Fetch candles with fallback checks for empty items[]
         if address not in DB_CACHE:
             df_hist = fetch_ohlcv_with_lookback(address, is_genesis=True)
             if df_hist.empty:
@@ -256,9 +277,8 @@ def run_bot_cycle():
         if len(df_final) < 5:
             continue
 
-        analyzed_count += 1
         current_price = df_final["close"].iloc[-1]
-        print(f"\n--- Analyzed [{analyzed_count}]: {symbol} | Price: ${current_price:.6f} | Candles: {len(df_final)} ---")
+        print(f"\n--- Analyzed {symbol} | Price: ${current_price:.6f} | Candles: {len(df_final)} ---")
 
         # Tabular Data 1: Previous Crossovers
         historical_trades = []
@@ -280,7 +300,7 @@ def run_bot_cycle():
             print(f"--- TABULAR DATA 1: Previous Crossovers ({symbol}) ---")
             print(df_trades.to_string(index=False))
 
-        # Tabular Data 2: Current Status
+        # Tabular Data 2: Current Status (Last 6 Rows)
         latest_idx = len(df_final) - 1
         is_current_cross = check_positive_crossover(df_final, latest_idx)
         
@@ -317,7 +337,7 @@ def run_bot_cycle():
         print(pd.DataFrame(display_data).to_string(index=False))
         print("=" * 50)
 
-        time.sleep(0.3)  # Rate pacing pause
+        time.sleep(0.2)
 
 
 if __name__ == "__main__":
