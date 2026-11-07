@@ -36,8 +36,8 @@ def fetch_birdeye_token_list():
             "sort_type": "desc",
             "offset": offset,
             "limit": 50,
-            "min_liquidity": 100000,
-            "market_cap":1000000
+            "liquidity": 100000,
+            "market_cap": 1000000
         }
         
         try:
