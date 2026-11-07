@@ -123,7 +123,7 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
     for attempt in range(2):
         try:
             response = SESSION.get(url, params=params, timeout=8)
-            print("response--------->",response)
+            print("response 1--------->",response)
             
             if response.status_code == 429:
                 time.sleep(1.5)
@@ -134,11 +134,11 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
                 items = data_json.get("data", {}).get("items", [])
                 
                 if not items:
-                    print("df------->",df)
+                    print("df not items------->",df)
                     return pd.DataFrame()
                     
                 df = pd.DataFrame(items)
-                print("df------->",df)
+                print("df with items------->",df)
                 df["timestamp"] = pd.to_datetime(df["time"], unit="s")
                 df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
                 print("df--->",df)
