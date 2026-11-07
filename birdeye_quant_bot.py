@@ -26,7 +26,7 @@ def fetch_birdeye_token_list():
     endpoint = f"{BASE_URL}/defi/v3/token/list"
     
     # Paginate across offsets safely with conservative rate-limit pacing
-    for offset in [0, 50, 100, 150,200,250,300]:
+    for offset in [0, 50, 100]:
         params = {
             "sort_by": "liquidity",  # Valid Birdeye V3 sort parameter
             "sort_type": "desc",
@@ -114,26 +114,39 @@ def filter_quality_meme_coins(tokens):
 
 
 def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
-    """Genesis fetch or 5-min look-back overwrite."""
+    """Fetches token-level OHLCV candles using Birdeye's standard /defi/ohlcv endpoint."""
     resolution = "5m"
     limit = 100 if is_genesis else 3  
     url = f"{BASE_URL}/defi/ohlcv"
-    params = {"address": token_address, "type": resolution, "limit": limit}
+    
+    # Matching official parameters from documentation
+    params = {
+        "address": token_address,
+        "type": resolution,
+        "limit": limit,
+        "currency": "usd",
+        "chart_type": "price"
+    }
     
     try:
         response = requests.get(url, headers=HEADERS, params=params, timeout=10)
         if response.status_code == 200:
-            items = response.json().get("data", {}).get("items", [])
+            data_json = response.json()
+            items = data_json.get("data", {}).get("items", [])
+            if not items and isinstance(data_json.get("data"), list):
+                items = data_json.get("data")
+                
             if not items:
                 return pd.DataFrame()
+                
             df = pd.DataFrame(items)
             df["timestamp"] = pd.to_datetime(df["time"], unit="s")
             df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
             return df.sort_values("timestamp").drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
     except Exception as e:
         print(f"[Error fetching OHLCV for {token_address}]: {e}")
+        
     return pd.DataFrame()
-
 
 def calculate_indicators(df):
     """Calculates MACD(8,17,9), Supertrend(10,3), and RSI safely."""
