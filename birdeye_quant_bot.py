@@ -45,7 +45,7 @@ def fetch_birdeye_token_list():
             
             if response.status_code != 200:
                 print(f"[API Error {response.status_code}] Offset {offset}: {response.text}")
-                time.sleep(1.0)
+                time.sleep(1.2)
                 continue
                 
             data_json = response.json()
