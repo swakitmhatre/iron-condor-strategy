@@ -113,51 +113,55 @@ def filter_quality_meme_coins(tokens):
     return quality_passed
 
 
+import requests
+import time
+import pandas as pd
+
+SESSION = requests.Session()
+SESSION.headers.update(HEADERS)
+
 def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
-    """Fetches token-level OHLCV candles using Birdeye's standard /defi/ohlcv endpoint."""
+    """Optimized OHLCV fetcher with back-off handling and session pooling."""
     resolution = "5m"
     limit = 100 if is_genesis else 3  
     url = f"{BASE_URL}/defi/ohlcv"
     
-    # Matching official parameters from documentation
     params = {
         "address": token_address,
         "type": resolution,
         "limit": limit,
         "currency": "usd",
         "chart_type": "price",
-        "ui_amount_mode":"raw"
+        "ui_amount_mode"="raw"
     }
     
-    try:
-        response = requests.get(url, headers=HEADERS, params=params, timeout=10)
-        print("response----------->",response)
-
-        if response.status_code == 429:
-            print(f"[Rate Limit 429] Backing off for token {token_address}...")
-            time.sleep(2.0)
-            return pd.DataFrame()
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            response = SESSION.get(url, params=params, timeout=8)
             
-        if response.status_code == 200:
-            data_json = response.json()
-            print("data_json----------------->",data_json)
-            items = data_json.get("data", {}).get("items", [])
-            if not items and isinstance(data_json.get("data"), list):
-                items = data_json.get("data")
-                print("items----------->",items)
+            if response.status_code == 429:
+                sleep_time = (attempt + 1) * 2.0
+                print(f"[Rate Limit 429] Backing off for {sleep_time}s on token {token_address[:8]}...")
+                time.sleep(sleep_time)
+                continue
                 
-            if not items:
-                return pd.DataFrame()
+            if response.status_code == 200:
+                data_json = response.json()
+                items = data_json.get("data", {}).get("items", [])
                 
-            df = pd.DataFrame(items)
-            df["timestamp"] = pd.to_datetime(df["time"], unit="s")
-            df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
-            return df.sort_values("timestamp").drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
-    except Exception as e:
-        print(f"[Error fetching OHLCV for {token_address}]: {e}")
-        
+                if not items:
+                    return pd.DataFrame()  # No candles indexed yet
+                    
+                df = pd.DataFrame(items)
+                df["timestamp"] = pd.to_datetime(df["time"], unit="s")
+                df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
+                return df.sort_values("timestamp").drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
+                
+        except Exception as e:
+            time.sleep(0.5)
+            
     return pd.DataFrame()
-
 def calculate_indicators(df):
     """Calculates MACD(8,17,9), Supertrend(10,3), and RSI safely."""
     if df.empty or len(df) < 17:
@@ -263,15 +267,23 @@ def run_bot_cycle():
 
     print(f"[Success] Processing {len(quality_coins)} verified quality tokens...")
 
+    active_processed_count = 0
     for idx, coin in enumerate(quality_coins, 1):
         address = coin.get("address")
         symbol = coin.get("symbol", "UNKNOWN")
+        
+        # Pre-filter: Skip tokens with negligible 24h volume to save API requests and avoid empty items[]
+        vol_24h = float(coin.get("v24hUSD") or coin.get("volume24h") or 0)
+        if vol_24h < 10000 and address not in ACTIVE_TRADES:
+            continue
 
-        print(f"\nProcessing Token [{idx}/{len(quality_coins)}]: {symbol} ({address})")
+        active_processed_count += 1
+        print(f"\nProcessing Active Token [{active_processed_count}]: {symbol} ({address[:8]}...)")
 
         if address not in DB_CACHE:
             df_hist = fetch_ohlcv_with_lookback(address, is_genesis=True)
             if df_hist.empty:
+                time.sleep(0.1) # Brief pause even on empty skip
                 continue
             DB_CACHE[address] = df_hist
         else:
@@ -281,9 +293,8 @@ def run_bot_cycle():
                 if len(existing_df) >= 3:
                     existing_df = existing_df.iloc[:-3]
                 DB_CACHE[address] = pd.concat([existing_df, df_recent]).drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
-        print("table value--->",DB_CACHE[address])
+
         df_final = calculate_indicators(DB_CACHE[address])
-        time.sleep(0.3)
         if len(df_final) < 5:
             continue
 
