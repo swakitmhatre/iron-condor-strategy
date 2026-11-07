@@ -30,7 +30,7 @@ def fetch_birdeye_token_list():
     endpoint = f"{BASE_URL}/defi/v3/token/list"
     
     # Paginate across offsets safely with conservative rate-limit pacing
-    for offset in [0, 50, 100]:
+    for offset in [0, 50, 100,150,200]:
         params = {
             "sort_by": "liquidity",  # Valid Birdeye V3 sort parameter
             "sort_type": "desc",
@@ -99,7 +99,7 @@ def filter_quality_meme_coins(tokens):
         except (TypeError, ValueError):
             continue
 
-        if liquidity > 100000 and market_cap >1000000 and lmc > 10 :
+        if liquidity > 100000 and market_cap >1000000 and lmc > 5 :
             quality_passed.append(token)
 
     print(f"[Filter Stats] Quality tokens cleared security and volume gates: {len(quality_passed)}")
