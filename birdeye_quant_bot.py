@@ -99,7 +99,7 @@ def filter_quality_meme_coins(tokens):
         except (TypeError, ValueError):
             continue
 
-        if liquidity > 100000 and market_cap >1000000 :
+        if liquidity > 100000 and market_cap >1000000 and lmc > 10 :
             quality_passed.append(token)
 
     print(f"[Filter Stats] Quality tokens cleared security and volume gates: {len(quality_passed)}")
