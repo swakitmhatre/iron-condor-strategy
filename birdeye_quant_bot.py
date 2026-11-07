@@ -134,9 +134,11 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
         print("response----------->",response)
         if response.status_code == 200:
             data_json = response.json()
+            print("data_json----------------->",data_json)
             items = data_json.get("data", {}).get("items", [])
             if not items and isinstance(data_json.get("data"), list):
                 items = data_json.get("data")
+                print("items----------->",items)
                 
             if not items:
                 return pd.DataFrame()
