@@ -130,6 +130,7 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
                 continue
                 
             if response.status_code == 200:
+                print("++++++++++++++++++++++++++++++++++++++=")
                 data_json = response.json()
                 items = data_json.get("data", {}).get("items", [])
                 print("df------->",df)
