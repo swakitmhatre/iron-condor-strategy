@@ -111,8 +111,8 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
     resolution = "5m"
     limit = 100 if is_genesis else 3  
     #url = f"{BASE_URL}/defi/ohlcv"
-    #url = f"{BASE_URL}/defi/v3/ohlcv"
-    url = f"{BASE_URL}/defi/price"
+    url = f"{BASE_URL}/defi/v3/ohlcv/pair"
+    #url = f"{BASE_URL}/defi/price"
     
     params = {
         "address": token_address,
