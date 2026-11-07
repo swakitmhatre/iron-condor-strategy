@@ -95,10 +95,11 @@ def filter_quality_meme_coins(tokens):
             market_cap=float(token.get("market_cap") or 0)
             volume_24h_usd=float(token.get("volume_24h_usd") or 0)
             lmc=float((liquidity/market_cap) or 0)
+            print("lmc--------->",lmc)
         except (TypeError, ValueError):
             continue
 
-        if liquidity > 1000000 and market_cap >10000000 :
+        if liquidity > 1000000 and market_cap >10000000 and lmc > 10:
             quality_passed.append(token)
 
     print(f"[Filter Stats] Quality tokens cleared security and volume gates: {len(quality_passed)}")
