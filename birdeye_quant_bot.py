@@ -132,6 +132,12 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
     try:
         response = requests.get(url, headers=HEADERS, params=params, timeout=10)
         print("response----------->",response)
+
+        if response.status_code == 429:
+            print(f"[Rate Limit 429] Backing off for token {token_address}...")
+            time.sleep(2.0)
+            return pd.DataFrame()
+            
         if response.status_code == 200:
             data_json = response.json()
             print("data_json----------------->",data_json)
@@ -277,6 +283,7 @@ def run_bot_cycle():
                 DB_CACHE[address] = pd.concat([existing_df, df_recent]).drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
         print("table value--->",DB_CACHE[address])
         df_final = calculate_indicators(DB_CACHE[address])
+        time.sleep(0.3)
         if len(df_final) < 5:
             continue
 
