@@ -137,6 +137,7 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
                     return pd.DataFrame()
                     
                 df = pd.DataFrame(items)
+                print("df------->",df)
                 df["timestamp"] = pd.to_datetime(df["time"], unit="s")
                 df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
                 print("df--->",df)
