@@ -98,7 +98,7 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
         "chart_type": "price"
     }
     
-    backoff = 1.0
+    backoff = 0.1
     for attempt in range(3):
         try:
             response = SESSION.get(url, params=params, timeout=10)
