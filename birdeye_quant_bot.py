@@ -6,7 +6,7 @@ import time
 import requests
 import pandas as pd
 
-BIRDEYE_API_KEY = "YOUR_BIRDEYE_API_KEY_HERE"  # Replace with your Birdeye API Key
+BIRDEYE_API_KEY = "00bc545b80924d7c8d3d100e07323ddf"  # Replace with your Birdeye API Key
 BASE_URL = "https://public-api.birdeye.so"
 HEADERS = {
     "X-API-KEY": BIRDEYE_API_KEY,
