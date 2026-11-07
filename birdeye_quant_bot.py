@@ -26,7 +26,7 @@ def fetch_birdeye_token_list():
     endpoint = f"{BASE_URL}/defi/v3/token/list"
     
     # Paginate across offsets safely with conservative rate-limit pacing
-    for offset in [0, 50, 100]:
+    for offset in [0, 50]:
         params = {
             "sort_by": "liquidity",  # Valid Birdeye V3 sort parameter
             "sort_type": "desc",
@@ -125,11 +125,13 @@ def fetch_ohlcv_with_lookback(token_address, is_genesis=False):
         "type": resolution,
         "limit": limit,
         "currency": "usd",
-        "chart_type": "price"
+        "chart_type": "price",
+        "ui_amount_mode":"raw"
     }
     
     try:
         response = requests.get(url, headers=HEADERS, params=params, timeout=10)
+        print("response----------->",response)
         if response.status_code == 200:
             data_json = response.json()
             items = data_json.get("data", {}).get("items", [])
