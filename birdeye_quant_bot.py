@@ -79,7 +79,7 @@ def verify_token_security_gate(token_address):
             freezeable = data.get("freezeable", True)
             top10_pct = float(data.get("top10HolderPercent", 1.0) or 1.0)
             
-            Security Rule Gate: Mint authority renounced, not freezeable, top 10 holders <= 40%
+            #Security Rule Gate: Mint authority renounced, not freezeable, top 10 holders <= 40%
             is_safe = (owner_address is None) and (not freezeable) and (top10_pct <= 0.40)
             return is_safe
     except Exception:
