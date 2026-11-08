@@ -8,8 +8,10 @@ NETWORK = "solana"
 BASE_URL = "https://api.geckoterminal.com/api/v2"
 HEADERS = {"Accept": "application/json;version=20230302"}
 
-# Rate limiting helper to avoid HTTP 429 errors
-REQUEST_DELAY = 1.1  # ~4-5 requests per second max for free/standard tiers
+# --- CORRECTED STEP 1: RAW POOL DISCOVERY FOR FREE TIER ---
+
+# Increase request delay for the free tier (at least 1.1 seconds between calls)
+REQUEST_DELAY = 1.1  
 
 def api_get(endpoint, params=None):
     url = f"{BASE_URL}/{endpoint}"
@@ -17,8 +19,8 @@ def api_get(endpoint, params=None):
         time.sleep(REQUEST_DELAY)
         response = requests.get(url, headers=HEADERS, params=params)
         if response.status_code == 429:
-            print("[!] Rate limit hit (429). Backing off for 10 seconds...")
-            time.sleep(10)
+            print("[!] Free tier rate limit hit (429). Backing off for 30 seconds...")
+            time.sleep(30)
             return api_get(endpoint, params)
         response.raise_for_status()
         return response.json()
@@ -26,26 +28,25 @@ def api_get(endpoint, params=None):
         print(f"[Error] API request failed for {url}: {e}")
         return None
 
-# --- STEP 1: RAW POOL DISCOVERY & COMPREHENSIVE FILTERING (a -> q) ---
-
 def fetch_candidate_pools():
-    """Fetches pools using 'new' listing / trending endpoints to capture fresh Solana tokens."""
+    """Fetches pools using the correct GeckoTerminal free tier endpoints."""
     pools = []
-    # Fetching latest discovered pools
+    
+    # 1. Correct endpoint for newly created pools on Solana
     data = api_get(f"networks/{NETWORK}/new_pools", params={"page": 1})
     if data and "data" in data:
         pools.extend(data["data"])
     
-    # Also fetch top pools by volume/liquidity as fallback/supplement
+    # 2. Top pools by volume/liquidity fallback
     top_data = api_get(f"networks/{NETWORK}/pools", params={"page": 1})
     if top_data and "data" in top_data:
-        # Merge without duplicates based on pool address
         existing_addrs = {p["id"] for p in pools}
         for p in top_data["data"]:
             if p["id"] not in existing_addrs:
                 pools.append(p)
                 
     return pools
+ 
 
 def fetch_token_deep_info(token_address):
     """Fetches token-specific metadata (mint auth, freeze auth, social links, holders)."""
