@@ -9,7 +9,7 @@ BASE_URL = "https://api.geckoterminal.com/api/v2"
 HEADERS = {"Accept": "application/json;version=20230302"}
 
 # Rate limiting helper to avoid HTTP 429 errors
-REQUEST_DELAY = 0.22  # ~4-5 requests per second max for free/standard tiers
+REQUEST_DELAY = 1.1  # ~4-5 requests per second max for free/standard tiers
 
 def api_get(endpoint, params=None):
     url = f"{BASE_URL}/{endpoint}"
@@ -32,7 +32,7 @@ def fetch_candidate_pools():
     """Fetches pools using 'new' listing / trending endpoints to capture fresh Solana tokens."""
     pools = []
     # Fetching latest discovered pools
-    data = api_get(f"networks/{NETWORK}/pools/new", params={"page": 1})
+    data = api_get(f"networks/{NETWORK}/new_pools", params={"page": 1})
     if data and "data" in data:
         pools.extend(data["data"])
     
