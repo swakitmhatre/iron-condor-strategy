@@ -367,7 +367,7 @@ def main():
                         "Exit Timestamp": exit_time,
                         "PnL (%)": round(pnl_pct, 2)
                     })
-                    in_trade = false
+                    in_trade = False
 
             # Check if latest closed candle has a CURRENT positive crossover (and not currently in historic trade loop)
             latest_curr = df.iloc[-1]
