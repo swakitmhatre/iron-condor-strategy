@@ -1,7 +1,7 @@
 import time
 import requests
 import pandas as pd
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # --- CONFIGURATION & CONSTANTS ---
 NETWORK = "solana"
@@ -10,6 +10,7 @@ HEADERS = {"Accept": "application/json;version=20230302"}
 
 # Free tier rate-limit safeguard (~1.1 seconds between requests)
 REQUEST_DELAY = 1.1  
+IST_OFFSET = timedelta(hours=5, minutes=30)
 
 def api_get(endpoint, params=None):
     url = f"{BASE_URL}/{endpoint}"
@@ -25,6 +26,15 @@ def api_get(endpoint, params=None):
     except requests.exceptions.RequestException as e:
         print(f"[Error] API request failed for {url}: {e}")
         return None
+
+def convert_to_ist(utc_dt):
+    """Converts a UTC datetime or pandas timestamp to IST string."""
+    if pd.isna(utc_dt):
+        return ""
+    if isinstance(utc_dt, pd.Timestamp):
+        utc_dt = utc_dt.to_pydatetime()
+    ist_dt = utc_dt.astimezone(timezone(IST_OFFSET))
+    return ist_dt.strftime('%Y-%m-%d %H:%M:%S IST')
 
 # --- STEP 1: ALL 4 RAW POOL DISCOVERY ENDPOINTS ---
 
@@ -88,6 +98,10 @@ def fetch_token_deep_info(token_address):
     return {}
 
 def filter_pools(pools, relax_filters=False):
+    """
+    Applies filters a -> q. 
+    If relax_filters is True (no tokens passed strict checks), criteria g -> q are bypassed.
+    """
     filtered_list = []
     now = datetime.now(timezone.utc)
     passed_af_count = 0
@@ -189,12 +203,17 @@ def filter_pools(pools, relax_filters=False):
             "market_cap": market_cap
         })
 
-    print(f"[*] Filter Stats -> Passed Criteria A-F: {passed_af_count} | Passed Criteria G-Q (Final): {len(filtered_list)}")
+    mode_label = "Relaxed (Bypassing G-Q)" if relax_filters else "Strict (G-Q Enforced)"
+    print(f"[*] Filter Stats [{mode_label}] -> Passed A-F: {passed_af_count} | Final Filtered: {len(filtered_list)}")
     return filtered_list
 
 # --- STEP 2: DYNAMIC CANDLE TIMEFRAMES & TECHNICAL INDICATORS ---
 
 def get_candlestick_timeframe(age_hours):
+    """
+    - 2 to 8 hours: 5 minute candles (timeframe='minute', aggregate=5)
+    - Above 8+ hours: 15 minute candles (timeframe='minute', aggregate=15)
+    """
     if 2 <= age_hours <= 8:
         return "minute", 5
     else:
@@ -231,7 +250,7 @@ def calculate_indicators(df):
     df['macd_signal'] = df['macd_line'].ewm(span=9, adjust=False).mean()
     df['histogram'] = df['macd_line'] - df['macd_signal']
 
-    # RSI (14) Calculation to filter false breakouts
+    # RSI (14)
     delta = close.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -268,19 +287,17 @@ def calculate_indicators(df):
         st_values[i] = lower_band.iloc[i] if supertrend[i] else upper_band.iloc[i]
 
     df['supertrend'] = st_values
-    df['supertrend_dir'] = supertrend  # True = Bullish, False = Bearish
+    df['supertrend_dir'] = supertrend
     return df
 
-# --- STEP 3: CROSSOVER EVALUATION WITH STRICT FILTERS ---
+# --- STEP 3: CROSSOVER EVALUATION ---
 
 def check_positive_crossover(row, prev_row=None):
     if row['macd_line'] <= row['macd_signal']: return False
     if row['macd_line'] <= 0: return False
-    # Require histogram to be robust (>15% of abs MACD) to avoid choppy whipsaws
     if row['histogram'] <= 0.15 * abs(row['macd_line']): return False
     if prev_row is not None and row['histogram'] <= prev_row['histogram']: return False
     if not row['supertrend_dir']: return False
-    # RSI filter: Avoid entries if overbought (>75) or weak (<45)
     if 'rsi' in row and not pd.isna(row['rsi']):
         if not (45 <= row['rsi'] <= 75): return False
     return True
@@ -298,14 +315,15 @@ def check_negative_crossover(row, prev_rows):
 # --- MAIN EXECUTION LOOP ---
 
 def main():
-    print(f"[{datetime.now(timezone.utc)}] Starting Solana Meme Coin Quant Bot...")
+    print(f"[{datetime.now(timezone.utc).astimezone(timezone(IST_OFFSET)).strftime('%Y-%m-%d %H:%M:%S IST')}] Starting Solana Meme Coin Quant Bot...")
     
     while True:
         pools = fetch_candidate_pools()
         filtered = filter_pools(pools, relax_filters=False)
         
+        # Adaptive Fallback: Relax filters if strict G-Q yields no matches
         if not filtered:
-            print("[*] No tokens met strict g->q filters. Relaxing criteria (bypassing g->q)...")
+            print("[*] No tokens met strict G->Q filters. Activating relaxation fallback (bypassing G->Q)...")
             filtered = filter_pools(pools, relax_filters=True)
 
         current_crossover_detected = False
@@ -347,8 +365,8 @@ def main():
                     pnl_pct = ((exit_price - entry_price) / entry_price) * 100.0
                     historical_trades.append({
                         "Pool Name": pool_name,
-                        "Entry Timestamp": entry_time,
-                        "Exit Timestamp": exit_time,
+                        "Entry (IST)": convert_to_ist(entry_time),
+                        "Exit (IST)": convert_to_ist(exit_time),
                         "PnL (%)": round(pnl_pct, 2)
                     })
                     in_trade = False
@@ -358,13 +376,13 @@ def main():
             if check_positive_crossover(latest_curr, latest_prev):
                 current_crossover_detected = True
                 
-                # Capture the last 5 tuples of candles for this token
+                # Last 5 tuples for active crossover token
                 last_5_df = df.tail(5)
                 for _, row in last_5_df.iterrows():
                     st_status = "BULLISH" if row.get('supertrend_dir', True) else "BEARISH"
                     current_signals_detailed.append({
                         "Pool Name": pool_name,
-                        "Timestamp": row['timestamp'],
+                        "Timestamp (IST)": convert_to_ist(row['timestamp']),
                         "Open": f"{row['open']:.8f}",
                         "High": f"{row['high']:.8f}",
                         "Low": f"{row['low']:.8f}",
@@ -376,25 +394,25 @@ def main():
                         "RSI": f"{row.get('rsi', 0):.1f}"
                     })
 
-        # --- RENDER TABULAR DATA OUTPUTS ---
-        print("\n" + "="*100)
-        print("TABLE 1: HISTORICAL POSITIVE MACD CROSSOVER TRADES (Bullish Trend PnL)")
-        print("="*100)
+        # --- RENDER TABULAR DATA OUTPUTS WITH IST ---
+        print("\n" + "="*120)
+        print("TABLE 1: HISTORICAL POSITIVE MACD CROSSOVER TRADES (IST Timestamps)")
+        print("="*120)
         if historical_trades:
             df_hist = pd.DataFrame(historical_trades)
             print(df_hist.to_string(index=False))
         else:
             print("No completed historical crossover trades found in current dataset.")
 
-        print("\n" + "="*100)
-        print("TABLE 2: CURRENT ACTIVE POSITIVE MACD CROSSOVER - LAST 5 CANDLE TUPLES")
-        print("="*100)
+        print("\n" + "="*120)
+        print("TABLE 2: CURRENT ACTIVE POSITIVE MACD CROSSOVER - LAST 5 CANDLES (IST Timestamps)")
+        print("="*120)
         if current_signals_detailed:
             df_curr = pd.DataFrame(current_signals_detailed)
             print(df_curr.to_string(index=False))
         else:
             print("No current positive crossover detected on latest candles.")
-        print("="*100 + "\n")
+        print("="*120 + "\n")
 
         # --- EXECUTION CONTROL LOGIC ---
         if current_crossover_detected:
