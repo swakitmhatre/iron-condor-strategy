@@ -391,4 +391,25 @@ def main():
         else:
             print("No completed historical crossover trades found in current dataset.")
 
-        print("\
+        print("\n" + "="*80)
+        print("TABLE 2: CURRENT ACTIVE POSITIVE MACD CROSSOVER SIGNALS (5-Min Update)")
+        print("="*80)
+        if current_signals:
+            df_curr = pd.DataFrame(current_signals)
+            print(df_curr.to_string(index=False))
+        else:
+            print("No current positive crossover detected on latest candles.")
+        print("="*80 + "\n")
+
+        # --- EXECUTION CONTROL LOGIC ---
+        if current_crossover_detected:
+            print("[+] Current positive crossover detected in at least one token! Pausing raw token discovery and focusing on active position monitoring...")
+            # Sleep for 5 minutes to monitor 5-minute closed candles as requested
+            time.sleep(300)
+        else:
+            print("[-] No current positive crossover found. Re-fetching raw tokens and running filters in 15 minutes...")
+            # Sleep for 15 minutes before next raw pool discovery poll
+            time.sleep(900)
+
+if __name__ == "__main__":
+    main()
