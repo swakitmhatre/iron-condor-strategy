@@ -17,8 +17,8 @@ def api_get(endpoint, params=None):
         time.sleep(REQUEST_DELAY)
         response = requests.get(url, headers=HEADERS, params=params)
         if response.status_code == 429:
-            print("[!] Free tier rate limit hit (429). Backing off for 30 seconds...")
-            time.sleep(30)
+            print("[!] Free tier rate limit hit (429). Backing off for 1.1 seconds...")
+            time.sleep(1.1)
             return api_get(endpoint, params)
         response.raise_for_status()
         return response.json()
