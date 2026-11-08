@@ -32,9 +32,9 @@ def fetch_candidate_pools():
     pools = []
     seen_addresses = set()
     
-    # 1. Trending Pools by Network Endpoint
+    # 1. Trending Pools by Network
     print("[*] Fetching Trending Pools by Network...")
-    for page in range(1, 4):  # Pages 1 to 3
+    for page in range(1, 4):
         data = api_get(f"networks/{NETWORK}/trending_pools", params={"page": page})
         if data and "data" in data:
             for p in data["data"]:
@@ -43,9 +43,9 @@ def fetch_candidate_pools():
                     pools.append(p)
         time.sleep(REQUEST_DELAY)
 
-    # 2. New Pools by Network Endpoint
+    # 2. New Pools by Network
     print("[*] Fetching New Pools by Network...")
-    for page in range(1, 4):  # Pages 1 to 3
+    for page in range(1, 4):
         data = api_get(f"networks/{NETWORK}/new_pools", params={"page": page})
         if data and "data" in data:
             for p in data["data"]:
@@ -54,9 +54,9 @@ def fetch_candidate_pools():
                     pools.append(p)
         time.sleep(REQUEST_DELAY)
 
-    # 3. Top Pools by Network Endpoint
+    # 3. Top Pools by Network
     print("[*] Fetching Top Pools by Network...")
-    for page in range(1, 4):  # Pages 1 to 3
+    for page in range(1, 4):
         data = api_get(f"networks/{NETWORK}/pools", params={"page": page})
         if data and "data" in data:
             for p in data["data"]:
@@ -65,11 +65,11 @@ def fetch_candidate_pools():
                     pools.append(p)
         time.sleep(REQUEST_DELAY)
 
-    # 4. Top Pools by DEX Endpoints (Raydium, Orca, Meteora)
+    # 4. Top Pools by DEX (Raydium, Orca, Meteora)
     dex_list = ["raydium", "orca", "meteora"]
     for dex in dex_list:
         print(f"[*] Fetching Top Pools for DEX: {dex}...")
-        for page in range(1, 3):  # Pages 1 to 2 per DEX
+        for page in range(1, 3):
             data = api_get(f"networks/{NETWORK}/dexes/{dex}/pools", params={"page": page})
             if data and "data" in data:
                 for p in data["data"]:
@@ -195,10 +195,6 @@ def filter_pools(pools, relax_filters=False):
 # --- STEP 2: DYNAMIC CANDLE TIMEFRAMES & TECHNICAL INDICATORS ---
 
 def get_candlestick_timeframe(age_hours):
-    """
-    - 2 to 8 hours: 5 minute candles (timeframe='minute', aggregate=5)
-    - Above 8+ hours: 15 minute candles (timeframe='minute', aggregate=15)
-    """
     if 2 <= age_hours <= 8:
         return "minute", 5
     else:
@@ -235,6 +231,13 @@ def calculate_indicators(df):
     df['macd_signal'] = df['macd_line'].ewm(span=9, adjust=False).mean()
     df['histogram'] = df['macd_line'] - df['macd_signal']
 
+    # RSI (14) Calculation to filter false breakouts
+    delta = close.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+
     hl2 = (df['high'] + df['low']) / 2
     tr = pd.concat([
         df['high'] - df['low'],
@@ -265,17 +268,21 @@ def calculate_indicators(df):
         st_values[i] = lower_band.iloc[i] if supertrend[i] else upper_band.iloc[i]
 
     df['supertrend'] = st_values
-    df['supertrend_dir'] = supertrend
+    df['supertrend_dir'] = supertrend  # True = Bullish, False = Bearish
     return df
 
-# --- STEP 3: CROSSOVER EVALUATION ---
+# --- STEP 3: CROSSOVER EVALUATION WITH STRICT FILTERS ---
 
 def check_positive_crossover(row, prev_row=None):
     if row['macd_line'] <= row['macd_signal']: return False
     if row['macd_line'] <= 0: return False
-    if row['histogram'] <= 0.10 * abs(row['macd_line']): return False
+    # Require histogram to be robust (>15% of abs MACD) to avoid choppy whipsaws
+    if row['histogram'] <= 0.15 * abs(row['macd_line']): return False
     if prev_row is not None and row['histogram'] <= prev_row['histogram']: return False
     if not row['supertrend_dir']: return False
+    # RSI filter: Avoid entries if overbought (>75) or weak (<45)
+    if 'rsi' in row and not pd.isna(row['rsi']):
+        if not (45 <= row['rsi'] <= 75): return False
     return True
 
 def check_negative_crossover(row, prev_rows):
@@ -303,7 +310,7 @@ def main():
 
         current_crossover_detected = False
         historical_trades = []
-        current_signals = []
+        current_signals_detailed = []
 
         print(f"[*] Processing indicators for {len(filtered)} filtered token(s)...")
         for item in filtered:
@@ -350,39 +357,44 @@ def main():
             latest_prev = df.iloc[-2]
             if check_positive_crossover(latest_curr, latest_prev):
                 current_crossover_detected = True
-                current_signals.append({
-                    "Pool Name": pool_name,
-                    "Timestamp": latest_curr['timestamp'],
-                    "Open": latest_curr['open'],
-                    "High": latest_curr['high'],
-                    "Low": latest_curr['low'],
-                    "Close": latest_curr['close'],
-                    "MACD": round(latest_curr['macd_line'], 4),
-                    "MACD Signal": round(latest_curr['macd_signal'], 4),
-                    "Histogram": round(latest_curr['histogram'], 4),
-                    "Supertrend": round(latest_curr['supertrend'], 4),
-                    "Signal": "BUY ENTRY"
-                })
+                
+                # Capture the last 5 tuples of candles for this token
+                last_5_df = df.tail(5)
+                for _, row in last_5_df.iterrows():
+                    st_status = "BULLISH" if row.get('supertrend_dir', True) else "BEARISH"
+                    current_signals_detailed.append({
+                        "Pool Name": pool_name,
+                        "Timestamp": row['timestamp'],
+                        "Open": f"{row['open']:.8f}",
+                        "High": f"{row['high']:.8f}",
+                        "Low": f"{row['low']:.8f}",
+                        "Close": f"{row['close']:.8f}",
+                        "MACD": f"{row.get('macd_line', 0):.6f}",
+                        "MACD Signal": f"{row.get('macd_signal', 0):.6f}",
+                        "Histogram": f"{row.get('histogram', 0):.6f}",
+                        "Supertrend": f"{row.get('supertrend', 0):.8f} ({st_status})",
+                        "RSI": f"{row.get('rsi', 0):.1f}"
+                    })
 
         # --- RENDER TABULAR DATA OUTPUTS ---
-        print("\n" + "="*80)
+        print("\n" + "="*100)
         print("TABLE 1: HISTORICAL POSITIVE MACD CROSSOVER TRADES (Bullish Trend PnL)")
-        print("="*80)
+        print("="*100)
         if historical_trades:
             df_hist = pd.DataFrame(historical_trades)
             print(df_hist.to_string(index=False))
         else:
             print("No completed historical crossover trades found in current dataset.")
 
-        print("\n" + "="*80)
-        print("TABLE 2: CURRENT ACTIVE POSITIVE MACD CROSSOVER SIGNALS (5-Min Update)")
-        print("="*80)
-        if current_signals:
-            df_curr = pd.DataFrame(current_signals)
+        print("\n" + "="*100)
+        print("TABLE 2: CURRENT ACTIVE POSITIVE MACD CROSSOVER - LAST 5 CANDLE TUPLES")
+        print("="*100)
+        if current_signals_detailed:
+            df_curr = pd.DataFrame(current_signals_detailed)
             print(df_curr.to_string(index=False))
         else:
             print("No current positive crossover detected on latest candles.")
-        print("="*80 + "\n")
+        print("="*100 + "\n")
 
         # --- EXECUTION CONTROL LOGIC ---
         if current_crossover_detected:
