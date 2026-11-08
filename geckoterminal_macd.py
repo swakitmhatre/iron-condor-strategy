@@ -186,8 +186,8 @@ def filter_pools(pools, relax_filters=False):
 def get_candlestick_timeframe(age_hours):
     """
     Returns timeframe string and aggregate based on coin age:
-    - 2 to 8 hours: 5 minute candles
-    - Above 8+ hours: 15 minute candles
+    - 2 to 8 hours: 5 minute candles (timeframe='minute', aggregate=5)
+    - Above 8+ hours: 15 minute candles (timeframe='minute', aggregate=15)
     """
     if age_hours <= 8:
         return "minute", 5
@@ -196,10 +196,13 @@ def get_candlestick_timeframe(age_hours):
 
 def fetch_ohlcv(pool_address, timeframe, aggregate, before_timestamp=None):
     """
-    Fetches OHLCV candles from GeckoTerminal with support for look-back overwrites.
+    Fetches OHLCV candles from GeckoTerminal using correct query parameters.
     Endpoint: GET /networks/{network}/pools/{pool_address}/ohlcv/{timeframe}
     """
-    endpoint = f"networks/{NETWORK}/pools/{pool_address}/ohlcv/{timeframe}"
+    # Clean pool address in case it contains redundant network prefixes
+    clean_pool_addr = pool_address.split("_")[-1] if "_" in pool_address else pool_address
+    
+    endpoint = f"networks/{NETWORK}/pools/{clean_pool_addr}/ohlcv/{timeframe}"
     params = {"aggregate": aggregate, "limit": 100}
     if before_timestamp:
         params["before_timestamp"] = before_timestamp
@@ -208,6 +211,9 @@ def fetch_ohlcv(pool_address, timeframe, aggregate, before_timestamp=None):
     if data and "data" in data:
         attributes = data["data"].get("attributes", {})
         ohlcv_list = attributes.get("ohlcv_list", [])
+        if not ohlcv_list:
+            return pd.DataFrame()
+            
         # Format: [timestamp, open, high, low, close, volume]
         df = pd.DataFrame(ohlcv_list, columns=["timestamp", "open", "high", "low", "close", "volume"])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', utc=True)
