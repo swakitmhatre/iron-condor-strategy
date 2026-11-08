@@ -17,8 +17,8 @@ def api_get(endpoint, params=None):
         time.sleep(REQUEST_DELAY)
         response = requests.get(url, headers=HEADERS, params=params)
         if response.status_code == 429:
-            print("[!] Free tier rate limit hit (429). Backing off for 5 seconds...")
-            time.sleep(5)
+            print("[!] Free tier rate limit hit (429). Backing off for 30 seconds...")
+            time.sleep(30)
             return api_get(endpoint, params)
         response.raise_for_status()
         return response.json()
@@ -26,34 +26,59 @@ def api_get(endpoint, params=None):
         print(f"[Error] API request failed for {url}: {e}")
         return None
 
-# --- STEP 1: RAW POOL DISCOVERY & COMPREHENSIVE FILTERING ---
+# --- STEP 1: ALL 4 RAW POOL DISCOVERY ENDPOINTS ---
 
 def fetch_candidate_pools():
     pools = []
     seen_addresses = set()
     
-    # 1. Fetch new pools (page 1 & 2 to get more raw volume)
-    for page in [1, 2]:
+    # 1. Trending Pools by Network Endpoint
+    print("[*] Fetching Trending Pools by Network...")
+    for page in range(1, 4):  # Pages 1 to 3
+        data = api_get(f"networks/{NETWORK}/trending_pools", params={"page": page})
+        if data and "data" in data:
+            for p in data["data"]:
+                if p["id"] not in seen_addresses:
+                    seen_addresses.add(p["id"])
+                    pools.append(p)
+        time.sleep(REQUEST_DELAY)
+
+    # 2. New Pools by Network Endpoint
+    print("[*] Fetching New Pools by Network...")
+    for page in range(1, 4):  # Pages 1 to 3
         data = api_get(f"networks/{NETWORK}/new_pools", params={"page": page})
         if data and "data" in data:
             for p in data["data"]:
                 if p["id"] not in seen_addresses:
                     seen_addresses.add(p["id"])
                     pools.append(p)
-                    
-    new_pools_count = len(pools)
-    
-    # 2. Fetch top pools by volume/liquidity
-    top_data = api_get(f"networks/{NETWORK}/pools", params={"page": 1})
-    top_pools_added = 0
-    if top_data and "data" in top_data:
-        for p in top_data["data"]:
-            if p["id"] not in seen_addresses:
-                seen_addresses.add(p["id"])
-                pools.append(p)
-                top_pools_added += 1
-                
-    print(f"[*] Fetched Raw Pools -> New Pools: {new_pools_count} | Top Pools Added: {top_pools_added} | Total Raw Pools: {len(pools)}")
+        time.sleep(REQUEST_DELAY)
+
+    # 3. Top Pools by Network Endpoint
+    print("[*] Fetching Top Pools by Network...")
+    for page in range(1, 4):  # Pages 1 to 3
+        data = api_get(f"networks/{NETWORK}/pools", params={"page": page})
+        if data and "data" in data:
+            for p in data["data"]:
+                if p["id"] not in seen_addresses:
+                    seen_addresses.add(p["id"])
+                    pools.append(p)
+        time.sleep(REQUEST_DELAY)
+
+    # 4. Top Pools by DEX Endpoints (Raydium, Orca, Meteora)
+    dex_list = ["raydium", "orca", "meteora"]
+    for dex in dex_list:
+        print(f"[*] Fetching Top Pools for DEX: {dex}...")
+        for page in range(1, 3):  # Pages 1 to 2 per DEX
+            data = api_get(f"networks/{NETWORK}/dexes/{dex}/pools", params={"page": page})
+            if data and "data" in data:
+                for p in data["data"]:
+                    if p["id"] not in seen_addresses:
+                        seen_addresses.add(p["id"])
+                        pools.append(p)
+            time.sleep(REQUEST_DELAY)
+
+    print(f"[*] Total Unique Raw Pools Collected Across All 4 Endpoints: {len(pools)}")
     return pools
 
 def fetch_token_deep_info(token_address):
@@ -65,7 +90,6 @@ def fetch_token_deep_info(token_address):
 def filter_pools(pools, relax_filters=False):
     filtered_list = []
     now = datetime.now(timezone.utc)
-    
     passed_af_count = 0
 
     for pool in pools:
@@ -168,10 +192,14 @@ def filter_pools(pools, relax_filters=False):
     print(f"[*] Filter Stats -> Passed Criteria A-F: {passed_af_count} | Passed Criteria G-Q (Final): {len(filtered_list)}")
     return filtered_list
 
-# --- STEP 2: OHLCV CANDLE FETCHING & TECHNICAL INDICATORS ---
+# --- STEP 2: DYNAMIC CANDLE TIMEFRAMES & TECHNICAL INDICATORS ---
 
 def get_candlestick_timeframe(age_hours):
-    if age_hours <= 8:
+    """
+    - 2 to 8 hours: 5 minute candles (timeframe='minute', aggregate=5)
+    - Above 8+ hours: 15 minute candles (timeframe='minute', aggregate=15)
+    """
+    if 2 <= age_hours <= 8:
         return "minute", 5
     else:
         return "minute", 15
@@ -356,6 +384,7 @@ def main():
             print("No current positive crossover detected on latest candles.")
         print("="*80 + "\n")
 
+        # --- EXECUTION CONTROL LOGIC ---
         if current_crossover_detected:
             print("[+] Current positive crossover detected! Pausing for 5 minutes...")
             time.sleep(300)
