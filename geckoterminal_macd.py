@@ -115,7 +115,7 @@ def filter_pools(pools, relax_filters=False):
 
         # --- Criteria a to l ---
         if not (1 <= age_hours <= 24): continue
-        if not (30000 <= market_cap <= 2000000): continue
+        if not (30000 <= market_cap <= 20000000): continue
         if liquidity_usd < 30000: continue
         if volume_24h < 50000 or volume_6h < 20000: continue
         if tx_count_24h < 500: continue
@@ -152,15 +152,15 @@ def filter_pools(pools, relax_filters=False):
 
         price_change_1h = float(attr.get("price_change_percentage", {}).get("h1", 0) or 0)
         price_change_24h = float(attr.get("price_change_percentage", {}).get("h24", 0) or 0)
-        if not (price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0): continue
+        #if not (price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0): continue
 
         buys_24h = tx_24h.get("buys", 0) or 0
         sells_24h = tx_24h.get("sells", 0) or 0
         buy_sell_ratio = (buys_24h / sells_24h) if sells_24h > 0 else 0
-        if buy_sell_ratio < 1.2: continue
+        if buy_sell_ratio < 0.8: continue
 
-        makers_unique = tx_24h.get("users", 0) or 0
-        if makers_unique < 2500: continue
+       # makers_unique = tx_24h.get("users", 0) or 0
+        #if makers_unique < 2500: continue
 
         liq_mcap_ratio = (liquidity_usd / market_cap) if market_cap > 0 else 0
         if liq_mcap_ratio <= 0.05: continue
