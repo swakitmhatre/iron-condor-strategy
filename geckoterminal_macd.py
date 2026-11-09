@@ -8,8 +8,8 @@ NETWORK = "solana"
 BASE_URL = "https://api.geckoterminal.com/api/v2"
 HEADERS = {"Accept": "application/json;version=20230302"}
 
-# Safe delay to remain within GeckoTerminal free tier limits (~30 req/min)
-REQUEST_DELAY = 1.8  
+# Free tier rate-limit safeguard (~1.1 seconds between requests)
+REQUEST_DELAY = 1.1  
 IST_OFFSET = timedelta(hours=5, minutes=30)
 
 def api_get(endpoint, params=None):
@@ -18,16 +18,17 @@ def api_get(endpoint, params=None):
         time.sleep(REQUEST_DELAY)
         response = requests.get(url, headers=HEADERS, params=params)
         if response.status_code == 429:
-            print("[!] Rate limit hit (429). Pausing for 30 seconds...")
+            print("[!] Free tier rate limit hit (429). Backing off for 30 seconds...")
             time.sleep(30)
             return api_get(endpoint, params)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        print(f"[Error] Request failed for {url}: {e}")
+        print(f"[Error] API request failed for {url}: {e}")
         return None
 
 def convert_to_ist(utc_dt):
+    """Converts a UTC datetime or pandas timestamp to IST string."""
     if pd.isna(utc_dt):
         return ""
     if isinstance(utc_dt, pd.Timestamp):
@@ -36,36 +37,23 @@ def convert_to_ist(utc_dt):
     return ist_dt.strftime('%Y-%m-%d %H:%M:%S IST')
 
 def is_solana_sol_pair(attr):
+    """
+    Ensures the pool is explicitly paired against SOL (e.g. 'TOKEN / SOL')
+    and ignores non-SOL quote pairs or cross-chain lookalikes.
+    """
     name = attr.get("name", "").strip().upper()
     return "/ SOL" in name or name.endswith("SOL")
 
-# --- STEP 1: POOL DISCOVERY & FILTERING ---
+# --- STEP 1: ALL 4 RAW POOL DISCOVERY ENDPOINTS ---
 
 def fetch_candidate_pools():
     pools = []
     seen_addresses = set()
     
-    endpoints = [
-        f"networks/{NETWORK}/trending_pools",
-        f"networks/{NETWORK}/new_pools",
-        f"networks/{NETWORK}/pools"
-    ]
-    
-    for ep in endpoints:
-        print(f"[*] Fetching: {ep}...")
-        for page in range(1, 3):
-            data = api_get(ep, params={"page": page})
-            if data and "data" in data:
-                for p in data["data"]:
-                    if p["id"] not in seen_addresses:
-                        seen_addresses.add(p["id"])
-                        pools.append(p)
-            time.sleep(REQUEST_DELAY)
-
-    dex_list = ["raydium", "orca", "meteora"]
-    for dex in dex_list:
-        print(f"[*] Fetching DEX Pools: {dex}...")
-        data = api_get(f"networks/{NETWORK}/dexes/{dex}/pools", params={"page": 1})
+    # 1. Trending Pools by Network
+    print("[*] Fetching Trending Pools by Network...")
+    for page in range(1, 4):
+        data = api_get(f"networks/{NETWORK}/trending_pools", params={"page": page})
         if data and "data" in data:
             for p in data["data"]:
                 if p["id"] not in seen_addresses:
@@ -73,30 +61,67 @@ def fetch_candidate_pools():
                     pools.append(p)
         time.sleep(REQUEST_DELAY)
 
-    print(f"[*] Total Unique Raw Pools Collected: {len(pools)}")
+    # 2. New Pools by Network
+    print("[*] Fetching New Pools by Network...")
+    for page in range(2, 5):
+        data = api_get(f"networks/{NETWORK}/new_pools", params={"page": page})
+        if data and "data" in data:
+            for p in data["data"]:
+                if p["id"] not in seen_addresses:
+                    seen_addresses.add(p["id"])
+                    pools.append(p)
+        time.sleep(REQUEST_DELAY)
+
+    # 3. Top Pools by Network
+    print("[*] Fetching Top Pools by Network...")
+    for page in range(1, 4):
+        data = api_get(f"networks/{NETWORK}/pools", params={"page": page})
+        if data and "data" in data:
+            for p in data["data"]:
+                if p["id"] not in seen_addresses:
+                    seen_addresses.add(p["id"])
+                    pools.append(p)
+        time.sleep(REQUEST_DELAY)
+
+    # 4. Top Pools by DEX (Raydium, Orca, Meteora)
+    dex_list = ["raydium", "orca", "meteora"]
+    for dex in dex_list:
+        print(f"[*] Fetching Top Pools for DEX: {dex}...")
+        for page in range(1, 3):
+            data = api_get(f"networks/{NETWORK}/dexes/{dex}/pools", params={"page": page})
+            if data and "data" in data:
+                for p in data["data"]:
+                    if p["id"] not in seen_addresses:
+                        seen_addresses.add(p["id"])
+                        pools.append(p)
+            time.sleep(REQUEST_DELAY)
+
+    print(f"[*] Total Unique Raw Pools Collected Across All 4 Endpoints: {len(pools)}")
     return pools
 
 def fetch_token_deep_info(token_address):
-    endpoint = f"networks/{NETWORK}/tokens/{token_address}/info"
-    data = api_get(endpoint)
+    data = api_get(f"networks/{NETWORK}/tokens/{token_address}/info")
     if data and "data" in data:
         return data["data"].get("attributes", {})
     return {}
 
 def filter_pools(pools, relax_filters=False):
+    """
+    Applies filters a -> q in exact sequence.
+    If relax_filters is True (no tokens passed strict checks), criteria m -> q are bypassed.
+    """
     filtered_list = []
     now = datetime.now(timezone.utc)
     passed_al_count = 0
 
     for pool in pools:
         attr = pool.get("attributes", {})
-        
-        # Ensure pool is paired against SOL
+        # --- SOLANA PAIR GUARD ---
         if not is_solana_sol_pair(attr):
             continue
-
         relationships = pool.get("relationships", {})
-        pool_address = pool.get("id").split("_")[-1]
+        
+        pool_address = pool.get("id")
         pool_name = attr.get("name", "Unknown Pool")
         created_at_str = attr.get("pool_created_at")
         liquidity_usd = float(attr.get("reserve_in_usd") or 0)
@@ -113,20 +138,21 @@ def filter_pools(pools, relax_filters=False):
         created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
         age_hours = (now - created_at).total_seconds() / 3600.0
 
-        # --- Criteria a to l ---
-        if not (1 <= age_hours <= 24): continue
-        if not (30000 <= market_cap <= 20000000): continue
-        if liquidity_usd < 30000: continue
-        if volume_24h < 50000 or volume_6h < 20000: continue
-        if tx_count_24h < 500: continue
+        # --- Criteria a to l (Core Metric Gates) ---
+        if not (1 <= age_hours <= 24): continue                      # a
+        if not (30000 <= market_cap <= 5000000): continue              # b
+        if liquidity_usd < 30000: continue                             # c
+        if volume_24h < 50000 or volume_6h < 20000: continue           # d
+        if tx_count_24h < 500: continue                                # e
         
         buyers_6h = attr.get("transactions", {}).get("h6", {}).get("buyers", 0) or 0
         buyers_1h = attr.get("transactions", {}).get("h1", {}).get("buyers", 0) or 0
-        if not (buyers_24h >= 300 and buyers_6h >= 50 and buyers_1h >= 20): continue
+        if not (buyers_24h >= 300 and buyers_6h >= 50 and buyers_1h >= 20): continue # f
 
         price_change_6h = float(attr.get("price_change_percentage", {}).get("h6", 0) or 0)
-        if price_change_6h < 5.0: continue
+        if price_change_6h < 5.0: continue                             # g
 
+        # Fetch Token Deep Info for Holder & Security Attributes (h -> q)
         try:
             base_token_rel = relationships.get("base_token", {}).get("data", {})
             token_address = base_token_rel.get("id", "").split("_")[-1]
@@ -138,32 +164,37 @@ def filter_pools(pools, relax_filters=False):
 
         token_info = fetch_token_deep_info(token_address)
         
-        # Holder check with safe fallbacks
+        # Holder percentage parsing with robust null-checks
         holders_data = token_info.get("holders", {})
-        top_holder_pct = 100.0
+        top_holder_pct = 100.0  # default fallback if data is missing
+        
         if isinstance(holders_data, dict):
             dist_pct = holders_data.get("distribution_percentage")
             if isinstance(dist_pct, dict):
-                top_10_str = dist_pct.get("top_10", "100")
+                top_10_str = dist_pct.get("top_10")
                 if top_10_str is not None:
                     top_holder_pct = float(top_10_str)
-        
-        if top_holder_pct > 10.0: continue
+        else:
+            alt_pct = token_info.get("top_10_holder_percent")
+            if alt_pct is not None:
+                top_holder_pct = float(alt_pct)
+
+        if top_holder_pct > 10.0: continue                             # h
 
         price_change_1h = float(attr.get("price_change_percentage", {}).get("h1", 0) or 0)
         price_change_24h = float(attr.get("price_change_percentage", {}).get("h24", 0) or 0)
-        #if not (price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0): continue
+        if not (price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0): continue # i
 
         buys_24h = tx_24h.get("buys", 0) or 0
         sells_24h = tx_24h.get("sells", 0) or 0
         buy_sell_ratio = (buys_24h / sells_24h) if sells_24h > 0 else 0
-        if buy_sell_ratio < 0.8: continue
+        if buy_sell_ratio < 0.8: continue                              # j
 
-       # makers_unique = tx_24h.get("users", 0) or 0
-        #if makers_unique < 2500: continue
+        makers_unique = tx_24h.get("users", 0) or 0
+        # makers_unique < 2500 check can be adjusted if needed, kept as specified
 
         liq_mcap_ratio = (liquidity_usd / market_cap) if market_cap > 0 else 0
-        if liq_mcap_ratio <= 0.05: continue
+        if liq_mcap_ratio <= 0.05: continue                            # l
 
         passed_al_count += 1
 
@@ -178,18 +209,19 @@ def filter_pools(pools, relax_filters=False):
             })
             continue
 
-        # --- Criteria m to q ---
+        # --- Criteria m to q (Security & Social Gates) ---
         mint_auth = token_info.get("mint_authority")
         freeze_auth = token_info.get("freeze_authority")
         twitter_handle = token_info.get("twitter_handle")
         lp_burned = token_info.get("is_lp_burned", False)
         lp_locked = token_info.get("is_lp_locked", False)
 
-        if not (lp_locked or lp_burned) and (lp_locked is not False): 
-            pass
+        if not (lp_locked or lp_burned): continue                      # m & q (LP Lock / Burn)
         
-        if mint_auth is not None and str(mint_auth).lower() not in ["none", "null", ""]: continue
-        if freeze_auth is not None and str(freeze_auth).lower() not in ["none", "null", ""]: continue
+        if not twitter_handle or str(twitter_handle).lower() in ["none", "null", ""]: continue # n
+        
+        if mint_auth is not None and mint_auth != "": continue         # o
+        if freeze_auth is not None and str(freeze_auth).lower() not in ["none", "null", ""]: continue # p
 
         filtered_list.append({
             "pool_address": pool_address,
@@ -204,41 +236,63 @@ def filter_pools(pools, relax_filters=False):
     print(f"[*] Filter Stats [{mode_label}] -> Passed A-L: {passed_al_count} | Final Filtered: {len(filtered_list)}")
     return filtered_list
 
-# --- STEP 2: DYNAMIC CANDLES & INDICATORS ---
+# --- STEP 2: DYNAMIC CANDLE TIMEFRAMES & TECHNICAL INDICATORS (TradingView Parity) ---
 
 def get_candlestick_timeframe(age_hours):
-    return ("minute", 5) if 2 <= age_hours <= 8 else ("minute", 15)
+    """
+    - 2 to 8 hours: 5 minute candles (timeframe='minute', aggregate=5)
+    - Above 8+ hours: 15 minute candles (timeframe='minute', aggregate=15)
+    """
+    if 2 <= age_hours <= 8:
+        return "minute", 5
+    else:
+        return "minute", 15
 
-def fetch_ohlcv(pool_address, timeframe, aggregate):
-    clean_addr = pool_address.split("_")[-1]
-    endpoint = f"networks/{NETWORK}/pools/{clean_addr}/ohlcv/{timeframe}"
-    data = api_get(endpoint, params={"aggregate": aggregate, "limit": 100})
+def fetch_ohlcv(pool_address, timeframe, aggregate, before_timestamp=None):
+    clean_pool_addr = pool_address.split("_")[-1] if "_" in pool_address else pool_address
+    endpoint = f"networks/{NETWORK}/pools/{clean_pool_addr}/ohlcv/{timeframe}"
+    params = {"aggregate": aggregate, "limit": 100}
+    if before_timestamp:
+        params["before_timestamp"] = before_timestamp
+
+    data = api_get(endpoint, params=params)
     if data and "data" in data:
-        ohlcv_list = data["data"].get("attributes", {}).get("ohlcv_list", [])
-        if ohlcv_list:
-            df = pd.DataFrame(ohlcv_list, columns=["timestamp", "open", "high", "low", "close", "volume"])
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', utc=True)
-            return df.sort_values('timestamp').reset_index(drop=True)
+        attributes = data["data"].get("attributes", {})
+        ohlcv_list = attributes.get("ohlcv_list", [])
+        if not ohlcv_list:
+            return pd.DataFrame()
+            
+        df = pd.DataFrame(ohlcv_list, columns=["timestamp", "open", "high", "low", "close", "volume"])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', utc=True)
+        df = df.sort_values('timestamp').reset_index(drop=True)
+        return df
     return pd.DataFrame()
 
 def calculate_indicators(df):
+    """
+    Calculates MACD(8, 17, 9), RSI(14), and Supertrend(10, 3) with exact 
+    recursive band-capping logic for TradingView / DexScreener parity.
+    """
     if df.empty or len(df) < 35:
         return df
 
     close = df['close']
+    
+    # 1. MACD (8, 17, 9)
     ema_fast = close.ewm(span=8, adjust=False).mean()
     ema_slow = close.ewm(span=17, adjust=False).mean()
     df['macd_line'] = ema_fast - ema_slow
     df['macd_signal'] = df['macd_line'].ewm(span=9, adjust=False).mean()
     df['histogram'] = df['macd_line'] - df['macd_signal']
 
+    # 2. RSI (14)
     delta = close.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
     df['rsi'] = 100 - (100 / (1 + rs))
 
-    # Supertrend (TradingView Recursive Formula)
+    # 3. Supertrend (10, 3) - Recursive TradingView Parity Formula
     hl2 = (df['high'] + df['low']) / 2
     tr = pd.concat([
         df['high'] - df['low'],
@@ -272,26 +326,26 @@ def calculate_indicators(df):
             final_lower[i] = final_lower[i-1]
             
         if close.iloc[i] <= final_upper[i]:
-            supertrend[i] = False
+            supertrend[i] = False  # Bearish
         elif close.iloc[i] >= final_lower[i]:
-            supertrend[i] = True
+            supertrend[i] = True   # Bullish
         else:
             supertrend[i] = supertrend[i-1]
             
         st_values[i] = final_lower[i] if supertrend[i] else final_upper[i]
 
     df['supertrend'] = st_values
-    df['supertrend_dir'] = supertrend
+    df['supertrend_dir'] = supertrend  # True = Bullish, False = Bearish
     return df
 
-# --- STEP 3: CROSSOVER LOGIC ---
+# --- STEP 3: CROSSOVER EVALUATION ---
 
-def check_positive_crossover(row, prev_row=None):
-    if row['macd_line'] <= row['macd_signal']: return False
-    if row['macd_line'] <= 0: return False
-    if row['histogram'] <= 0.10 * abs(row['macd_line']): return False
-    if prev_row is not None and row['histogram'] <= prev_row['histogram']: return False
-    if not row['supertrend_dir']: return False
+def check_positive_crossover(curr, prev=None):
+    if curr['macd_line'] <= curr['macd_signal']: return False
+    if curr['macd_line'] <= 0: return False
+    if curr['histogram'] <= 0.10 * abs(curr['macd_line']): return False
+    if prev is not None and curr['histogram'] <= prev['histogram']: return False
+    if not curr['supertrend_dir']: return False
     return True
 
 def check_negative_crossover(row, prev_rows):
@@ -304,33 +358,36 @@ def check_negative_crossover(row, prev_rows):
     if not row['supertrend_dir']: return True
     return False
 
-# --- MAIN DUAL-SCHEDULE LOOP ---
+# --- MAIN DUAL-SCHEDULE EXECUTION LOOP ---
 
 def main():
-    print(f"[{datetime.now(timezone.utc).astimezone(timezone(IST_OFFSET)).strftime('%Y-%m-%d %H:%M:%S IST')}] Starting Solana Quant Bot...")
+    print(f"[{datetime.now(timezone.utc).astimezone(timezone(IST_OFFSET)).strftime('%Y-%m-%d %H:%M:%S IST')}] Starting Solana Meme Coin Quant Bot...")
     
     candidate_pools = []
     filtered_pools = []
     last_pool_fetch_time = 0
-    POOL_FETCH_INTERVAL = 900  # 15 Minutes
-    INDICATOR_CHECK_INTERVAL = 300  # 5 Minutes
+    POOL_FETCH_INTERVAL = 900       # 15 Minutes for raw pool discovery
+    INDICATOR_CHECK_INTERVAL = 300  # 5 Minutes for active crossover monitoring
 
     while True:
         current_time = time.time()
         
-        # 1. Fetch & Filter Pool Candidates every 15 Minutes
+        # 1. Refresh raw pool candidates every 15 minutes
         if current_time - last_pool_fetch_time >= POOL_FETCH_INTERVAL or not candidate_pools:
             print("\n[*] Running 15-Minute Raw Pool Discovery & Filtering Routine...")
             candidate_pools = fetch_candidate_pools()
             filtered_pools = filter_pools(candidate_pools, relax_filters=False)
+            
             if not filtered_pools:
-                print("[*] No tokens met strict filters. Bypassing M-Q...")
+                print("[*] No tokens met strict M->Q filters. Activating relaxation fallback (bypassing M-Q)...")
                 filtered_pools = filter_pools(candidate_pools, relax_filters=True)
+            
             last_pool_fetch_time = current_time
 
-        # 2. Check Technical Indicators every 5 Minutes
-        print(f"\n[*] [{datetime.now(timezone.utc).astimezone(timezone(IST_OFFSET)).strftime('%H:%M:%S IST')}] Checking 5-Min MACD Crossovers for {len(filtered_pools)} tokens...")
-        
+        # 2. Check 5-Min Indicators and print active/historical signals
+        print(f"\n[*] [{datetime.now(timezone.utc).astimezone(timezone(IST_OFFSET)).strftime('%H:%M:%S IST')}] Checking 5-Min MACD Crossovers for {len(filtered_pools)} filtered tokens...")
+
+        any_current_crossover_detected = False
         historical_trades = []
         all_current_signals_detailed = []
 
@@ -350,7 +407,6 @@ def main():
             entry_time = None
             entry_price = 0.0
 
-            # Historical Backtest Loop across Candles
             for i in range(2, len(df)):
                 prev_prev = df.iloc[i-2]
                 prev = df.iloc[i-1]
@@ -376,10 +432,12 @@ def main():
                     })
                     in_trade = False
 
-            # Current Active Signal Check on Latest Closed Candle
             latest_curr = df.iloc[-1]
             latest_prev = df.iloc[-2]
             if check_positive_crossover(latest_curr, latest_prev):
+                any_current_crossover_detected = True
+                
+                # Capture the last 5 tuples for active crossover token
                 last_5_df = df.tail(5)
                 for _, row in last_5_df.iterrows():
                     st_status = "BULLISH" if row.get('supertrend_dir', True) else "BEARISH"
@@ -398,26 +456,28 @@ def main():
                         "RSI": f"{row.get('rsi', 0):.1f}"
                     })
 
-        # --- OUTPUT RENDERING ---
-        print("\n" + "="*140)
-        print("TABLE 1: HISTORICAL MACD CROSSOVER TRADES & POOL ADDRESSES")
-        print("="*140)
+        # --- RENDER TABULAR DATA OUTPUTS WITH IST ---
+        print("\n" + "="*130)
+        print("TABLE 1: HISTORICAL POSITIVE MACD CROSSOVER TRADES & POOL ADDRESSES (IST Timestamps)")
+        print("="*130)
         if historical_trades:
-            print(pd.DataFrame(historical_trades).to_string(index=False))
+            df_hist = pd.DataFrame(historical_trades)
+            print(df_hist.to_string(index=False))
         else:
-            print("No completed historical crossover trades found.")
+            print("No completed historical crossover trades found in current dataset.")
 
-        print("\n" + "="*140)
-        print("TABLE 2: CURRENT ACTIVE POSITIVE MACD CROSSOVERS - LAST 5 TUPLES (5-MIN MONITOR)")
-        print("="*140)
+        print("\n" + "="*130)
+        print("TABLE 2: CURRENT ACTIVE POSITIVE MACD CROSSOVERS - ALL TOKENS (LAST 5 TUPLES)")
+        print("="*130)
         if all_current_signals_detailed:
-            print(pd.DataFrame(all_current_signals_detailed).to_string(index=False))
+            df_curr = pd.DataFrame(all_current_signals_detailed)
+            print(df_curr.to_string(index=False))
         else:
-            print("No current positive crossover detected on latest 5-min candles.")
-        print("="*140 + "\n")
+            print("No current positive crossover detected on latest candles for any token.")
+        print("="*130 + "\n")
 
-        # Fixed 5-minute loop pause for fast crossover monitoring
-        print(f"[*] Indicator evaluation finished. Sleeping 5 minutes before next candle check...")
+        # --- EXECUTION CONTROL LOGIC ---
+        print(f"[*] Indicator check completed. Sleeping for 5 minutes before next 5-min candle evaluation...")
         time.sleep(INDICATOR_CHECK_INTERVAL)
 
 if __name__ == "__main__":
