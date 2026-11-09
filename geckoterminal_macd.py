@@ -281,36 +281,44 @@ def fetch_ohlcv(pool_address, timeframe, aggregate, before_timestamp=None):
         return df
     return pd.DataFrame()
 
-def calculate_indicators(df):
+def calculate_indicators(df, current_market_cap=None):
     """
-    Calculates MACD(8, 17, 9), RSI(14), and Supertrend(10, 3) on raw price series 
-    to maintain historical Table 1 trade parity.
+    Calculates indicators on Market Cap USD series for 100% parity with DexScreener Mcap mode.
     """
     if df.empty or len(df) < 35:
         return df
 
-    close = df['close']
-    
+    latest_close = df['close'].iloc[-1]
+    if current_market_cap and current_market_cap > 0 and latest_close > 0:
+        scaling_factor = current_market_cap / latest_close
+        series = df['close'] * scaling_factor
+        high_series = df['high'] * scaling_factor
+        low_series = df['low'] * scaling_factor
+    else:
+        series = df['close']
+        high_series = df['high']
+        low_series = df['low']
+
     # 1. MACD (8, 17, 9)
-    ema_fast = close.ewm(span=8, adjust=False).mean()
-    ema_slow = close.ewm(span=17, adjust=False).mean()
+    ema_fast = series.ewm(span=8, adjust=False).mean()
+    ema_slow = series.ewm(span=17, adjust=False).mean()
     df['macd_line'] = ema_fast - ema_slow
     df['macd_signal'] = df['macd_line'].ewm(span=9, adjust=False).mean()
     df['histogram'] = df['macd_line'] - df['macd_signal']
 
     # 2. RSI (14)
-    delta = close.diff()
+    delta = series.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
     df['rsi'] = 100 - (100 / (1 + rs))
 
-    # 3. Supertrend (10, 3) - Recursive TradingView Parity Formula on Price
-    hl2 = (df['high'] + df['low']) / 2
+    # 3. Supertrend (10, 3) - Recursive Parity Formula
+    hl2 = (high_series + low_series) / 2
     tr = pd.concat([
-        df['high'] - df['low'],
-        (df['high'] - close.shift()).abs(),
-        (df['low'] - close.shift()).abs()
+        high_series - low_series,
+        (high_series - series.shift()).abs(),
+        (low_series - series.shift()).abs()
     ], axis=1).max(axis=1)
     atr = tr.rolling(window=10).mean()
 
@@ -328,27 +336,28 @@ def calculate_indicators(df):
             final_lower[i] = basic_lower.iloc[i]
             continue
             
-        if basic_upper.iloc[i] < final_upper[i-1] or close.iloc[i-1] > final_upper[i-1]:
+        if basic_upper.iloc[i] < final_upper[i-1] or series.iloc[i-1] > final_upper[i-1]:
             final_upper[i] = basic_upper.iloc[i]
         else:
             final_upper[i] = final_upper[i-1]
             
-        if basic_lower.iloc[i] > final_lower[i-1] or close.iloc[i-1] < final_lower[i-1]:
+        if basic_lower.iloc[i] > final_lower[i-1] or series.iloc[i-1] < final_lower[i-1]:
             final_lower[i] = basic_lower.iloc[i]
         else:
             final_lower[i] = final_lower[i-1]
             
-        if close.iloc[i] <= final_upper[i]:
-            supertrend[i] = False  # Bearish
-        elif close.iloc[i] >= final_lower[i]:
-            supertrend[i] = True   # Bullish
+        if series.iloc[i] <= final_upper[i]:
+            supertrend[i] = False
+        elif series.iloc[i] >= final_lower[i]:
+            supertrend[i] = True
         else:
             supertrend[i] = supertrend[i-1]
             
         st_values[i] = final_lower[i] if supertrend[i] else final_upper[i]
 
     df['supertrend'] = st_values
-    df['supertrend_dir'] = supertrend  # True = Bullish, False = Bearish
+    df['supertrend_dir'] = supertrend
+    df['mcap_series'] = series
     return df
 # --- STEP 3: CROSSOVER EVALUATION ---
 
@@ -406,13 +415,14 @@ def main():
             pool_addr = item["pool_address"]
             pool_name = item["pool_name"]
             age = item["age_hours"]
+            market_cap = item["market_cap"]
             tf, agg = get_candlestick_timeframe(age)
             
             df = fetch_ohlcv(pool_addr, tf, agg)
             if df.empty or len(df) < 35:
                 continue
                 
-            df = calculate_indicators(df)  # Removed current_market_cap argument
+            df = calculate_indicators(df, current_market_cap=market_cap)
 
             in_trade = False
             entry_time = None
@@ -429,10 +439,10 @@ def main():
                 if not in_trade and is_pos_cross:
                     in_trade = True
                     entry_time = curr['timestamp']
-                    entry_price = curr['close']
+                    entry_price = curr['mcap_series']
                 elif in_trade and is_neg_cross:
                     exit_time = curr['timestamp']
-                    exit_price = curr['close']
+                    exit_price = curr['mcap_series']
                     pnl_pct = ((exit_price - entry_price) / entry_price) * 100.0
                     historical_trades.append({
                         "Pool Name": pool_name,
