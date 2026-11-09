@@ -104,7 +104,7 @@ def fetch_token_deep_info(token_address):
     if data and "data" in data:
         return data["data"].get("attributes", {})
     return {}
-              
+
 def filter_pools(pools, relax_filters=False):
     """
     Applies filters a -> q in exact sequence.
@@ -113,10 +113,6 @@ def filter_pools(pools, relax_filters=False):
     filtered_list = []
     now = datetime.now(timezone.utc)
     passed_al_count = 0
-    buyers=0
-    lmc=0
-    top_10=0
-    buy_sell=0
 
     for pool in pools:
         attr = pool.get("attributes", {})
@@ -143,22 +139,20 @@ def filter_pools(pools, relax_filters=False):
         age_hours = (now - created_at).total_seconds() / 3600.0
 
         # --- Criteria a to l (Core Metric Gates) ---
-        if not (1 <= age_hours <= 24): continue                         # a
-        if not (30000 <= market_cap <= 5000000): continue               # b
-        if liquidity_usd < 30000: continue                              # c
-        if volume_24h < 50000 or volume_6h < 20000: continue            # d
-        if tx_count_24h < 500: continue                                 # e
+        if not (1 <= age_hours <= 24): continue                      # a
+        if not (30000 <= market_cap <= 5000000): continue              # b
+        if liquidity_usd < 30000: continue                             # c
+        if volume_24h < 50000 or volume_6h < 20000: continue           # d
+        if tx_count_24h < 500: continue                                # e
         
         buyers_6h = attr.get("transactions", {}).get("h6", {}).get("buyers", 0) or 0
         buyers_1h = attr.get("transactions", {}).get("h1", {}).get("buyers", 0) or 0
         if not (buyers_24h >= 300 and buyers_6h >= 50 and buyers_1h >= 20): continue # f
-        buyers=buyers+1
-        print("buyers---->",buyers)
 
         price_change_6h = float(attr.get("price_change_percentage", {}).get("h6", 0) or 0)
-        if price_change_6h < 5.0: continue                              # g
+        if price_change_6h < 5.0: continue                             # g
 
-        # Fetch Token Deep Info forHolder & Security Attributes (h -> q)
+        # Fetch Token Deep Info for Holder & Security Attributes (h -> q)
         try:
             base_token_rel = relationships.get("base_token", {}).get("data", {})
             token_address = base_token_rel.get("id", "").split("_")[-1]
@@ -177,39 +171,27 @@ def filter_pools(pools, relax_filters=False):
         if isinstance(holders_data, dict):
             dist_pct = holders_data.get("distribution_percentage")
             if isinstance(dist_pct, dict):
-                #top_10_str = dist_pct.get("top_10", "100")
                 top_10_str = dist_pct.get("top_10")
                 if top_10_str is not None:
                     top_holder_pct = float(top_10_str)
         else:
-            # Fallback for alternative flat attributes if present
             alt_pct = token_info.get("top_10_holder_percent")
             if alt_pct is not None:
                 top_holder_pct = float(alt_pct)
 
-        #if top_holder_pct > 10.0: continue                       # h
-        #top_10=top_10+1
-        #print("top_holder_pct---->",top_10)
+        if top_holder_pct > 10.0: continue                             # h
 
         price_change_1h = float(attr.get("price_change_percentage", {}).get("h1", 0) or 0)
         price_change_24h = float(attr.get("price_change_percentage", {}).get("h24", 0) or 0)
-        #if not (price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0): continue # i
-        #print("(price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0):")
+        if not (price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0): continue # i
 
         buys_24h = tx_24h.get("buys", 0) or 0
         sells_24h = tx_24h.get("sells", 0) or 0
         buy_sell_ratio = (buys_24h / sells_24h) if sells_24h > 0 else 0
-        if buy_sell_ratio < 0.8: continue                               # j
-        buy_sell=buy_sell+1
-        print("buy_sell_ratio < 1.0:------->",buy_sell)
-
-        makers_unique = tx_24h.get("users", 0) or 0
-        #if makers_unique < 2500: continue                               # k
+        if buy_sell_ratio < 0.8: continue                              # j
 
         liq_mcap_ratio = (liquidity_usd / market_cap) if market_cap > 0 else 0
-        if liq_mcap_ratio <= 0.05: continue                             # l
-        lmc=lmc+1
-        print("liq_mcap_ratio----------->",lmc)
+        if liq_mcap_ratio <= 0.05: continue                            # l
 
         passed_al_count += 1
 
@@ -231,12 +213,11 @@ def filter_pools(pools, relax_filters=False):
         lp_burned = token_info.get("is_lp_burned", False)
         lp_locked = token_info.get("is_lp_locked", False)
 
-        if not (lp_locked or lp_burned): continue                       # m & q (LP Lock / Burn)
+        if not (lp_locked or lp_burned): continue                      # m & q (LP Lock / Burn)
         
-        # Robust Twitter handle check (handling string 'none', None, or empty)
         if not twitter_handle or str(twitter_handle).lower() in ["none", "null", ""]: continue # n
         
-        if mint_auth is not None and mint_auth != "": continue          # o
+        if mint_auth is not None and mint_auth != "": continue         # o
         if freeze_auth is not None and str(freeze_auth).lower() not in ["none", "null", ""]: continue # p
 
         filtered_list.append({
@@ -252,8 +233,7 @@ def filter_pools(pools, relax_filters=False):
     print(f"[*] Filter Stats [{mode_label}] -> Passed A-L: {passed_al_count} | Final Filtered: {len(filtered_list)}")
     return filtered_list
 
-
-# --- STEP 2: DYNAMIC CANDLE TIMEFRAMES & TECHNICAL INDICATORS (TradingView Parity) ---
+# --- STEP 2: DYNAMIC CANDLE TIMEFRAMES & TECHNICAL INDICATORS (Market Cap Parity) ---
 
 def get_candlestick_timeframe(age_hours):
     if 2 <= age_hours <= 8:
@@ -281,32 +261,46 @@ def fetch_ohlcv(pool_address, timeframe, aggregate, before_timestamp=None):
         return df
     return pd.DataFrame()
 
-def calculate_indicators(df):
+def calculate_indicators(df, current_market_cap=None):
+    """
+    Calculates MACD(8, 17, 9), RSI(14), and Supertrend(10, 3) on Market Cap series 
+    for 100% parity with DexScreener's Mcap mode.
+    """
     if df.empty or len(df) < 35:
         return df
 
-    close = df['close']
-    
+    # Scale OHLCV price series to Market Cap USD matching DexScreener Mcap mode
+    latest_close = df['close'].iloc[-1]
+    if current_market_cap and current_market_cap > 0 and latest_close > 0:
+        scaling_factor = current_market_cap / latest_close
+        series = df['close'] * scaling_factor
+        high_series = df['high'] * scaling_factor
+        low_series = df['low'] * scaling_factor
+    else:
+        series = df['close']
+        high_series = df['high']
+        low_series = df['low']
+
     # 1. MACD (8, 17, 9)
-    ema_fast = close.ewm(span=8, adjust=False).mean()
-    ema_slow = close.ewm(span=17, adjust=False).mean()
+    ema_fast = series.ewm(span=8, adjust=False).mean()
+    ema_slow = series.ewm(span=17, adjust=False).mean()
     df['macd_line'] = ema_fast - ema_slow
     df['macd_signal'] = df['macd_line'].ewm(span=9, adjust=False).mean()
     df['histogram'] = df['macd_line'] - df['macd_signal']
 
     # 2. RSI (14)
-    delta = close.diff()
+    delta = series.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
     df['rsi'] = 100 - (100 / (1 + rs))
 
-    # 3. Supertrend (10, 3) - Recursive TradingView Parity Formula
-    hl2 = (df['high'] + df['low']) / 2
+    # 3. Supertrend (10, 3) - Recursive TradingView / Mcap Parity Formula
+    hl2 = (high_series + low_series) / 2
     tr = pd.concat([
-        df['high'] - df['low'],
-        (df['high'] - close.shift()).abs(),
-        (df['low'] - close.shift()).abs()
+        high_series - low_series,
+        (high_series - series.shift()).abs(),
+        (low_series - series.shift()).abs()
     ], axis=1).max(axis=1)
     atr = tr.rolling(window=10).mean()
 
@@ -324,19 +318,19 @@ def calculate_indicators(df):
             final_lower[i] = basic_lower.iloc[i]
             continue
             
-        if basic_upper.iloc[i] < final_upper[i-1] or close.iloc[i-1] > final_upper[i-1]:
+        if basic_upper.iloc[i] < final_upper[i-1] or series.iloc[i-1] > final_upper[i-1]:
             final_upper[i] = basic_upper.iloc[i]
         else:
             final_upper[i] = final_upper[i-1]
             
-        if basic_lower.iloc[i] > final_lower[i-1] or close.iloc[i-1] < final_lower[i-1]:
+        if basic_lower.iloc[i] > final_lower[i-1] or series.iloc[i-1] < final_lower[i-1]:
             final_lower[i] = basic_lower.iloc[i]
         else:
             final_lower[i] = final_lower[i-1]
             
-        if close.iloc[i] <= final_upper[i]:
+        if series.iloc[i] <= final_upper[i]:
             supertrend[i] = False  # Bearish
-        elif close.iloc[i] >= final_lower[i]:
+        elif series.iloc[i] >= final_lower[i]:
             supertrend[i] = True   # Bullish
         else:
             supertrend[i] = supertrend[i-1]
@@ -345,6 +339,8 @@ def calculate_indicators(df):
 
     df['supertrend'] = st_values
     df['supertrend_dir'] = supertrend  # True = Bullish, False = Bearish
+    # Keep track of Mcap series values for accurate price reference if needed
+    df['mcap_series'] = series
     return df
 
 # --- STEP 3: CROSSOVER EVALUATION ---
@@ -403,19 +399,19 @@ def main():
             pool_addr = item["pool_address"]
             pool_name = item["pool_name"]
             age = item["age_hours"]
+            market_cap = item["market_cap"]
             tf, agg = get_candlestick_timeframe(age)
             
             df = fetch_ohlcv(pool_addr, tf, agg)
             if df.empty or len(df) < 35:
                 continue
                 
-            df = calculate_indicators(df)
+            df = calculate_indicators(df, current_market_cap=market_cap)
 
             in_trade = False
             entry_time = None
             entry_price = 0.0
 
-            # Historical Backtest Loop across Candles
             for i in range(2, len(df)):
                 prev_prev = df.iloc[i-2]
                 prev = df.iloc[i-1]
@@ -427,10 +423,10 @@ def main():
                 if not in_trade and is_pos_cross:
                     in_trade = True
                     entry_time = curr['timestamp']
-                    entry_price = curr['close']
+                    entry_price = curr['mcap_series'] if 'mcap_series' in curr else curr['close']
                 elif in_trade and is_neg_cross:
                     exit_time = curr['timestamp']
-                    exit_price = curr['close']
+                    exit_price = curr['mcap_series'] if 'mcap_series' in curr else curr['close']
                     pnl_pct = ((exit_price - entry_price) / entry_price) * 100.0
                     historical_trades.append({
                         "Pool Name": pool_name,
@@ -446,66 +442,59 @@ def main():
             latest_prev = df.iloc[-2]
             
             if check_positive_crossover(latest_curr, latest_prev):
-                # Scan backwards to locate the exact positive crossover entry point
-                active_entry_price = latest_curr['close']
-                active_entry_time = latest_curr['timestamp']
+                active_entry_price = latest_curr['mcap_series'] if 'mcap_series' in latest_curr else latest_curr['close']
                 
                 for j in range(len(df)-1, 0, -1):
                     p_curr = df.iloc[j]
                     p_prev = df.iloc[j-1]
-                    # If a negative cross happened previously, the active run started right after it
                     if j >= 2:
                         p_prev_prev = df.iloc[j-2]
                         if check_negative_crossover(p_curr, [p_prev_prev.to_dict(), p_prev.to_dict()]):
                             break
                     if check_positive_crossover(p_curr, p_prev):
-                        active_entry_price = p_curr['close']
-                        active_entry_time = p_curr['timestamp']
+                        active_entry_price = p_curr['mcap_series'] if 'mcap_series' in p_curr else p_curr['close']
 
-                current_price = latest_curr['close']
-                live_pnl_pct = ((current_price - active_entry_price) / active_entry_price) * 100.0
+                current_val = latest_curr['mcap_series'] if 'mcap_series' in latest_curr else latest_curr['close']
+                live_pnl_pct = ((current_val - active_entry_price) / active_entry_price) * 100.0
 
-                # Capture the last 5 tuples for Table 2 with Live PnL
                 last_5_df = df.tail(5)
                 for _, row in last_5_df.iterrows():
                     st_status = "BULLISH" if row.get('supertrend_dir', True) else "BEARISH"
+                    row_val = row['mcap_series'] if 'mcap_series' in row else row['close']
                     all_current_signals_detailed.append({
                         "Pool Name": pool_name,
                         "DexScreener Pool Address": pool_addr,
                         "Timestamp (IST)": convert_to_ist(row['timestamp']),
-                        "Open": f"{row['open']:.8f}",
-                        "High": f"{row['high']:.8f}",
-                        "Low": f"{row['low']:.8f}",
-                        "Close": f"{row['close']:.8f}",
-                        "MACD": f"{row.get('macd_line', 0):.6f}",
-                        "MACD Signal": f"{row.get('macd_signal', 0):.6f}",
-                        "Histogram": f"{row.get('histogram', 0):.6f}",
-                        "Supertrend": f"{row.get('supertrend', 0):.8f} ({st_status})",
+                        "Mcap Open": f"${row.get('open', 0)*(market_cap/latest_close):,.0f}",
+                        "Mcap Close": f"${row_val:,.0f}",
+                        "MACD": f"{row.get('macd_line', 0):.2f}",
+                        "MACD Signal": f"{row.get('macd_signal', 0):.2f}",
+                        "Histogram": f"{row.get('histogram', 0):.2f}",
+                        "Supertrend": f"${row.get('supertrend', 0):,.0f} ({st_status})",
                         "RSI": f"{row.get('rsi', 0):.1f}",
                         "Live PnL (%)": f"{live_pnl_pct:+.2f}%"
                     })
 
         # --- RENDER TABULAR DATA OUTPUTS WITH IST ---
-        print("\n" + "="*140)
+        print("\n" + "="*130)
         print("TABLE 1: HISTORICAL POSITIVE MACD CROSSOVER TRADES & POOL ADDRESSES (IST Timestamps)")
-        print("="*140)
+        print("="*130)
         if historical_trades:
             df_hist = pd.DataFrame(historical_trades)
             print(df_hist.to_string(index=False))
         else:
             print("No completed historical crossover trades found in current dataset.")
 
-        print("\n" + "="*140)
-        print("TABLE 2: CURRENT ACTIVE POSITIVE MACD CROSSOVERS - LAST 5 TUPLES WITH LIVE PnL (%)")
-        print("="*140)
+        print("\n" + "="*130)
+        print("TABLE 2: CURRENT ACTIVE POSITIVE MACD CROSSOVERS - LAST 5 TUPLES WITH LIVE PnL (%) [MCAP MODE]")
+        print("="*130)
         if all_current_signals_detailed:
             df_curr = pd.DataFrame(all_current_signals_detailed)
             print(df_curr.to_string(index=False))
         else:
             print("No current positive crossover detected on latest candles for any token.")
-        print("="*140 + "\n")
+        print("="*130 + "\n")
 
-        # --- EXECUTION CONTROL LOGIC ---
         print(f"[*] Indicator check completed. Sleeping for 5 minutes before next 5-min candle evaluation...")
         time.sleep(INDICATOR_CHECK_INTERVAL)
 
