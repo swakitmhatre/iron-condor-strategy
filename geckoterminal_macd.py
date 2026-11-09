@@ -141,7 +141,8 @@ def filter_pools(pools, relax_filters=False):
         buyers_6h = attr.get("transactions", {}).get("h6", {}).get("buyers", 0) or 0
         buyers_1h = attr.get("transactions", {}).get("h1", {}).get("buyers", 0) or 0
         if not (buyers_24h >= 300 and buyers_6h >= 50 and buyers_1h >= 20): continue # f
-        print("(buyers_24h >= 300 and buyers_6h >= 50 and buyers_1h >= 20):")
+        buyer=buyer+1
+        print("buyers---->",buyers)
 
         price_change_6h = float(attr.get("price_change_percentage", {}).get("h6", 0) or 0)
         if price_change_6h < 5.0: continue                              # g
@@ -168,7 +169,8 @@ def filter_pools(pools, relax_filters=False):
             top_holder_pct = float(token_info.get("top_10_holder_percent", 100.0) or 100.0)
 
         if top_holder_pct > 10.0: continue                              # h
-        print("top_holder_pct---->",top_holder_pct)
+        top_10=top_10+1
+        print("top_holder_pct---->",top_10)
 
         price_change_1h = float(attr.get("price_change_percentage", {}).get("h1", 0) or 0)
         price_change_24h = float(attr.get("price_change_percentage", {}).get("h24", 0) or 0)
@@ -179,14 +181,16 @@ def filter_pools(pools, relax_filters=False):
         sells_24h = tx_24h.get("sells", 0) or 0
         buy_sell_ratio = (buys_24h / sells_24h) if sells_24h > 0 else 0
         if buy_sell_ratio < 1.0: continue                               # j
-        print("buy_sell_ratio < 1.0:------->",buy_sell_ratio)
+        buy_sell=buy_sell+1
+        print("buy_sell_ratio < 1.0:------->",buy_sell)
 
         makers_unique = tx_24h.get("users", 0) or 0
         #if makers_unique < 2500: continue                               # k
 
         liq_mcap_ratio = (liquidity_usd / market_cap) if market_cap > 0 else 0
         if liq_mcap_ratio <= 0.05: continue                             # l
-        print("liq_mcap_ratio----------->",liq_mcap_ratio)
+        lmc=lmc+1
+        print("liq_mcap_ratio----------->",lmc)
 
         passed_al_count += 1
 
