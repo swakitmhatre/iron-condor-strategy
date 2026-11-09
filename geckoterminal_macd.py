@@ -281,46 +281,36 @@ def fetch_ohlcv(pool_address, timeframe, aggregate, before_timestamp=None):
         return df
     return pd.DataFrame()
 
-def calculate_indicators(df, current_market_cap=None):
+def calculate_indicators(df):
     """
-    Calculates MACD(8, 17, 9), RSI(14), and Supertrend(10, 3) on Market Cap series 
-    for 100% parity with DexScreener's Mcap mode.
+    Calculates MACD(8, 17, 9), RSI(14), and Supertrend(10, 3) on raw price series 
+    to maintain historical Table 1 trade parity.
     """
     if df.empty or len(df) < 35:
         return df
 
-    # Scale OHLCV price series to Market Cap USD matching DexScreener Mcap mode
-    latest_close = df['close'].iloc[-1]
-    if current_market_cap and current_market_cap > 0 and latest_close > 0:
-        scaling_factor = current_market_cap / latest_close
-        series = df['close'] * scaling_factor
-        high_series = df['high'] * scaling_factor
-        low_series = df['low'] * scaling_factor
-    else:
-        series = df['close']
-        high_series = df['high']
-        low_series = df['low']
-
+    close = df['close']
+    
     # 1. MACD (8, 17, 9)
-    ema_fast = series.ewm(span=8, adjust=False).mean()
-    ema_slow = series.ewm(span=17, adjust=False).mean()
+    ema_fast = close.ewm(span=8, adjust=False).mean()
+    ema_slow = close.ewm(span=17, adjust=False).mean()
     df['macd_line'] = ema_fast - ema_slow
     df['macd_signal'] = df['macd_line'].ewm(span=9, adjust=False).mean()
     df['histogram'] = df['macd_line'] - df['macd_signal']
 
     # 2. RSI (14)
-    delta = series.diff()
+    delta = close.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
     df['rsi'] = 100 - (100 / (1 + rs))
 
-    # 3. Supertrend (10, 3) - Recursive TradingView / Mcap Parity Formula
-    hl2 = (high_series + low_series) / 2
+    # 3. Supertrend (10, 3) - Recursive TradingView Parity Formula on Price
+    hl2 = (df['high'] + df['low']) / 2
     tr = pd.concat([
-        high_series - low_series,
-        (high_series - series.shift()).abs(),
-        (low_series - series.shift()).abs()
+        df['high'] - df['low'],
+        (df['high'] - close.shift()).abs(),
+        (df['low'] - close.shift()).abs()
     ], axis=1).max(axis=1)
     atr = tr.rolling(window=10).mean()
 
@@ -338,19 +328,19 @@ def calculate_indicators(df, current_market_cap=None):
             final_lower[i] = basic_lower.iloc[i]
             continue
             
-        if basic_upper.iloc[i] < final_upper[i-1] or series.iloc[i-1] > final_upper[i-1]:
+        if basic_upper.iloc[i] < final_upper[i-1] or close.iloc[i-1] > final_upper[i-1]:
             final_upper[i] = basic_upper.iloc[i]
         else:
             final_upper[i] = final_upper[i-1]
             
-        if basic_lower.iloc[i] > final_lower[i-1] or series.iloc[i-1] < final_lower[i-1]:
+        if basic_lower.iloc[i] > final_lower[i-1] or close.iloc[i-1] < final_lower[i-1]:
             final_lower[i] = basic_lower.iloc[i]
         else:
             final_lower[i] = final_lower[i-1]
             
-        if series.iloc[i] <= final_upper[i]:
+        if close.iloc[i] <= final_upper[i]:
             supertrend[i] = False  # Bearish
-        elif series.iloc[i] >= final_lower[i]:
+        elif close.iloc[i] >= final_lower[i]:
             supertrend[i] = True   # Bullish
         else:
             supertrend[i] = supertrend[i-1]
@@ -359,10 +349,7 @@ def calculate_indicators(df, current_market_cap=None):
 
     df['supertrend'] = st_values
     df['supertrend_dir'] = supertrend  # True = Bullish, False = Bearish
-    # Keep track of Mcap series values for accurate price reference if needed
-    df['mcap_series'] = series
     return df
-
 # --- STEP 3: CROSSOVER EVALUATION ---
 
 def check_positive_crossover(curr, prev=None):
@@ -419,14 +406,13 @@ def main():
             pool_addr = item["pool_address"]
             pool_name = item["pool_name"]
             age = item["age_hours"]
-            market_cap = item["market_cap"]
             tf, agg = get_candlestick_timeframe(age)
             
             df = fetch_ohlcv(pool_addr, tf, agg)
             if df.empty or len(df) < 35:
                 continue
                 
-            df = calculate_indicators(df, current_market_cap=market_cap)
+            df = calculate_indicators(df)  # Removed current_market_cap argument
 
             in_trade = False
             entry_time = None
@@ -443,10 +429,10 @@ def main():
                 if not in_trade and is_pos_cross:
                     in_trade = True
                     entry_time = curr['timestamp']
-                    entry_price = curr['mcap_series'] if 'mcap_series' in curr else curr['close']
+                    entry_price = curr['close']
                 elif in_trade and is_neg_cross:
                     exit_time = curr['timestamp']
-                    exit_price = curr['mcap_series'] if 'mcap_series' in curr else curr['close']
+                    exit_price = curr['close']
                     pnl_pct = ((exit_price - entry_price) / entry_price) * 100.0
                     historical_trades.append({
                         "Pool Name": pool_name,
@@ -457,14 +443,13 @@ def main():
                     })
                     in_trade = False
 
-           
             # Active Trade Check on Latest Closed Candle for Table 2 Live PnL Tracking
             latest_curr = df.iloc[-1]
             latest_prev = df.iloc[-2]
-            latest_close = latest_curr['close']  # Defined properly here
+            latest_close = latest_curr['close']
 
             if check_positive_crossover(latest_curr, latest_prev):
-                active_entry_price = latest_curr['mcap_series'] if 'mcap_series' in latest_curr else latest_close
+                active_entry_price = latest_close
                 
                 for j in range(len(df)-1, 0, -1):
                     p_curr = df.iloc[j]
@@ -474,27 +459,24 @@ def main():
                         if check_negative_crossover(p_curr, [p_prev_prev.to_dict(), p_prev.to_dict()]):
                             break
                     if check_positive_crossover(p_curr, p_prev):
-                        active_entry_price = p_curr['mcap_series'] if 'mcap_series' in p_curr else p_curr['close']
+                        active_entry_price = p_curr['close']
 
-                current_val = latest_curr['mcap_series'] if 'mcap_series' in latest_curr else latest_close
+                current_val = latest_close
                 live_pnl_pct = ((current_val - active_entry_price) / active_entry_price) * 100.0
 
                 last_5_df = df.tail(5)
                 for _, row in last_5_df.iterrows():
                     st_status = "BULLISH" if row.get('supertrend_dir', True) else "BEARISH"
-                    row_val = row['mcap_series'] if 'mcap_series' in row else row['close']
-                    scaling_factor = (market_cap / latest_close) if latest_close > 0 else 1.0
-                    
                     all_current_signals_detailed.append({
                         "Pool Name": pool_name,
                         "DexScreener Pool Address": pool_addr,
                         "Timestamp (IST)": convert_to_ist(row['timestamp']),
-                        "Mcap Open": f"${row.get('open', 0) * scaling_factor:,.0f}",
-                        "Mcap Close": f"${row_val:,.0f}",
-                        "MACD": f"{row.get('macd_line', 0):.2f}",
-                        "MACD Signal": f"{row.get('macd_signal', 0):.2f}",
-                        "Histogram": f"{row.get('histogram', 0):.2f}",
-                        "Supertrend": f"${row.get('supertrend', 0):,.0f} ({st_status})",
+                        "Open": f"{row['open']:.8f}",
+                        "Close": f"{row['close']:.8f}",
+                        "MACD": f"{row.get('macd_line', 0):.6f}",
+                        "MACD Signal": f"{row.get('macd_signal', 0):.6f}",
+                        "Histogram": f"{row.get('histogram', 0):.6f}",
+                        "Supertrend": f"{row.get('supertrend', 0):.8f} ({st_status})",
                         "RSI": f"{row.get('rsi', 0):.1f}",
                         "Live PnL (%)": f"{live_pnl_pct:+.2f}%"
                     })
