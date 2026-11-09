@@ -180,7 +180,7 @@ def filter_pools(pools, relax_filters=False):
         buys_24h = tx_24h.get("buys", 0) or 0
         sells_24h = tx_24h.get("sells", 0) or 0
         buy_sell_ratio = (buys_24h / sells_24h) if sells_24h > 0 else 0
-        if buy_sell_ratio < 1.0: continue                               # j
+        if buy_sell_ratio < 0.8: continue                               # j
         buy_sell=buy_sell+1
         print("buy_sell_ratio < 1.0:------->",buy_sell)
 
