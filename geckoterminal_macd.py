@@ -181,6 +181,10 @@ def filter_pools(pools, relax_filters=False):
         lp_burned = token_info.get("is_lp_burned", False)
         lp_locked = token_info.get("is_lp_locked", False)
 
+        print("pool---------->",pool)
+        print("attr---------->",attr)
+        print("token_info---->",token_info)
+        
         # Enforcing criteria g through q
         if buyers_6h < 50 or buyers_1h < 20: continue
         if price_change_6h < 5.0: continue
