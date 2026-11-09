@@ -457,12 +457,14 @@ def main():
                     })
                     in_trade = False
 
+           
             # Active Trade Check on Latest Closed Candle for Table 2 Live PnL Tracking
             latest_curr = df.iloc[-1]
             latest_prev = df.iloc[-2]
-            
+            latest_close = latest_curr['close']  # Defined properly here
+
             if check_positive_crossover(latest_curr, latest_prev):
-                active_entry_price = latest_curr['mcap_series'] if 'mcap_series' in latest_curr else latest_curr['close']
+                active_entry_price = latest_curr['mcap_series'] if 'mcap_series' in latest_curr else latest_close
                 
                 for j in range(len(df)-1, 0, -1):
                     p_curr = df.iloc[j]
@@ -474,18 +476,20 @@ def main():
                     if check_positive_crossover(p_curr, p_prev):
                         active_entry_price = p_curr['mcap_series'] if 'mcap_series' in p_curr else p_curr['close']
 
-                current_val = latest_curr['mcap_series'] if 'mcap_series' in latest_curr else latest_curr['close']
+                current_val = latest_curr['mcap_series'] if 'mcap_series' in latest_curr else latest_close
                 live_pnl_pct = ((current_val - active_entry_price) / active_entry_price) * 100.0
 
                 last_5_df = df.tail(5)
                 for _, row in last_5_df.iterrows():
                     st_status = "BULLISH" if row.get('supertrend_dir', True) else "BEARISH"
                     row_val = row['mcap_series'] if 'mcap_series' in row else row['close']
+                    scaling_factor = (market_cap / latest_close) if latest_close > 0 else 1.0
+                    
                     all_current_signals_detailed.append({
                         "Pool Name": pool_name,
                         "DexScreener Pool Address": pool_addr,
                         "Timestamp (IST)": convert_to_ist(row['timestamp']),
-                        "Mcap Open": f"${row.get('open', 0)*(market_cap/latest_close):,.0f}",
+                        "Mcap Open": f"${row.get('open', 0) * scaling_factor:,.0f}",
                         "Mcap Close": f"${row_val:,.0f}",
                         "MACD": f"{row.get('macd_line', 0):.2f}",
                         "MACD Signal": f"{row.get('macd_signal', 0):.2f}",
@@ -494,7 +498,6 @@ def main():
                         "RSI": f"{row.get('rsi', 0):.1f}",
                         "Live PnL (%)": f"{live_pnl_pct:+.2f}%"
                     })
-
         # --- RENDER TABULAR DATA OUTPUTS WITH IST ---
         print("\n" + "="*130)
         print("TABLE 1: HISTORICAL POSITIVE MACD CROSSOVER TRADES & POOL ADDRESSES (IST Timestamps)")
