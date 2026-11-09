@@ -36,6 +36,14 @@ def convert_to_ist(utc_dt):
     ist_dt = utc_dt.astimezone(timezone(IST_OFFSET))
     return ist_dt.strftime('%Y-%m-%d %H:%M:%S IST')
 
+def is_solana_sol_pair(attr):
+    """
+    Ensures the pool is explicitly paired against SOL (e.g. 'TOKEN / SOL')
+    and ignores non-SOL quote pairs or cross-chain lookalikes.
+    """
+    name = attr.get("name", "").strip().upper()
+    return "/ SOL" in name or name.endswith("SOL")
+
 # --- STEP 1: ALL 4 RAW POOL DISCOVERY ENDPOINTS ---
 
 def fetch_candidate_pools():
@@ -96,14 +104,6 @@ def fetch_token_deep_info(token_address):
     if data and "data" in data:
         return data["data"].get("attributes", {})
     return {}
-
-def is_solana_sol_pair(attr):
-    """
-    Ensures the pool is explicitly paired against SOL (e.g. 'TOKEN / SOL')
-    and ignores non-SOL quote pairs or cross-chain lookalikes.
-    """
-    name = attr.get("name", "").strip().upper()
-    return "/ SOL" in name or name.endswith("SOL")
 
 def filter_pools(pools, relax_filters=False):
     """
@@ -251,7 +251,6 @@ def filter_pools(pools, relax_filters=False):
     mode_label = "Relaxed (Bypassing M-Q)" if relax_filters else "Strict (M-Q Enforced)"
     print(f"[*] Filter Stats [{mode_label}] -> Passed A-L: {passed_al_count} | Final Filtered: {len(filtered_list)}")
     return filtered_list
-
 # --- STEP 2: DYNAMIC CANDLE TIMEFRAMES & TECHNICAL INDICATORS (TradingView Parity) ---
 
 def get_candlestick_timeframe(age_hours):
@@ -356,12 +355,12 @@ def calculate_indicators(df):
 
 # --- STEP 3: CROSSOVER EVALUATION ---
 
-def check_positive_crossover(row, prev_row=None):
-    if row['macd_line'] <= row['macd_signal']: return False
-    if row['macd_line'] <= 0: return False
-    if row['histogram'] <= 0.10 * abs(row['macd_line']): return False
-    if prev_row is not None and row['histogram'] <= prev_row['histogram']: return False
-    if not row['supertrend_dir']: return False
+def check_positive_crossover(curr, prev=None):
+    if curr['macd_line'] <= curr['macd_signal']: return False
+    if curr['macd_line'] <= 0: return False
+    if curr['histogram'] <= 0.10 * abs(curr['macd_line']): return False
+    if prev is not None and curr['histogram'] <= prev['histogram']: return False
+    if not curr['supertrend_dir']: return False
     return True
 
 def check_negative_crossover(row, prev_rows):
@@ -374,35 +373,46 @@ def check_negative_crossover(row, prev_rows):
     if not row['supertrend_dir']: return True
     return False
 
-# --- MAIN EXECUTION LOOP ---
+# --- MAIN DUAL-SCHEDULE EXECUTION LOOP ---
 
 def main():
     print(f"[{datetime.now(timezone.utc).astimezone(timezone(IST_OFFSET)).strftime('%Y-%m-%d %H:%M:%S IST')}] Starting Solana Meme Coin Quant Bot...")
     
+    candidate_pools = []
+    filtered_pools = []
+    last_pool_fetch_time = 0
+    POOL_FETCH_INTERVAL = 900       # 15 Minutes for raw pool discovery
+    INDICATOR_CHECK_INTERVAL = 300  # 5 Minutes for active crossover monitoring
+
     while True:
-        pools = fetch_candidate_pools()
-        filtered = filter_pools(pools, relax_filters=False)
+        current_time = time.time()
         
-        # Adaptive Fallback: Relax M-Q filters if strict checks yield no matches
-        if not filtered:
-            print("[*] No tokens met strict M->Q filters. Activating relaxation fallback (bypassing M-Q)...")
-            filtered = filter_pools(pools, relax_filters=True)
-            print("filtered---------->",filtered)
+        # 1. Refresh raw pool candidates every 15 minutes
+        if current_time - last_pool_fetch_time >= POOL_FETCH_INTERVAL or not candidate_pools:
+            print("\n[*] Running 15-Minute Raw Pool Discovery & Filtering Routine...")
+            candidate_pools = fetch_candidate_pools()
+            filtered_pools = filter_pools(candidate_pools, relax_filters=False)
+            
+            if not filtered_pools:
+                print("[*] No tokens met strict M->Q filters. Activating relaxation fallback (bypassing M-Q)...")
+                filtered_pools = filter_pools(candidate_pools, relax_filters=True)
+            
+            last_pool_fetch_time = current_time
+
+        # 2. Check 5-Min Indicators and print active/historical signals
+        print(f"\n[*] [{datetime.now(timezone.utc).astimezone(timezone(IST_OFFSET)).strftime('%H:%M:%S IST')}] Checking 5-Min MACD Crossovers for {len(filtered_pools)} filtered tokens...")
 
         any_current_crossover_detected = False
         historical_trades = []
         all_current_signals_detailed = []
 
-        print(f"[*] Processing indicators for {len(filtered)} filtered token(s)...")
-        for item in filtered:
+        for item in filtered_pools:
             pool_addr = item["pool_address"]
             pool_name = item["pool_name"]
             age = item["age_hours"]
             tf, agg = get_candlestick_timeframe(age)
             
             df = fetch_ohlcv(pool_addr, tf, agg)
-            
-            # Skip if candle history is too short for indicators (requires min 35 candles)
             if df.empty or len(df) < 35:
                 continue
                 
@@ -430,6 +440,7 @@ def main():
                     pnl_pct = ((exit_price - entry_price) / entry_price) * 100.0
                     historical_trades.append({
                         "Pool Name": pool_name,
+                        "DexScreener Address": pool_addr,
                         "Entry (IST)": convert_to_ist(entry_time),
                         "Exit (IST)": convert_to_ist(exit_time),
                         "PnL (%)": round(pnl_pct, 2)
@@ -441,12 +452,13 @@ def main():
             if check_positive_crossover(latest_curr, latest_prev):
                 any_current_crossover_detected = True
                 
-                # Last 5 tuples for active crossover token
+                # Capture the last 5 tuples for active crossover token
                 last_5_df = df.tail(5)
                 for _, row in last_5_df.iterrows():
                     st_status = "BULLISH" if row.get('supertrend_dir', True) else "BEARISH"
                     all_current_signals_detailed.append({
                         "Pool Name": pool_name,
+                        "DexScreener Pool Address": pool_addr,
                         "Timestamp (IST)": convert_to_ist(row['timestamp']),
                         "Open": f"{row['open']:.8f}",
                         "High": f"{row['high']:.8f}",
@@ -460,32 +472,28 @@ def main():
                     })
 
         # --- RENDER TABULAR DATA OUTPUTS WITH IST ---
-        print("\n" + "="*120)
-        print("TABLE 1: HISTORICAL POSITIVE MACD CROSSOVER TRADES (IST Timestamps)")
-        print("="*120)
+        print("\n" + "="*130)
+        print("TABLE 1: HISTORICAL POSITIVE MACD CROSSOVER TRADES & POOL ADDRESSES (IST Timestamps)")
+        print("="*130)
         if historical_trades:
             df_hist = pd.DataFrame(historical_trades)
             print(df_hist.to_string(index=False))
         else:
             print("No completed historical crossover trades found in current dataset.")
 
-        print("\n" + "="*120)
+        print("\n" + "="*130)
         print("TABLE 2: CURRENT ACTIVE POSITIVE MACD CROSSOVERS - ALL TOKENS (LAST 5 TUPLES)")
-        print("="*120)
+        print("="*130)
         if all_current_signals_detailed:
             df_curr = pd.DataFrame(all_current_signals_detailed)
             print(df_curr.to_string(index=False))
         else:
             print("No current positive crossover detected on latest candles for any token.")
-        print("="*120 + "\n")
+        print("="*130 + "\n")
 
         # --- EXECUTION CONTROL LOGIC ---
-        if any_current_crossover_detected:
-            print("[+] Current positive crossover detected in at least one token! Pausing raw discovery for 5 minutes...")
-            time.sleep(300)
-        else:
-            print("[-] No current positive crossover found. Re-fetching raw tokens in 15 minutes...")
-            time.sleep(900)
+        print(f"[*] Indicator check completed. Sleeping for 5 minutes before next 5-min candle evaluation...")
+        time.sleep(INDICATOR_CHECK_INTERVAL)
 
 if __name__ == "__main__":
     main()
