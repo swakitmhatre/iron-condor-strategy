@@ -376,6 +376,7 @@ def main():
         if not filtered:
             print("[*] No tokens met strict M->Q filters. Activating relaxation fallback (bypassing M-Q)...")
             filtered = filter_pools(pools, relax_filters=True)
+            print("filtered---------->",filtered)
 
         any_current_crossover_detected = False
         historical_trades = []
