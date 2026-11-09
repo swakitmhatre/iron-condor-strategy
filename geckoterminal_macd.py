@@ -104,7 +104,7 @@ def fetch_token_deep_info(token_address):
     if data and "data" in data:
         return data["data"].get("attributes", {})
     return {}
-              
+
 def filter_pools(pools, relax_filters=False):
     """
     Applies filters a -> q in exact sequence.
@@ -251,11 +251,13 @@ def filter_pools(pools, relax_filters=False):
     mode_label = "Relaxed (Bypassing M-Q)" if relax_filters else "Strict (M-Q Enforced)"
     print(f"[*] Filter Stats [{mode_label}] -> Passed A-L: {passed_al_count} | Final Filtered: {len(filtered_list)}")
     return filtered_list
-
-
 # --- STEP 2: DYNAMIC CANDLE TIMEFRAMES & TECHNICAL INDICATORS (TradingView Parity) ---
 
 def get_candlestick_timeframe(age_hours):
+    """
+    - 2 to 8 hours: 5 minute candles (timeframe='minute', aggregate=5)
+    - Above 8+ hours: 15 minute candles (timeframe='minute', aggregate=15)
+    """
     if 2 <= age_hours <= 8:
         return "minute", 5
     else:
@@ -282,6 +284,10 @@ def fetch_ohlcv(pool_address, timeframe, aggregate, before_timestamp=None):
     return pd.DataFrame()
 
 def calculate_indicators(df):
+    """
+    Calculates MACD(8, 17, 9), RSI(14), and Supertrend(10, 3) with exact 
+    recursive band-capping logic for TradingView / DexScreener parity.
+    """
     if df.empty or len(df) < 35:
         return df
 
@@ -396,6 +402,7 @@ def main():
         # 2. Check 5-Min Indicators and print active/historical signals
         print(f"\n[*] [{datetime.now(timezone.utc).astimezone(timezone(IST_OFFSET)).strftime('%H:%M:%S IST')}] Checking 5-Min MACD Crossovers for {len(filtered_pools)} filtered tokens...")
 
+        any_current_crossover_detected = False
         historical_trades = []
         all_current_signals_detailed = []
 
@@ -415,7 +422,6 @@ def main():
             entry_time = None
             entry_price = 0.0
 
-            # Historical Backtest Loop across Candles
             for i in range(2, len(df)):
                 prev_prev = df.iloc[i-2]
                 prev = df.iloc[i-1]
@@ -441,31 +447,12 @@ def main():
                     })
                     in_trade = False
 
-            # Active Trade Check on Latest Closed Candle for Table 2 Live PnL Tracking
             latest_curr = df.iloc[-1]
             latest_prev = df.iloc[-2]
-            
             if check_positive_crossover(latest_curr, latest_prev):
-                # Scan backwards to locate the exact positive crossover entry point
-                active_entry_price = latest_curr['close']
-                active_entry_time = latest_curr['timestamp']
+                any_current_crossover_detected = True
                 
-                for j in range(len(df)-1, 0, -1):
-                    p_curr = df.iloc[j]
-                    p_prev = df.iloc[j-1]
-                    # If a negative cross happened previously, the active run started right after it
-                    if j >= 2:
-                        p_prev_prev = df.iloc[j-2]
-                        if check_negative_crossover(p_curr, [p_prev_prev.to_dict(), p_prev.to_dict()]):
-                            break
-                    if check_positive_crossover(p_curr, p_prev):
-                        active_entry_price = p_curr['close']
-                        active_entry_time = p_curr['timestamp']
-
-                current_price = latest_curr['close']
-                live_pnl_pct = ((current_price - active_entry_price) / active_entry_price) * 100.0
-
-                # Capture the last 5 tuples for Table 2 with Live PnL
+                # Capture the last 5 tuples for active crossover token
                 last_5_df = df.tail(5)
                 for _, row in last_5_df.iterrows():
                     st_status = "BULLISH" if row.get('supertrend_dir', True) else "BEARISH"
@@ -481,29 +468,28 @@ def main():
                         "MACD Signal": f"{row.get('macd_signal', 0):.6f}",
                         "Histogram": f"{row.get('histogram', 0):.6f}",
                         "Supertrend": f"{row.get('supertrend', 0):.8f} ({st_status})",
-                        "RSI": f"{row.get('rsi', 0):.1f}",
-                        "Live PnL (%)": f"{live_pnl_pct:+.2f}%"
+                        "RSI": f"{row.get('rsi', 0):.1f}"
                     })
 
         # --- RENDER TABULAR DATA OUTPUTS WITH IST ---
-        print("\n" + "="*140)
+        print("\n" + "="*130)
         print("TABLE 1: HISTORICAL POSITIVE MACD CROSSOVER TRADES & POOL ADDRESSES (IST Timestamps)")
-        print("="*140)
+        print("="*130)
         if historical_trades:
             df_hist = pd.DataFrame(historical_trades)
             print(df_hist.to_string(index=False))
         else:
             print("No completed historical crossover trades found in current dataset.")
 
-        print("\n" + "="*140)
-        print("TABLE 2: CURRENT ACTIVE POSITIVE MACD CROSSOVERS - LAST 5 TUPLES WITH LIVE PnL (%)")
-        print("="*140)
+        print("\n" + "="*130)
+        print("TABLE 2: CURRENT ACTIVE POSITIVE MACD CROSSOVERS - ALL TOKENS (LAST 5 TUPLES)")
+        print("="*130)
         if all_current_signals_detailed:
             df_curr = pd.DataFrame(all_current_signals_detailed)
             print(df_curr.to_string(index=False))
         else:
             print("No current positive crossover detected on latest candles for any token.")
-        print("="*140 + "\n")
+        print("="*130 + "\n")
 
         # --- EXECUTION CONTROL LOGIC ---
         print(f"[*] Indicator check completed. Sleeping for 5 minutes before next 5-min candle evaluation...")
