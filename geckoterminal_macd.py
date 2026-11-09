@@ -99,12 +99,12 @@ def fetch_token_deep_info(token_address):
 
 def filter_pools(pools, relax_filters=False):
     """
-    Applies filters a -> q. 
-    If relax_filters is True (no tokens passed strict checks), criteria g -> q are bypassed.
+    Applies filters a -> q in exact sequence.
+    If relax_filters is True (no tokens passed strict checks), criteria m -> q are bypassed.
     """
     filtered_list = []
     now = datetime.now(timezone.utc)
-    passed_af_count = 0
+    passed_al_count = 0
 
     for pool in pools:
         attr = pool.get("attributes", {})
@@ -127,29 +127,21 @@ def filter_pools(pools, relax_filters=False):
         created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
         age_hours = (now - created_at).total_seconds() / 3600.0
 
-        # --- Criteria A to F (Mandatory) ---
-        if not (1 <= age_hours <= 24): continue
-        if not (30000 <= market_cap <= 2000000): continue
-        if liquidity_usd < 30000: continue
-        if volume_24h < 50000: continue
-        if volume_6h < 20000: continue
-        if tx_count_24h < 500: continue
-        if buyers_24h < 300: continue
+        # --- Criteria a to l (Core Metric Gates) ---
+        if not (1 <= age_hours <= 24): continue                         # a
+        if not (30000 <= market_cap <= 2000000): continue               # b
+        if liquidity_usd < 30000: continue                              # c
+        if volume_24h < 50000 or volume_6h < 20000: continue            # d
+        if tx_count_24h < 500: continue                                 # e
+        
+        buyers_6h = attr.get("transactions", {}).get("h6", {}).get("buyers", 0) or 0
+        buyers_1h = attr.get("transactions", {}).get("h1", {}).get("buyers", 0) or 0
+        if not (buyers_24h >= 300 and buyers_6h >= 50 and buyers_1h >= 20): continue # f
 
-        passed_af_count += 1
+        price_change_6h = float(attr.get("price_change_percentage", {}).get("h6", 0) or 0)
+        if price_change_6h < 5.0: continue                              # g
 
-        if relax_filters:
-            filtered_list.append({
-                "pool_address": pool_address,
-                "pool_name": pool_name,
-                "token_address": None,
-                "age_hours": age_hours,
-                "liquidity": liquidity_usd,
-                "market_cap": market_cap
-            })
-            continue
-
-        # --- Fetch Token Deep Info for Criteria G to Q ---
+        # Fetch Token Deep Info forHolder & Security Attributes (h -> q)
         try:
             base_token_rel = relationships.get("base_token", {}).get("data", {})
             token_address = base_token_rel.get("id", "").split("_")[-1]
@@ -161,42 +153,59 @@ def filter_pools(pools, relax_filters=False):
 
         token_info = fetch_token_deep_info(token_address)
         
-        buyers_6h = attr.get("transactions", {}).get("h6", {}).get("buyers", 0) or 0
-        buyers_1h = attr.get("transactions", {}).get("h1", {}).get("buyers", 0) or 0
-        price_change_6h = float(attr.get("price_change_percentage", {}).get("h6", 0) or 0)
+        # Corrected Holder attribute check: token_info['holders']['distribution_percentage']['top_10']
+        holders_data = token_info.get("holders", {})
+        if isinstance(holders_data, dict):
+            dist_pct = holders_data.get("distribution_percentage", {})
+            top_10_str = dist_pct.get("top_10", "100")
+            top_holder_pct = float(top_10_str) if top_10_str is not None else 100.0
+        else:
+            top_holder_pct = float(token_info.get("top_10_holder_percent", 100.0) or 100.0)
+
+        if top_holder_pct > 10.0: continue                              # h
+
         price_change_1h = float(attr.get("price_change_percentage", {}).get("h1", 0) or 0)
         price_change_24h = float(attr.get("price_change_percentage", {}).get("h24", 0) or 0)
-        
+        if not (price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0): continue # i
+
         buys_24h = tx_24h.get("buys", 0) or 0
         sells_24h = tx_24h.get("sells", 0) or 0
-        buy_sell_ratio = (buys_24h / sells_24h) if sells_24h > 0 else float('inf')
-        
-        makers_unique = tx_24h.get("users", 0) or 0
-        liq_mcap_ratio = (liquidity_usd / market_cap) if market_cap > 0 else 0
+        buy_sell_ratio = (buys_24h / sells_24h) if sells_24h > 0 else 0
+        if buy_sell_ratio < 1.2: continue                               # j
 
+        makers_unique = tx_24h.get("users", 0) or 0
+        if makers_unique < 2500: continue                               # k
+
+        liq_mcap_ratio = (liquidity_usd / market_cap) if market_cap > 0 else 0
+        if liq_mcap_ratio <= 0.05: continue                             # l
+
+        passed_al_count += 1
+
+        if relax_filters:
+            filtered_list.append({
+                "pool_address": pool_address,
+                "pool_name": pool_name,
+                "token_address": token_address,
+                "age_hours": age_hours,
+                "liquidity": liquidity_usd,
+                "market_cap": market_cap
+            })
+            continue
+
+        # --- Criteria m to q (Security & Social Gates) ---
         mint_auth = token_info.get("mint_authority")
         freeze_auth = token_info.get("freeze_authority")
         twitter_handle = token_info.get("twitter_handle")
-        top_holder_pct = float(token_info.get("top_10_holder_percent", 0) or 0)
         lp_burned = token_info.get("is_lp_burned", False)
         lp_locked = token_info.get("is_lp_locked", False)
 
-        print("pool---------->",pool)
-        print("attr---------->",attr)
-        print("token_info---->",token_info)
+        if not (lp_locked or lp_burned): continue                       # m & q (LP Lock / Burn)
         
-        # Enforcing criteria g through q
-        if buyers_6h < 50 or buyers_1h < 20: continue
-        if price_change_6h < 5.0: continue
-        if not (lp_locked or lp_burned): continue
-        if not twitter_handle: continue
-        if top_holder_pct > 10.0: continue
-        if not (price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0): continue
-        if buy_sell_ratio < 1.5: continue
-        if makers_unique < 2500: continue
-        if liq_mcap_ratio <= 0.05: continue
-        if mint_auth is not None and mint_auth != "": continue
-        if freeze_auth is not None: continue
+        # Robust Twitter handle check (handling string 'none', None, or empty)
+        if not twitter_handle or str(twitter_handle).lower() in ["none", "null", ""]: continue # n
+        
+        if mint_auth is not None and mint_auth != "": continue          # o
+        if freeze_auth is not None and str(freeze_auth).lower() not in ["none", "null", ""]: continue # p
 
         filtered_list.append({
             "pool_address": pool_address,
@@ -207,11 +216,11 @@ def filter_pools(pools, relax_filters=False):
             "market_cap": market_cap
         })
 
-    mode_label = "Relaxed (Bypassing G-Q)" if relax_filters else "Strict (G-Q Enforced)"
-    print(f"[*] Filter Stats [{mode_label}] -> Passed A-F: {passed_af_count} | Final Filtered: {len(filtered_list)}")
+    mode_label = "Relaxed (Bypassing M-Q)" if relax_filters else "Strict (M-Q Enforced)"
+    print(f"[*] Filter Stats [{mode_label}] -> Passed A-L: {passed_al_count} | Final Filtered: {len(filtered_list)}")
     return filtered_list
 
-# --- STEP 2: DYNAMIC CANDLE TIMEFRAMES & TECHNICAL INDICATORS ---
+# --- STEP 2: DYNAMIC CANDLE TIMEFRAMES & TECHNICAL INDICATORS (TradingView Parity) ---
 
 def get_candlestick_timeframe(age_hours):
     """
@@ -244,23 +253,30 @@ def fetch_ohlcv(pool_address, timeframe, aggregate, before_timestamp=None):
     return pd.DataFrame()
 
 def calculate_indicators(df):
+    """
+    Calculates MACD(8, 17, 9), RSI(14), and Supertrend(10, 3) with exact 
+    recursive band-capping logic for TradingView / DexScreener parity.
+    """
     if df.empty or len(df) < 35:
         return df
 
     close = df['close']
+    
+    # 1. MACD (8, 17, 9)
     ema_fast = close.ewm(span=8, adjust=False).mean()
     ema_slow = close.ewm(span=17, adjust=False).mean()
     df['macd_line'] = ema_fast - ema_slow
     df['macd_signal'] = df['macd_line'].ewm(span=9, adjust=False).mean()
     df['histogram'] = df['macd_line'] - df['macd_signal']
 
-    # RSI (14)
+    # 2. RSI (14)
     delta = close.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
     df['rsi'] = 100 - (100 / (1 + rs))
 
+    # 3. Supertrend (10, 3) - Recursive TradingView Parity Formula
     hl2 = (df['high'] + df['low']) / 2
     tr = pd.concat([
         df['high'] - df['low'],
@@ -269,29 +285,41 @@ def calculate_indicators(df):
     ], axis=1).max(axis=1)
     atr = tr.rolling(window=10).mean()
 
-    upper_band = hl2 + (3 * atr)
-    lower_band = hl2 - (3 * atr)
+    basic_upper = hl2 + (3 * atr)
+    basic_lower = hl2 - (3 * atr)
     
+    final_upper = [0.0] * len(df)
+    final_lower = [0.0] * len(df)
     supertrend = [True] * len(df)
     st_values = [0.0] * len(df)
     
-    for i in range(1, len(df)):
-        curr_close = close.iloc[i]
-        if curr_close > upper_band.iloc[i-1]:
-            supertrend[i] = True
-        elif curr_close < lower_band.iloc[i-1]:
-            supertrend[i] = False
+    for i in range(len(df)):
+        if i == 0:
+            final_upper[i] = basic_upper.iloc[i]
+            final_lower[i] = basic_lower.iloc[i]
+            continue
+            
+        if basic_upper.iloc[i] < final_upper[i-1] or close.iloc[i-1] > final_upper[i-1]:
+            final_upper[i] = basic_upper.iloc[i]
+        else:
+            final_upper[i] = final_upper[i-1]
+            
+        if basic_lower.iloc[i] > final_lower[i-1] or close.iloc[i-1] < final_lower[i-1]:
+            final_lower[i] = basic_lower.iloc[i]
+        else:
+            final_lower[i] = final_lower[i-1]
+            
+        if close.iloc[i] <= final_upper[i]:
+            supertrend[i] = False  # Bearish
+        elif close.iloc[i] >= final_lower[i]:
+            supertrend[i] = True   # Bullish
         else:
             supertrend[i] = supertrend[i-1]
-            if supertrend[i] and lower_band.iloc[i] < lower_band.iloc[i-1]:
-                lower_band.iat[i] = lower_band.iloc[i-1]
-            if not supertrend[i] and upper_band.iloc[i] > upper_band.iloc[i-1]:
-                upper_band.iat[i] = upper_band.iloc[i-1]
-                
-        st_values[i] = lower_band.iloc[i] if supertrend[i] else upper_band.iloc[i]
+            
+        st_values[i] = final_lower[i] if supertrend[i] else final_upper[i]
 
     df['supertrend'] = st_values
-    df['supertrend_dir'] = supertrend
+    df['supertrend_dir'] = supertrend  # True = Bullish, False = Bearish
     return df
 
 # --- STEP 3: CROSSOVER EVALUATION ---
@@ -299,11 +327,9 @@ def calculate_indicators(df):
 def check_positive_crossover(row, prev_row=None):
     if row['macd_line'] <= row['macd_signal']: return False
     if row['macd_line'] <= 0: return False
-    if row['histogram'] <= 0.15 * abs(row['macd_line']): return False
+    if row['histogram'] <= 0.10 * abs(row['macd_line']): return False
     if prev_row is not None and row['histogram'] <= prev_row['histogram']: return False
     if not row['supertrend_dir']: return False
-    if 'rsi' in row and not pd.isna(row['rsi']):
-        if not (45 <= row['rsi'] <= 75): return False
     return True
 
 def check_negative_crossover(row, prev_rows):
@@ -325,14 +351,14 @@ def main():
         pools = fetch_candidate_pools()
         filtered = filter_pools(pools, relax_filters=False)
         
-        # Adaptive Fallback: Relax filters if strict G-Q yields no matches
+        # Adaptive Fallback: Relax M-Q filters if strict checks yield no matches
         if not filtered:
-            print("[*] No tokens met strict G->Q filters. Activating relaxation fallback (bypassing G->Q)...")
+            print("[*] No tokens met strict M->Q filters. Activating relaxation fallback (bypassing M-Q)...")
             filtered = filter_pools(pools, relax_filters=True)
 
-        current_crossover_detected = False
+        any_current_crossover_detected = False
         historical_trades = []
-        current_signals_detailed = []
+        all_current_signals_detailed = []
 
         print(f"[*] Processing indicators for {len(filtered)} filtered token(s)...")
         for item in filtered:
@@ -377,14 +403,16 @@ def main():
 
             latest_curr = df.iloc[-1]
             latest_prev = df.iloc[-2]
+            
+            # Check for current active crossover
             if check_positive_crossover(latest_curr, latest_prev):
-                current_crossover_detected = True
+                any_current_crossover_detected = True
                 
-                # Last 5 tuples for active crossover token
+                # Capture the last 5 candle tuples for THIS token
                 last_5_df = df.tail(5)
                 for _, row in last_5_df.iterrows():
                     st_status = "BULLISH" if row.get('supertrend_dir', True) else "BEARISH"
-                    current_signals_detailed.append({
+                    all_current_signals_detailed.append({
                         "Pool Name": pool_name,
                         "Timestamp (IST)": convert_to_ist(row['timestamp']),
                         "Open": f"{row['open']:.8f}",
@@ -409,18 +437,18 @@ def main():
             print("No completed historical crossover trades found in current dataset.")
 
         print("\n" + "="*120)
-        print("TABLE 2: CURRENT ACTIVE POSITIVE MACD CROSSOVER - LAST 5 CANDLES (IST Timestamps)")
+        print("TABLE 2: CURRENT ACTIVE POSITIVE MACD CROSSOVERS - ALL TOKENS (LAST 5 TUPLES)")
         print("="*120)
-        if current_signals_detailed:
-            df_curr = pd.DataFrame(current_signals_detailed)
+        if all_current_signals_detailed:
+            df_curr = pd.DataFrame(all_current_signals_detailed)
             print(df_curr.to_string(index=False))
         else:
-            print("No current positive crossover detected on latest candles.")
+            print("No current positive crossover detected on latest candles for any token.")
         print("="*120 + "\n")
 
         # --- EXECUTION CONTROL LOGIC ---
-        if current_crossover_detected:
-            print("[+] Current positive crossover detected! Pausing for 5 minutes...")
+        if any_current_crossover_detected:
+            print("[+] Current positive crossover detected in at least one token! Pausing raw discovery for 5 minutes...")
             time.sleep(300)
         else:
             print("[-] No current positive crossover found. Re-fetching raw tokens in 15 minutes...")
