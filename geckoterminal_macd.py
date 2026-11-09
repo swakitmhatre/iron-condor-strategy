@@ -105,6 +105,10 @@ def filter_pools(pools, relax_filters=False):
     filtered_list = []
     now = datetime.now(timezone.utc)
     passed_al_count = 0
+    buyers=0
+    lmc=0
+    top_10=0
+    buy_sell=0
 
     for pool in pools:
         attr = pool.get("attributes", {})
@@ -168,8 +172,8 @@ def filter_pools(pools, relax_filters=False):
 
         price_change_1h = float(attr.get("price_change_percentage", {}).get("h1", 0) or 0)
         price_change_24h = float(attr.get("price_change_percentage", {}).get("h24", 0) or 0)
-        if not (price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0): continue # i
-        print("(price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0):")
+        #if not (price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0): continue # i
+        #print("(price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0):")
 
         buys_24h = tx_24h.get("buys", 0) or 0
         sells_24h = tx_24h.get("sells", 0) or 0
