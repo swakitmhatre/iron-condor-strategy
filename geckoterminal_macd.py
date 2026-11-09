@@ -389,10 +389,12 @@ def main():
             tf, agg = get_candlestick_timeframe(age)
             
             df = fetch_ohlcv(pool_addr, tf, agg)
-            df = calculate_indicators(df)
             
-            if df.empty or len(df) < 5:
+            # Skip if candle history is too short for indicators (requires min 35 candles)
+            if df.empty or len(df) < 35:
                 continue
+                
+            df = calculate_indicators(df)
 
             in_trade = False
             entry_time = None
@@ -424,12 +426,10 @@ def main():
 
             latest_curr = df.iloc[-1]
             latest_prev = df.iloc[-2]
-            
-            # Check for current active crossover
             if check_positive_crossover(latest_curr, latest_prev):
                 any_current_crossover_detected = True
                 
-                # Capture the last 5 candle tuples for THIS token
+                # Last 5 tuples for active crossover token
                 last_5_df = df.tail(5)
                 for _, row in last_5_df.iterrows():
                     st_status = "BULLISH" if row.get('supertrend_dir', True) else "BEARISH"
