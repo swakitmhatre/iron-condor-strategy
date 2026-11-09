@@ -407,6 +407,7 @@ def main():
         all_current_signals_detailed = []
 
         for item in filtered_pools:
+            print("filtered_pools--------->",filtered_pools)
             pool_addr = item["pool_address"]
             pool_name = item["pool_name"]
             age = item["age_hours"]
