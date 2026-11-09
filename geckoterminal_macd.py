@@ -104,7 +104,7 @@ def fetch_token_deep_info(token_address):
     if data and "data" in data:
         return data["data"].get("attributes", {})
     return {}
-
+              
 def filter_pools(pools, relax_filters=False):
     """
     Applies filters a -> q in exact sequence.
@@ -113,6 +113,10 @@ def filter_pools(pools, relax_filters=False):
     filtered_list = []
     now = datetime.now(timezone.utc)
     passed_al_count = 0
+    buyers=0
+    lmc=0
+    top_10=0
+    buy_sell=0
 
     for pool in pools:
         attr = pool.get("attributes", {})
@@ -139,20 +143,22 @@ def filter_pools(pools, relax_filters=False):
         age_hours = (now - created_at).total_seconds() / 3600.0
 
         # --- Criteria a to l (Core Metric Gates) ---
-        if not (1 <= age_hours <= 24): continue                      # a
-        if not (30000 <= market_cap <= 5000000): continue              # b
-        if liquidity_usd < 30000: continue                             # c
-        if volume_24h < 50000 or volume_6h < 20000: continue           # d
-        if tx_count_24h < 500: continue                                # e
+        if not (1 <= age_hours <= 24): continue                         # a
+        if not (30000 <= market_cap <= 5000000): continue               # b
+        if liquidity_usd < 30000: continue                              # c
+        if volume_24h < 50000 or volume_6h < 20000: continue            # d
+        if tx_count_24h < 500: continue                                 # e
         
         buyers_6h = attr.get("transactions", {}).get("h6", {}).get("buyers", 0) or 0
         buyers_1h = attr.get("transactions", {}).get("h1", {}).get("buyers", 0) or 0
         if not (buyers_24h >= 300 and buyers_6h >= 50 and buyers_1h >= 20): continue # f
+        buyers=buyers+1
+        print("buyers---->",buyers)
 
         price_change_6h = float(attr.get("price_change_percentage", {}).get("h6", 0) or 0)
-        if price_change_6h < 5.0: continue                             # g
+        if price_change_6h < 5.0: continue                              # g
 
-        # Fetch Token Deep Info for Holder & Security Attributes (h -> q)
+        # Fetch Token Deep Info forHolder & Security Attributes (h -> q)
         try:
             base_token_rel = relationships.get("base_token", {}).get("data", {})
             token_address = base_token_rel.get("id", "").split("_")[-1]
@@ -171,27 +177,39 @@ def filter_pools(pools, relax_filters=False):
         if isinstance(holders_data, dict):
             dist_pct = holders_data.get("distribution_percentage")
             if isinstance(dist_pct, dict):
+                #top_10_str = dist_pct.get("top_10", "100")
                 top_10_str = dist_pct.get("top_10")
                 if top_10_str is not None:
                     top_holder_pct = float(top_10_str)
         else:
+            # Fallback for alternative flat attributes if present
             alt_pct = token_info.get("top_10_holder_percent")
             if alt_pct is not None:
                 top_holder_pct = float(alt_pct)
 
-        if top_holder_pct > 10.0: continue                             # h
+        #if top_holder_pct > 10.0: continue                       # h
+        #top_10=top_10+1
+        #print("top_holder_pct---->",top_10)
 
         price_change_1h = float(attr.get("price_change_percentage", {}).get("h1", 0) or 0)
         price_change_24h = float(attr.get("price_change_percentage", {}).get("h24", 0) or 0)
-        if not (price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0): continue # i
+        #if not (price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0): continue # i
+        #print("(price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0):")
 
         buys_24h = tx_24h.get("buys", 0) or 0
         sells_24h = tx_24h.get("sells", 0) or 0
         buy_sell_ratio = (buys_24h / sells_24h) if sells_24h > 0 else 0
-        if buy_sell_ratio < 0.8: continue                              # j
+        if buy_sell_ratio < 0.8: continue                               # j
+        buy_sell=buy_sell+1
+        print("buy_sell_ratio < 1.0:------->",buy_sell)
+
+        makers_unique = tx_24h.get("users", 0) or 0
+        #if makers_unique < 2500: continue                               # k
 
         liq_mcap_ratio = (liquidity_usd / market_cap) if market_cap > 0 else 0
-        if liq_mcap_ratio <= 0.05: continue                            # l
+        if liq_mcap_ratio <= 0.05: continue                             # l
+        lmc=lmc+1
+        print("liq_mcap_ratio----------->",lmc)
 
         passed_al_count += 1
 
@@ -213,11 +231,12 @@ def filter_pools(pools, relax_filters=False):
         lp_burned = token_info.get("is_lp_burned", False)
         lp_locked = token_info.get("is_lp_locked", False)
 
-        if not (lp_locked or lp_burned): continue                      # m & q (LP Lock / Burn)
+        if not (lp_locked or lp_burned): continue                       # m & q (LP Lock / Burn)
         
+        # Robust Twitter handle check (handling string 'none', None, or empty)
         if not twitter_handle or str(twitter_handle).lower() in ["none", "null", ""]: continue # n
         
-        if mint_auth is not None and mint_auth != "": continue         # o
+        if mint_auth is not None and mint_auth != "": continue          # o
         if freeze_auth is not None and str(freeze_auth).lower() not in ["none", "null", ""]: continue # p
 
         filtered_list.append({
@@ -232,6 +251,7 @@ def filter_pools(pools, relax_filters=False):
     mode_label = "Relaxed (Bypassing M-Q)" if relax_filters else "Strict (M-Q Enforced)"
     print(f"[*] Filter Stats [{mode_label}] -> Passed A-L: {passed_al_count} | Final Filtered: {len(filtered_list)}")
     return filtered_list
+
 
 # --- STEP 2: DYNAMIC CANDLE TIMEFRAMES & TECHNICAL INDICATORS (TradingView Parity) ---
 
