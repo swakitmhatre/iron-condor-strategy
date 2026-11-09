@@ -144,7 +144,7 @@ def filter_pools(pools, relax_filters=False):
 
         # --- Criteria a to l (Core Metric Gates) ---
         if not (1 <= age_hours <= 72): continue                         # a
-        if not (30000 <= market_cap <= 2000000): continue               # b
+        if not (30000 <= market_cap <= 50000000): continue               # b
         if liquidity_usd < 30000: continue                              # c
         if volume_24h < 50000 or volume_6h < 20000: continue            # d
         if tx_count_24h < 500: continue                                 # e
