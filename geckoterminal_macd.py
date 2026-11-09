@@ -55,7 +55,7 @@ def fetch_candidate_pools():
 
     # 2. New Pools by Network
     print("[*] Fetching New Pools by Network...")
-    for page in range(1, 4):
+    for page in range(2, 5):
         data = api_get(f"networks/{NETWORK}/new_pools", params={"page": page})
         if data and "data" in data:
             for p in data["data"]:
