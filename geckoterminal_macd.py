@@ -97,6 +97,14 @@ def fetch_token_deep_info(token_address):
         return data["data"].get("attributes", {})
     return {}
 
+def is_solana_sol_pair(attr):
+    """
+    Ensures the pool is explicitly paired against SOL (e.g. 'TOKEN / SOL')
+    and ignores non-SOL quote pairs or cross-chain lookalikes.
+    """
+    name = attr.get("name", "").strip().upper()
+    return "/ SOL" in name or name.endswith("SOL")
+
 def filter_pools(pools, relax_filters=False):
     """
     Applies filters a -> q in exact sequence.
@@ -112,6 +120,9 @@ def filter_pools(pools, relax_filters=False):
 
     for pool in pools:
         attr = pool.get("attributes", {})
+        # --- SOLANA PAIR GUARD ---
+        if not is_solana_sol_pair(attr):
+            continue
         relationships = pool.get("relationships", {})
         
         pool_address = pool.get("id")
