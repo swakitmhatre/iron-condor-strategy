@@ -137,6 +137,7 @@ def filter_pools(pools, relax_filters=False):
         buyers_6h = attr.get("transactions", {}).get("h6", {}).get("buyers", 0) or 0
         buyers_1h = attr.get("transactions", {}).get("h1", {}).get("buyers", 0) or 0
         if not (buyers_24h >= 300 and buyers_6h >= 50 and buyers_1h >= 20): continue # f
+        print("(buyers_24h >= 300 and buyers_6h >= 50 and buyers_1h >= 20):")
 
         price_change_6h = float(attr.get("price_change_percentage", {}).get("h6", 0) or 0)
         if price_change_6h < 5.0: continue                              # g
@@ -163,10 +164,12 @@ def filter_pools(pools, relax_filters=False):
             top_holder_pct = float(token_info.get("top_10_holder_percent", 100.0) or 100.0)
 
         if top_holder_pct > 10.0: continue                              # h
+        print("top_holder_pct---->",top_holder_pct)
 
         price_change_1h = float(attr.get("price_change_percentage", {}).get("h1", 0) or 0)
         price_change_24h = float(attr.get("price_change_percentage", {}).get("h24", 0) or 0)
         if not (price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0): continue # i
+        print("(price_change_1h > 0 and price_change_6h > 0 and price_change_24h > 0):")
 
         buys_24h = tx_24h.get("buys", 0) or 0
         sells_24h = tx_24h.get("sells", 0) or 0
