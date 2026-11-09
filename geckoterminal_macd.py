@@ -159,16 +159,24 @@ def filter_pools(pools, relax_filters=False):
 
         token_info = fetch_token_deep_info(token_address)
         
-        # Corrected Holder attribute check: token_info['holders']['distribution_percentage']['top_10']
+        # Holder percentage parsing with robust null-checks
         holders_data = token_info.get("holders", {})
+        top_holder_pct = 100.0  # default fallback if data is missing
+        
         if isinstance(holders_data, dict):
-            dist_pct = holders_data.get("distribution_percentage", {})
-            top_10_str = dist_pct.get("top_10", "100")
-            top_holder_pct = float(top_10_str) if top_10_str is not None else 100.0
+            dist_pct = holders_data.get("distribution_percentage")
+            if isinstance(dist_pct, dict):
+                #top_10_str = dist_pct.get("top_10", "100")
+                top_10_str = dist_pct.get("top_10")
+                if top_10_str is not None:
+                    top_holder_pct = float(top_10_str)
         else:
-            top_holder_pct = float(token_info.get("top_10_holder_percent", 100.0) or 100.0)
+            # Fallback for alternative flat attributes if present
+            alt_pct = token_info.get("top_10_holder_percent")
+            if alt_pct is not None:
+                top_holder_pct = float(alt_pct)
 
-        if top_holder_pct > 10.0: continue                              # h
+        if top_holder_pct > 10.0: continue                       # h
         top_10=top_10+1
         print("top_holder_pct---->",top_10)
 
