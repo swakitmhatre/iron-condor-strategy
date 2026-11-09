@@ -141,7 +141,7 @@ def filter_pools(pools, relax_filters=False):
         buyers_6h = attr.get("transactions", {}).get("h6", {}).get("buyers", 0) or 0
         buyers_1h = attr.get("transactions", {}).get("h1", {}).get("buyers", 0) or 0
         if not (buyers_24h >= 300 and buyers_6h >= 50 and buyers_1h >= 20): continue # f
-        buyer=buyer+1
+        buyers=buyers+1
         print("buyers---->",buyers)
 
         price_change_6h = float(attr.get("price_change_percentage", {}).get("h6", 0) or 0)
