@@ -176,9 +176,9 @@ def filter_pools(pools, relax_filters=False):
             if alt_pct is not None:
                 top_holder_pct = float(alt_pct)
 
-        if top_holder_pct > 10.0: continue                       # h
-        top_10=top_10+1
-        print("top_holder_pct---->",top_10)
+        #if top_holder_pct > 10.0: continue                       # h
+        #top_10=top_10+1
+        #print("top_holder_pct---->",top_10)
 
         price_change_1h = float(attr.get("price_change_percentage", {}).get("h1", 0) or 0)
         price_change_24h = float(attr.get("price_change_percentage", {}).get("h24", 0) or 0)
