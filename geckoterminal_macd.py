@@ -143,7 +143,7 @@ def filter_pools(pools, relax_filters=False):
         age_hours = (now - created_at).total_seconds() / 3600.0
 
         # --- Criteria a to l (Core Metric Gates) ---
-        if not (1 <= age_hours <= 48): continue                         # a
+        if not (1 <= age_hours <= 24): continue                         # a
         if not (30000 <= market_cap <= 5000000): continue               # b
         if liquidity_usd < 30000: continue                              # c
         if volume_24h < 50000 or volume_6h < 20000: continue            # d
