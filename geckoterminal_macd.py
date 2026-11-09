@@ -172,12 +172,14 @@ def filter_pools(pools, relax_filters=False):
         sells_24h = tx_24h.get("sells", 0) or 0
         buy_sell_ratio = (buys_24h / sells_24h) if sells_24h > 0 else 0
         if buy_sell_ratio < 1.0: continue                               # j
+        print("buy_sell_ratio < 1.0:------->",buy_sell_ratio)
 
         makers_unique = tx_24h.get("users", 0) or 0
         #if makers_unique < 2500: continue                               # k
 
         liq_mcap_ratio = (liquidity_usd / market_cap) if market_cap > 0 else 0
         if liq_mcap_ratio <= 0.05: continue                             # l
+        print("liq_mcap_ratio----------->",liq_mcap_ratio)
 
         passed_al_count += 1
 
