@@ -314,6 +314,9 @@ def calculate_indicators(df, current_market_cap=None):
     df['rsi'] = 100 - (100 / (1 + rs))
 
     # 3. Robust Supertrend (10, 3) with safe initialization
+    high=high_series
+    low=low_series
+    close=series
     hl2 = (high + low) / 2
     tr = pd.concat([
         high - low,
