@@ -253,7 +253,7 @@ def filter_pools(pools, relax_filters=False):
     return filtered_list
 
 
-# --- STEP 2: DYNAMIC CANDLE TIMEFRAMES & TECHNICAL INDICATORS ---
+# --- STEP 2: DYNAMIC CANDLE TIMEFRAMES & TECHNICAL INDICATORS (Market Cap Parity) ---
 
 def get_candlestick_timeframe(age_hours):
     if 2 <= age_hours <= 8:
@@ -281,26 +281,33 @@ def fetch_ohlcv(pool_address, timeframe, aggregate, before_timestamp=None):
         return df
     return pd.DataFrame()
 
-def calculate_indicators(df):
+def calculate_indicators(df, current_market_cap=None):
     """
-    Calculates MACD(8, 17, 9), RSI(14), and robust Supertrend(10, 3) with zero NaN values.
+    Calculates indicators on Market Cap USD series for 100% parity with DexScreener Mcap mode.
     """
     if df.empty or len(df) < 35:
         return df
 
-    close = df['close']
-    high = df['high']
-    low = df['low']
-    
+    latest_close = df['close'].iloc[-1]
+    if current_market_cap and current_market_cap > 0 and latest_close > 0:
+        scaling_factor = current_market_cap / latest_close
+        series = df['close'] * scaling_factor
+        high_series = df['high'] * scaling_factor
+        low_series = df['low'] * scaling_factor
+    else:
+        series = df['close']
+        high_series = df['high']
+        low_series = df['low']
+
     # 1. MACD (8, 17, 9)
-    ema_fast = close.ewm(span=8, adjust=False).mean()
-    ema_slow = close.ewm(span=17, adjust=False).mean()
+    ema_fast = series.ewm(span=8, adjust=False).mean()
+    ema_slow = series.ewm(span=17, adjust=False).mean()
     df['macd_line'] = ema_fast - ema_slow
     df['macd_signal'] = df['macd_line'].ewm(span=9, adjust=False).mean()
     df['histogram'] = df['macd_line'] - df['macd_signal']
 
     # 2. RSI (14)
-    delta = close.diff()
+    delta = series.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
@@ -320,9 +327,8 @@ def calculate_indicators(df):
     basic_upper = hl2 + (3 * atr)
     basic_lower = hl2 - (3 * atr)
     
-    # Initialize as standard Python lists to prevent read-only array assignment errors
-    final_upper = basic_upper.tolist()
-    final_lower = basic_lower.tolist()
+    final_upper = basic_upper.copy().values
+    final_lower = basic_lower.copy().values
     supertrend = [True] * len(df)
     st_values = [0.0] * len(df)
     
@@ -330,12 +336,12 @@ def calculate_indicators(df):
         c_prev = close.iloc[i-1]
         c_curr = close.iloc[i]
         
-        if basic_upper.iloc[i] < final_upper[i-1] or c_prev > final_upper[i-1]:
+        if basic_upper[i] < final_upper[i-1] or c_prev > final_upper[i-1]:
             final_upper[i] = basic_upper.iloc[i]
         else:
             final_upper[i] = final_upper[i-1]
             
-        if basic_lower.iloc[i] > final_lower[i-1] or c_prev < final_lower[i-1]:
+        if basic_lower[i] > final_lower[i-1] or c_prev < final_lower[i-1]:
             final_lower[i] = basic_lower.iloc[i]
         else:
             final_lower[i] = final_lower[i-1]
@@ -350,9 +356,8 @@ def calculate_indicators(df):
         st_values[i] = final_lower[i] if supertrend[i] else final_upper[i]
 
     df['supertrend'] = st_values
-    df['supertrend_dir'] = supertrend
+    df['supertrend_dir'] = supertrend  # True = Bullish, False = Bearish
     return df
-
 # --- STEP 3: CROSSOVER EVALUATION ---
 
 def check_positive_crossover(curr, prev=None):
@@ -360,7 +365,7 @@ def check_positive_crossover(curr, prev=None):
     if curr['macd_line'] <= 0: return False
     if curr['histogram'] <= 0.10 * abs(curr['macd_line']): return False
     if prev is not None and curr['histogram'] <= prev['histogram']: return False
-    if not curr['supertrend_dir']: return False  # Must be Bullish (Green Supertrend)
+    if not curr['supertrend_dir']: return False
     return True
 
 def check_negative_crossover(row, prev_rows):
@@ -368,12 +373,12 @@ def check_negative_crossover(row, prev_rows):
     curr, prev1, prev2 = row['histogram'], prev_rows[-1]['histogram'], prev_rows[-2]['histogram']
     if row['macd_line'] < row['macd_signal']: return True
     if row['macd_line'] < 0: return True
-    if prev1 != 0 and curr < (prev1 - (0.18 * prev1)): return True
+    if prev1 != 0 and curr < (prev1 - (0.18 * prev1)):
     if curr < prev1 < prev2: return True
     if not row['supertrend_dir']: return True
     return False
 
-# --- MAIN EXECUTION LOOP ---
+# --- MAIN DUAL-SCHEDULE EXECUTION LOOP ---
 
 def main():
     print(f"[{datetime.now(timezone.utc).astimezone(timezone(IST_OFFSET)).strftime('%Y-%m-%d %H:%M:%S IST')}] Starting Solana Meme Coin Quant Bot...")
@@ -381,20 +386,25 @@ def main():
     candidate_pools = []
     filtered_pools = []
     last_pool_fetch_time = 0
-    POOL_FETCH_INTERVAL = 900       # 15 Minutes
-    INDICATOR_CHECK_INTERVAL = 300  # 5 Minutes
+    POOL_FETCH_INTERVAL = 900       # 15 Minutes for raw pool discovery
+    INDICATOR_CHECK_INTERVAL = 300  # 5 Minutes for active crossover monitoring
 
     while True:
         current_time = time.time()
         
+        # 1. Refresh raw pool candidates every 15 minutes
         if current_time - last_pool_fetch_time >= POOL_FETCH_INTERVAL or not candidate_pools:
             print("\n[*] Running 15-Minute Raw Pool Discovery & Filtering Routine...")
             candidate_pools = fetch_candidate_pools()
             filtered_pools = filter_pools(candidate_pools, relax_filters=False)
+            
             if not filtered_pools:
+                print("[*] No tokens met strict M->Q filters. Activating relaxation fallback (bypassing M-Q)...")
                 filtered_pools = filter_pools(candidate_pools, relax_filters=True)
+            
             last_pool_fetch_time = current_time
 
+        # 2. Check 5-Min Indicators and print active/historical signals
         print(f"\n[*] [{datetime.now(timezone.utc).astimezone(timezone(IST_OFFSET)).strftime('%H:%M:%S IST')}] Checking 5-Min MACD Crossovers for {len(filtered_pools)} filtered tokens...")
 
         historical_trades = []
@@ -417,7 +427,7 @@ def main():
             entry_price = 0.0
             entry_idx = 0
 
-            # Warmup skip to prevent false early entries
+            # Start checking crossovers only after index 20 to let MACD/Supertrend warm up
             start_idx = max(2, len(df) - len(df) + 20) if len(df) >= 20 else 2
 
             for i in range(start_idx, len(df)):
@@ -446,7 +456,7 @@ def main():
                     })
                     in_trade = False
 
-            # Table 2: Print FULL active sequence from entry_idx onward without truncation
+            # If the trade is STILL active on the latest candle, display the full sequence in Table 2
             if in_trade:
                 active_df = df.iloc[entry_idx:]
                 for _, row in active_df.iterrows():
@@ -469,26 +479,27 @@ def main():
                         "RSI": f"{row.get('rsi', 0):.1f}",
                         "Live PnL (%)": f"{live_pnl_pct:+.2f}%"
                     })
-
-        # --- RENDER OUTPUT TABLES ---
-        print("\n" + "="*140)
+        # --- RENDER TABULAR DATA OUTPUTS WITH IST ---
+        print("\n" + "="*130)
         print("TABLE 1: HISTORICAL POSITIVE MACD CROSSOVER TRADES & POOL ADDRESSES (IST Timestamps)")
-        print("="*140)
+        print("="*130)
         if historical_trades:
-            print(pd.DataFrame(historical_trades).to_string(index=False))
+            df_hist = pd.DataFrame(historical_trades)
+            print(df_hist.to_string(index=False))
         else:
             print("No completed historical crossover trades found in current dataset.")
 
-        print("\n" + "="*140)
-        print("TABLE 2: CURRENT ACTIVE POSITIVE MACD CROSSOVERS - FULL ACTIVE SEQUENCE WITH LIVE PnL (%)")
-        print("="*140)
+        print("\n" + "="*130)
+        print("TABLE 2: CURRENT ACTIVE POSITIVE MACD CROSSOVERS - LAST 5 TUPLES WITH LIVE PnL (%) [MCAP MODE]")
+        print("="*130)
         if all_current_signals_detailed:
-            print(pd.DataFrame(all_current_signals_detailed).to_string(index=False))
+            df_curr = pd.DataFrame(all_current_signals_detailed)
+            print(df_curr.to_string(index=False))
         else:
-            print("No current active positive crossover trade running.")
-        print("="*140 + "\n")
+            print("No current positive crossover detected on latest candles for any token.")
+        print("="*130 + "\n")
 
-        print(f"[*] Indicator check completed. Sleeping for 5 minutes before next evaluation...")
+        print(f"[*] Indicator check completed. Sleeping for 5 minutes before next 5-min candle evaluation...")
         time.sleep(INDICATOR_CHECK_INTERVAL)
 
 if __name__ == "__main__":
