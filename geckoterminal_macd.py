@@ -317,11 +317,12 @@ def calculate_indicators(df):
     # Use EMA for ATR to eliminate initial NaNs
     atr = tr.ewm(span=10, adjust=False).mean()
 
-    basic_upper = hl2 + (3 * atr)
+   basic_upper = hl2 + (3 * atr)
     basic_lower = hl2 - (3 * atr)
     
-    final_upper = basic_upper.copy().values
-    final_lower = basic_lower.copy().values
+    # Initialize as standard Python lists to prevent read-only array assignment errors
+    final_upper = basic_upper.tolist()
+    final_lower = basic_lower.tolist()
     supertrend = [True] * len(df)
     st_values = [0.0] * len(df)
     
@@ -329,12 +330,12 @@ def calculate_indicators(df):
         c_prev = close.iloc[i-1]
         c_curr = close.iloc[i]
         
-        if basic_upper[i] < final_upper[i-1] or c_prev > final_upper[i-1]:
+        if basic_upper.iloc[i] < final_upper[i-1] or c_prev > final_upper[i-1]:
             final_upper[i] = basic_upper.iloc[i]
         else:
             final_upper[i] = final_upper[i-1]
             
-        if basic_lower[i] > final_lower[i-1] or c_prev < final_lower[i-1]:
+        if basic_lower.iloc[i] > final_lower[i-1] or c_prev < final_lower[i-1]:
             final_lower[i] = basic_lower.iloc[i]
         else:
             final_lower[i] = final_lower[i-1]
@@ -349,7 +350,7 @@ def calculate_indicators(df):
         st_values[i] = final_lower[i] if supertrend[i] else final_upper[i]
 
     df['supertrend'] = st_values
-    df['supertrend_dir'] = supertrend  # True = Bullish, False = Bearish
+    df['supertrend_dir'] = supertrend
     return df
 
 # --- STEP 3: CROSSOVER EVALUATION ---
