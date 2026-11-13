@@ -415,20 +415,23 @@ def main():
             pool_addr = item["pool_address"]
             pool_name = item["pool_name"]
             age = item["age_hours"]
-            market_cap = item["market_cap"]
             tf, agg = get_candlestick_timeframe(age)
             
             df = fetch_ohlcv(pool_addr, tf, agg)
             if df.empty or len(df) < 35:
                 continue
                 
-            df = calculate_indicators(df, current_market_cap=market_cap)
+            df = calculate_indicators(df)
 
             in_trade = False
             entry_time = None
             entry_price = 0.0
+            entry_idx = 0
 
-            for i in range(2, len(df)):
+            # Start checking crossovers only after index 20 to let MACD/Supertrend warm up
+            start_idx = max(2, len(df) - len(df) + 20) if len(df) >= 20 else 2
+
+            for i in range(start_idx, len(df)):
                 prev_prev = df.iloc[i-2]
                 prev = df.iloc[i-1]
                 curr = df.iloc[i]
@@ -439,10 +442,11 @@ def main():
                 if not in_trade and is_pos_cross:
                     in_trade = True
                     entry_time = curr['timestamp']
-                    entry_price = curr['mcap_series']
+                    entry_price = curr['close']
+                    entry_idx = i
                 elif in_trade and is_neg_cross:
                     exit_time = curr['timestamp']
-                    exit_price = curr['mcap_series']
+                    exit_price = curr['close']
                     pnl_pct = ((exit_price - entry_price) / entry_price) * 100.0
                     historical_trades.append({
                         "Pool Name": pool_name,
@@ -453,35 +457,21 @@ def main():
                     })
                     in_trade = False
 
-            # Active Trade Check on Latest Closed Candle for Table 2 Live PnL Tracking
-            latest_curr = df.iloc[-1]
-            latest_prev = df.iloc[-2]
-            latest_close = latest_curr['close']
-
-            if check_positive_crossover(latest_curr, latest_prev):
-                active_entry_price = latest_close
-                
-                for j in range(len(df)-1, 0, -1):
-                    p_curr = df.iloc[j]
-                    p_prev = df.iloc[j-1]
-                    if j >= 2:
-                        p_prev_prev = df.iloc[j-2]
-                        if check_negative_crossover(p_curr, [p_prev_prev.to_dict(), p_prev.to_dict()]):
-                            break
-                    if check_positive_crossover(p_curr, p_prev):
-                        active_entry_price = p_curr['close']
-
-                current_val = latest_close
-                live_pnl_pct = ((current_val - active_entry_price) / active_entry_price) * 100.0
-
-                last_5_df = df.tail(5)
-                for _, row in last_5_df.iterrows():
+            # If the trade is STILL active on the latest candle, display the full sequence in Table 2
+            if in_trade:
+                active_df = df.iloc[entry_idx:]
+                for _, row in active_df.iterrows():
+                    candle_close = row['close']
+                    live_pnl_pct = ((candle_close - entry_price) / entry_price) * 100.0
                     st_status = "BULLISH" if row.get('supertrend_dir', True) else "BEARISH"
+                    
                     all_current_signals_detailed.append({
                         "Pool Name": pool_name,
                         "DexScreener Pool Address": pool_addr,
                         "Timestamp (IST)": convert_to_ist(row['timestamp']),
                         "Open": f"{row['open']:.8f}",
+                        "High": f"{row['high']:.8f}",
+                        "Low": f"{row['low']:.8f}",
                         "Close": f"{row['close']:.8f}",
                         "MACD": f"{row.get('macd_line', 0):.6f}",
                         "MACD Signal": f"{row.get('macd_signal', 0):.6f}",
