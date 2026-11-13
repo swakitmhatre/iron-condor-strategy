@@ -342,12 +342,12 @@ def calculate_indicators(df, current_market_cap=None):
         if basic_upper[i] < final_upper[i-1] or c_prev > final_upper[i-1]:
             final_upper[i] = basic_upper.iloc[i]
         else:
-            final_upper[i] = final_upper.iloc[i-1]
+            final_upper[i] = final_upper[i-1]
             
         if basic_lower[i] > final_lower[i-1] or c_prev < final_lower[i-1]:
             final_lower[i] = basic_lower.iloc[i]
         else:
-            final_lower[i] = final_lower.iloc[i-1]
+            final_lower[i] = final_lower[i-1]
             
         if c_curr <= final_upper[i]:
             supertrend[i] = False  # Bearish (Red)
