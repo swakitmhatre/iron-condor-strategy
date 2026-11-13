@@ -317,7 +317,7 @@ def calculate_indicators(df):
     # Use EMA for ATR to eliminate initial NaNs
     atr = tr.ewm(span=10, adjust=False).mean()
 
-   basic_upper = hl2 + (3 * atr)
+    basic_upper = hl2 + (3 * atr)
     basic_lower = hl2 - (3 * atr)
     
     # Initialize as standard Python lists to prevent read-only array assignment errors
