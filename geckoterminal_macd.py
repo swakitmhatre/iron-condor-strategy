@@ -373,7 +373,7 @@ def check_negative_crossover(row, prev_rows):
     curr, prev1, prev2 = row['histogram'], prev_rows[-1]['histogram'], prev_rows[-2]['histogram']
     if row['macd_line'] < row['macd_signal']: return True
     if row['macd_line'] < 0: return True
-    if prev1 != 0 and curr < (prev1 - (0.18 * prev1)):
+    if prev1 != 0 and curr < (prev1 - (0.18 * prev1)):return True
     if curr < prev1 < prev2: return True
     if not row['supertrend_dir']: return True
     return False
