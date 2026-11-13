@@ -330,8 +330,8 @@ def calculate_indicators(df, current_market_cap=None):
     basic_upper = hl2 + (3 * atr)
     basic_lower = hl2 - (3 * atr)
     
-    final_upper = basic_upper.copy().values
-    final_lower = basic_lower.copy().values
+    final_upper = basic_upper.tolist()
+    final_lower = basic_lower.tolist()
     supertrend = [True] * len(df)
     st_values = [0.0] * len(df)
     
