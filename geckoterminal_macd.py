@@ -318,53 +318,53 @@ def calculate_indicators(df, current_market_cap=None):
     high = df['high']
     low = df['low']
     close = df['close']
-    period=10
-    multiplier=3
 
     hl2 = (high + low) / 2
     tr = pd.concat([
         high - low,
-        (high - close.shift()).abs(),
-        (low - close.shift()).abs()
+        (high - close.shift(1)).abs(),
+        (low - close.shift(1)).abs()
     ], axis=1).max(axis=1)
 
-    atr = tr.ewm(span=period, adjust=False).mean()
+    # Standard TradingView / DexScreener ATR uses Wilder's RMA (alpha = 1 / period)
+    atr = tr.ewm(alpha=1 / period, adjust=False).mean()
 
     basic_upper = (hl2 + multiplier * atr).tolist()
     basic_lower = (hl2 - multiplier * atr).tolist()
     closes = close.tolist()
 
-    final_upper = [0.0] * len(df)
-    final_lower = [0.0] * len(df)
-    supertrend = [True] * len(df)
-    st_values = [0.0] * len(df)
+    n = len(df)
+    final_upper = [0.0] * n
+    final_lower = [0.0] * n
+    supertrend = [False] * n
+    st_values = [0.0] * n
 
     final_upper[0] = basic_upper[0]
     final_lower[0] = basic_lower[0]
-    st_values[0] = final_lower[0]
+    # Set initial direction based on whether close is above or below midpoint
+    supertrend[0] = closes[0] > hl2.iloc[0]
+    st_values[0] = final_lower[0] if supertrend[0] else final_upper[0]
 
-    for i in range(1, len(df)):
-        # Upper band (resistance in downtrend)
+    for i in range(1, n):
+        # Upper band (Red resistance)
         if basic_upper[i] < final_upper[i - 1] or closes[i - 1] > final_upper[i - 1]:
             final_upper[i] = basic_upper[i]
         else:
             final_upper[i] = final_upper[i - 1]
 
-        # Lower band (support in uptrend)
+        # Lower band (Green support)
         if basic_lower[i] > final_lower[i - 1] or closes[i - 1] < final_lower[i - 1]:
             final_lower[i] = basic_lower[i]
         else:
             final_lower[i] = final_lower[i - 1]
 
-        # Direction state machine
+        # Standard TradingView Supertrend flip logic
         if supertrend[i - 1]:
-            # Was Bullish -> flips Bearish only if close drops below final_lower
             if closes[i] < final_lower[i]:
                 supertrend[i] = False
             else:
                 supertrend[i] = True
         else:
-            # Was Bearish -> flips Bullish only if close breaks above final_upper
             if closes[i] > final_upper[i]:
                 supertrend[i] = True
             else:
@@ -373,8 +373,7 @@ def calculate_indicators(df, current_market_cap=None):
         st_values[i] = final_lower[i] if supertrend[i] else final_upper[i]
 
     df['supertrend'] = st_values
-    df['supertrend_dir'] = supertrend  # True = Bullish (Green), False = Bearish (Red)
-    print(df[['timestamp', 'close', 'supertrend', 'supertrend_dir']].tail(10))
+    df['supertrend_dir'] = supertrend  # True = Green (Bullish), False = Red (Bearish)
     return df
     '''
     high=high_series
