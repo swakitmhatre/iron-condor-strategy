@@ -319,6 +319,8 @@ def calculate_indicators(df, current_market_cap=None):
     high = df['high']
     low = df['low']
     close = df['close']
+    period=10
+    multiplier=3
 
     hl2 = (high + low) / 2
     tr = pd.concat([
