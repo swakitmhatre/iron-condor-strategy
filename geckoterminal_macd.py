@@ -543,13 +543,12 @@ def main():
             entry_price = 0.0
             entry_idx = 0
 
-            # Start checking crossovers only after index 20 to let MACD/Supertrend warm up
-            #start_idx = max(2, len(df) - len(df) + 20) if len(df) >= 20 else 2
+            # Already >= 10 (past indices 0–8 warmup) since len(df) >= 35
             start_idx = max(10, 20 if len(df) >= 20 else 2)
 
             for i in range(start_idx, len(df)):
-                prev_prev = df.iloc[i-2]
-                prev = df.iloc[i-1]
+                prev_prev = df.iloc[i - 2]
+                prev = df.iloc[i - 1]
                 curr = df.iloc[i]
 
                 is_pos_cross = check_positive_crossover(curr, prev)
