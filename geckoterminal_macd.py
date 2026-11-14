@@ -72,7 +72,7 @@ def fetch_candidate_pools():
                     seen_addresses.add(p["id"])
                     pools.append(p)
         time.sleep(REQUEST_DELAY)
-
+    '''
     # 3. Top Pools by Network
     print("[*] Fetching Top Pools by Network...")
     for page in range(1, 4):
@@ -83,7 +83,7 @@ def fetch_candidate_pools():
                     seen_addresses.add(p["id"])
                     pools.append(p)
         time.sleep(REQUEST_DELAY)
-    '''
+    
     # 4. Top Pools by DEX (Raydium, Orca, Meteora)
     dex_list = ["raydium", "orca", "meteora"]
     for dex in dex_list:
