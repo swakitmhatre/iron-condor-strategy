@@ -282,7 +282,7 @@ def fetch_ohlcv(pool_address, timeframe, aggregate, before_timestamp=None):
         return df
     return pd.DataFrame()
 
-def calculate_indicators(df, current_market_cap=None):
+def calculate_indicators(df, current_market_cap=None,pool_name="UNKNOWN"):
     """
     Calculates indicators on Market Cap USD series for 100% parity with DexScreener Mcap mode.
     """
@@ -372,8 +372,10 @@ def calculate_indicators(df, current_market_cap=None):
     df['supertrend'] = st_values
     df['supertrend_dir'] = supertrend_dir
     
+    print(f"--- {pool_name} | Tail 10 ---")
     print(df[['timestamp', 'close', 'supertrend', 'supertrend_dir']].tail(10))
     flips = df[df['supertrend_dir'] != df['supertrend_dir'].shift(1)]
+    print(f"--- {pool_name} | Flips ---")
     print(flips[['timestamp', 'close', 'supertrend', 'supertrend_dir']])
     return df
     '''
@@ -531,12 +533,14 @@ def main():
             pool_name = item["pool_name"]
             age = item["age_hours"]
             tf, agg = get_candlestick_timeframe(age)
-            
+
+            print(f"\n[*] Evaluating {pool_name} ({pool_addr}) [{agg}{tf[0]}]")
             df = fetch_ohlcv(pool_addr, tf, agg)
             if df.empty or len(df) < 35:
+                print(f"[!] Skipping {pool_name}: insufficient OHLCV candles ({len(df)})")
                 continue
-                
-            df = calculate_indicators(df)
+
+            df = calculate_indicators(df, pool_name=pool_name)
 
             in_trade = False
             entry_time = None
