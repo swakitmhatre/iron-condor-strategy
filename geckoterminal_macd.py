@@ -316,44 +316,40 @@ def calculate_indicators(df, current_market_cap=None):
     
     # 3. Robust Supertrend (10, 3) with safe initialization
 
-    high = df['high']
-    low = df['low']
-    close = df['close']
-    period=10
-    multiplier=3
+    # 3. TradingView / DexScreener Supertrend (10, 3) inside calculate_indicators(df)
+    period = 10
+    multiplier = 3
 
-    hl2 = (high + low) / 2
+    hl2 = (high_series + low_series) / 2.0
     tr = pd.concat([
-        high - low,
-        (high - close.shift(1)).abs(),
-        (low - close.shift(1)).abs()
+        high_series - low_series,
+        (high_series - series.shift(1)).abs(),
+        (low_series - series.shift(1)).abs()
     ], axis=1).max(axis=1)
 
-    # Match TradingView ta.atr(period): SMA seed on first `period` bars, then Wilder's RMA
-    atr = pd.Series(np.nan, index=df.index)
+    atr = pd.Series(np.nan, index=df.index, dtype="float64")
     if len(df) >= period:
         atr.iloc[period - 1] = tr.iloc[:period].mean()
         alpha = 1.0 / period
         for i in range(period, len(df)):
-            atr.iloc[i] = alpha * tr.iloc[i] + (1 - alpha) * atr.iloc[i - 1]
+            atr.iloc[i] = alpha * tr.iloc[i] + (1.0 - alpha) * atr.iloc[i - 1]
 
     basic_upper = (hl2 + multiplier * atr).tolist()
     basic_lower = (hl2 - multiplier * atr).tolist()
-    closes = close.tolist()
+    closes = series.tolist()
 
     n = len(df)
     final_upper = [np.nan] * n
     final_lower = [np.nan] * n
-    supertrend = [False] * n
+    supertrend_dir = [False] * n
     st_values = [np.nan] * n
 
     start_idx = period - 1
     if n > start_idx:
         final_upper[start_idx] = basic_upper[start_idx]
         final_lower[start_idx] = basic_lower[start_idx]
-        # TradingView starts bearish (dir = 1 in Pine) unless close > basic_upper
-        supertrend[start_idx] = closes[start_idx] > basic_upper[start_idx]
-        st_values[start_idx] = final_lower[start_idx] if supertrend[start_idx] else final_upper[start_idx]
+        supertrend_dir[start_idx] = closes[start_idx] > basic_upper[start_idx]
+        st_values[start_idx] = final_lower[start_idx] if supertrend_dir[start_idx] else final_upper[start_idx]
 
         for i in range(start_idx + 1, n):
             if basic_upper[i] < final_upper[i - 1] or closes[i - 1] > final_upper[i - 1]:
@@ -366,15 +362,16 @@ def calculate_indicators(df, current_market_cap=None):
             else:
                 final_lower[i] = final_lower[i - 1]
 
-            if supertrend[i - 1]:
-                supertrend[i] = False if closes[i] < final_lower[i] else True
+            if supertrend_dir[i - 1]:
+                supertrend_dir[i] = False if closes[i] < final_lower[i] else True
             else:
-                supertrend[i] = True if closes[i] > final_upper[i] else False
+                supertrend_dir[i] = True if closes[i] > final_upper[i] else False
 
-            st_values[i] = final_lower[i] if supertrend[i] else final_upper[i]
+            st_values[i] = final_lower[i] if supertrend_dir[i] else final_upper[i]
 
     df['supertrend'] = st_values
-    df['supertrend_dir'] = supertrend  # True = Green (Bullish), False = Red (Bearish)
+    df['supertrend_dir'] = supertrend_dir
+    
     print(df[['timestamp', 'close', 'supertrend', 'supertrend_dir']].tail(10))
     flips = df[df['supertrend_dir'] != df['supertrend_dir'].shift(1)]
     print(flips[['timestamp', 'close', 'supertrend', 'supertrend_dir']])
@@ -548,6 +545,7 @@ def main():
 
             # Start checking crossovers only after index 20 to let MACD/Supertrend warm up
             start_idx = max(2, len(df) - len(df) + 20) if len(df) >= 20 else 2
+            start_idx = max(10, 20 if len(df) >= 20 else 2)
 
             for i in range(start_idx, len(df)):
                 prev_prev = df.iloc[i-2]
