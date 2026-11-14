@@ -377,6 +377,8 @@ def calculate_indicators(df, current_market_cap=None):
     df['supertrend'] = st_values
     df['supertrend_dir'] = supertrend  # True = Green (Bullish), False = Red (Bearish)
     print(df[['timestamp', 'close', 'supertrend', 'supertrend_dir']].tail(10))
+    flips = df[df['supertrend_dir'] != df['supertrend_dir'].shift(1)]
+    print(flips[['timestamp', 'close', 'supertrend', 'supertrend_dir']])
     return df
     '''
     high=high_series
