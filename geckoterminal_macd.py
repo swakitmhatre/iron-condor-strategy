@@ -318,8 +318,6 @@ def calculate_indicators(df, current_market_cap=None):
     high = df['high']
     low = df['low']
     close = df['close']
-    period=10
-    multiplier=3
 
     hl2 = (high + low) / 2
     tr = pd.concat([
@@ -328,51 +326,49 @@ def calculate_indicators(df, current_market_cap=None):
         (low - close.shift(1)).abs()
     ], axis=1).max(axis=1)
 
-    # Standard TradingView / DexScreener ATR uses Wilder's RMA (alpha = 1 / period)
-    atr = tr.ewm(alpha=1 / period, adjust=False).mean()
+    # Match TradingView ta.atr(period): SMA seed on first `period` bars, then Wilder's RMA
+    atr = pd.Series(np.nan, index=df.index)
+    if len(df) >= period:
+        atr.iloc[period - 1] = tr.iloc[:period].mean()
+        alpha = 1.0 / period
+        for i in range(period, len(df)):
+            atr.iloc[i] = alpha * tr.iloc[i] + (1 - alpha) * atr.iloc[i - 1]
 
     basic_upper = (hl2 + multiplier * atr).tolist()
     basic_lower = (hl2 - multiplier * atr).tolist()
     closes = close.tolist()
 
     n = len(df)
-    final_upper = [0.0] * n
-    final_lower = [0.0] * n
+    final_upper = [np.nan] * n
+    final_lower = [np.nan] * n
     supertrend = [False] * n
-    st_values = [0.0] * n
+    st_values = [np.nan] * n
 
-    final_upper[0] = basic_upper[0]
-    final_lower[0] = basic_lower[0]
-    # Set initial direction based on whether close is above or below midpoint
-    supertrend[0] = closes[0] > hl2.iloc[0]
-    st_values[0] = final_lower[0] if supertrend[0] else final_upper[0]
+    start_idx = period - 1
+    if n > start_idx:
+        final_upper[start_idx] = basic_upper[start_idx]
+        final_lower[start_idx] = basic_lower[start_idx]
+        # TradingView starts bearish (dir = 1 in Pine) unless close > basic_upper
+        supertrend[start_idx] = closes[start_idx] > basic_upper[start_idx]
+        st_values[start_idx] = final_lower[start_idx] if supertrend[start_idx] else final_upper[start_idx]
 
-    for i in range(1, n):
-        # Upper band (Red resistance)
-        if basic_upper[i] < final_upper[i - 1] or closes[i - 1] > final_upper[i - 1]:
-            final_upper[i] = basic_upper[i]
-        else:
-            final_upper[i] = final_upper[i - 1]
-
-        # Lower band (Green support)
-        if basic_lower[i] > final_lower[i - 1] or closes[i - 1] < final_lower[i - 1]:
-            final_lower[i] = basic_lower[i]
-        else:
-            final_lower[i] = final_lower[i - 1]
-
-        # Standard TradingView Supertrend flip logic
-        if supertrend[i - 1]:
-            if closes[i] < final_lower[i]:
-                supertrend[i] = False
+        for i in range(start_idx + 1, n):
+            if basic_upper[i] < final_upper[i - 1] or closes[i - 1] > final_upper[i - 1]:
+                final_upper[i] = basic_upper[i]
             else:
-                supertrend[i] = True
-        else:
-            if closes[i] > final_upper[i]:
-                supertrend[i] = True
-            else:
-                supertrend[i] = False
+                final_upper[i] = final_upper[i - 1]
 
-        st_values[i] = final_lower[i] if supertrend[i] else final_upper[i]
+            if basic_lower[i] > final_lower[i - 1] or closes[i - 1] < final_lower[i - 1]:
+                final_lower[i] = basic_lower[i]
+            else:
+                final_lower[i] = final_lower[i - 1]
+
+            if supertrend[i - 1]:
+                supertrend[i] = False if closes[i] < final_lower[i] else True
+            else:
+                supertrend[i] = True if closes[i] > final_upper[i] else False
+
+            st_values[i] = final_lower[i] if supertrend[i] else final_upper[i]
 
     df['supertrend'] = st_values
     df['supertrend_dir'] = supertrend  # True = Green (Bullish), False = Red (Bearish)
