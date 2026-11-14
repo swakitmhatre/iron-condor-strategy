@@ -544,7 +544,7 @@ def main():
             entry_idx = 0
 
             # Start checking crossovers only after index 20 to let MACD/Supertrend warm up
-            start_idx = max(2, len(df) - len(df) + 20) if len(df) >= 20 else 2
+            #start_idx = max(2, len(df) - len(df) + 20) if len(df) >= 20 else 2
             start_idx = max(10, 20 if len(df) >= 20 else 2)
 
             for i in range(start_idx, len(df)):
