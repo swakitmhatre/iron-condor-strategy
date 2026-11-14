@@ -314,6 +314,7 @@ def calculate_indicators(df, current_market_cap=None):
     df['rsi'] = 100 - (100 / (1 + rs))
     
     # 3. Robust Supertrend (10, 3) with safe initialization
+    '''
     high=high_series
     low=low_series
     close=series
@@ -369,7 +370,8 @@ def calculate_indicators(df, current_market_cap=None):
         (high_series - series.shift()).abs(),
         (low_series - series.shift()).abs()
     ], axis=1).max(axis=1)
-    atr = tr.rolling(window=10).mean()
+    #atr = tr.rolling(window=10).mean()
+    atr = tr.ewm(span=10, adjust=False).mean()
 
     basic_upper = hl2 + (3 * atr)
     basic_lower = hl2 - (3 * atr)
@@ -408,7 +410,7 @@ def calculate_indicators(df, current_market_cap=None):
     df['supertrend_dir'] = supertrend
     df['mcap_series'] = series
     return df
-    '''
+    
 # --- STEP 3: CROSSOVER EVALUATION ---
 
 def check_positive_crossover(curr, prev=None):
