@@ -314,7 +314,68 @@ def calculate_indicators(df, current_market_cap=None):
     df['rsi'] = 100 - (100 / (1 + rs))
     
     # 3. Robust Supertrend (10, 3) with safe initialization
-    
+
+    high = df['high']
+    low = df['low']
+    close = df['close']
+    period=10
+    multiplier=3
+
+    hl2 = (high + low) / 2
+    tr = pd.concat([
+        high - low,
+        (high - close.shift()).abs(),
+        (low - close.shift()).abs()
+    ], axis=1).max(axis=1)
+
+    atr = tr.ewm(span=period, adjust=False).mean()
+
+    basic_upper = (hl2 + multiplier * atr).tolist()
+    basic_lower = (hl2 - multiplier * atr).tolist()
+    closes = close.tolist()
+
+    final_upper = [0.0] * len(df)
+    final_lower = [0.0] * len(df)
+    supertrend = [True] * len(df)
+    st_values = [0.0] * len(df)
+
+    final_upper[0] = basic_upper[0]
+    final_lower[0] = basic_lower[0]
+    st_values[0] = final_lower[0]
+
+    for i in range(1, len(df)):
+        # Upper band (resistance in downtrend)
+        if basic_upper[i] < final_upper[i - 1] or closes[i - 1] > final_upper[i - 1]:
+            final_upper[i] = basic_upper[i]
+        else:
+            final_upper[i] = final_upper[i - 1]
+
+        # Lower band (support in uptrend)
+        if basic_lower[i] > final_lower[i - 1] or closes[i - 1] < final_lower[i - 1]:
+            final_lower[i] = basic_lower[i]
+        else:
+            final_lower[i] = final_lower[i - 1]
+
+        # Direction state machine
+        if supertrend[i - 1]:
+            # Was Bullish -> flips Bearish only if close drops below final_lower
+            if closes[i] < final_lower[i]:
+                supertrend[i] = False
+            else:
+                supertrend[i] = True
+        else:
+            # Was Bearish -> flips Bullish only if close breaks above final_upper
+            if closes[i] > final_upper[i]:
+                supertrend[i] = True
+            else:
+                supertrend[i] = False
+
+        st_values[i] = final_lower[i] if supertrend[i] else final_upper[i]
+
+    df['supertrend'] = st_values
+    df['supertrend_dir'] = supertrend  # True = Bullish (Green), False = Bearish (Red)
+    return df
+    '''
     high=high_series
     low=low_series
     close=series
@@ -362,6 +423,7 @@ def calculate_indicators(df, current_market_cap=None):
     df['supertrend'] = st_values
     df['supertrend_dir'] = supertrend  # True = Bullish, False = Bearish
     return df
+    '''
     '''
 
     hl2 = (high_series + low_series) / 2
