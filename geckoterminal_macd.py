@@ -362,6 +362,52 @@ def calculate_indicators(df, current_market_cap=None):
     df['supertrend_dir'] = supertrend  # True = Bullish, False = Bearish
     return df
     '''
+
+    hl2 = (high_series + low_series) / 2
+    tr = pd.concat([
+        high_series - low_series,
+        (high_series - series.shift()).abs(),
+        (low_series - series.shift()).abs()
+    ], axis=1).max(axis=1)
+    atr = tr.rolling(window=10).mean()
+
+    basic_upper = hl2 + (3 * atr)
+    basic_lower = hl2 - (3 * atr)
+    
+    final_upper = [0.0] * len(df)
+    final_lower = [0.0] * len(df)
+    supertrend = [True] * len(df)
+    st_values = [0.0] * len(df)
+    
+    for i in range(len(df)):
+        if i == 0:
+            final_upper[i] = basic_upper.iloc[i]
+            final_lower[i] = basic_lower.iloc[i]
+            continue
+            
+        if basic_upper.iloc[i] < final_upper[i-1] or series.iloc[i-1] > final_upper[i-1]:
+            final_upper[i] = basic_upper.iloc[i]
+        else:
+            final_upper[i] = final_upper[i-1]
+            
+        if basic_lower.iloc[i] > final_lower[i-1] or series.iloc[i-1] < final_lower[i-1]:
+            final_lower[i] = basic_lower.iloc[i]
+        else:
+            final_lower[i] = final_lower[i-1]
+            
+        if series.iloc[i] <= final_upper[i]:
+            supertrend[i] = False
+        elif series.iloc[i] >= final_lower[i]:
+            supertrend[i] = True
+        else:
+            supertrend[i] = supertrend[i-1]
+            
+        st_values[i] = final_lower[i] if supertrend[i] else final_upper[i]
+
+    df['supertrend'] = st_values
+    df['supertrend_dir'] = supertrend
+    df['mcap_series'] = series
+    return df
 # --- STEP 3: CROSSOVER EVALUATION ---
 
 def check_positive_crossover(curr, prev=None):
