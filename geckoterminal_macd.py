@@ -50,7 +50,7 @@ def is_solana_sol_pair(attr):
 def fetch_candidate_pools():
     pools = []
     seen_addresses = set()
-    
+    '''
     # 1. Trending Pools by Network
     print("[*] Fetching Trending Pools by Network...")
     for page in range(1, 4):
@@ -83,7 +83,7 @@ def fetch_candidate_pools():
                     seen_addresses.add(p["id"])
                     pools.append(p)
         time.sleep(REQUEST_DELAY)
-
+    '''
     # 4. Top Pools by DEX (Raydium, Orca, Meteora)
     dex_list = ["raydium", "orca", "meteora"]
     for dex in dex_list:
