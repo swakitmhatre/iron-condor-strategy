@@ -706,4 +706,89 @@ def main() -> None:
 
                 elif p_addr in open_positions and is_neg:
                     pos = open_positions.pop(p_addr)
-                    entry_px = d(
+                    entry_px = d(pos.get("Entry Price"), str(px))
+                    alloc_sol = d(pos.get("Allocated SOL"), "0")
+                    pnl_pct = (((px - entry_px) / entry_px) * Decimal("100")) if entry_px > 0 else Decimal("0")
+
+                    try:
+                        exit_res = trader.sell_exit(
+                            token_mint=pos.get("Token Address") or token_addr,
+                            tokens_raw=int(pos.get("Tokens Raw") or 1),
+                            alloc_sol=alloc_sol,
+                            pnl_pct=pnl_pct,
+                        )
+                        exit_tx = exit_res.get("tx_sig", "")
+                    except Exception as exc:
+                        print(f"[!] SELL_EXIT failed for {pool_name}: {exc}")
+                        exit_tx = "SELL_FAILED"
+
+                    closed_trades.append({
+                        "Pool Name": pos.get("Pool Name", pool_name),
+                        "Entry (IST)": pos.get("Entry (IST)", ""),
+                        "Exit (IST)": ts_ist,
+                        "Allocated SOL": str(alloc_sol),
+                        "PnL (%)": f"{pnl_pct.quantize(Decimal('0.01')):+.2f}%",
+                        "Entry Tx": pos.get("Entry Tx", ""),
+                        "Exit Tx": exit_tx,
+                    })
+                    save_bot_state(open_positions, closed_trades)
+                    print(f"[SELL_EXIT] {pool_name} @ {px} | PnL: {pnl_pct:+.2f}% | Tx: {exit_tx}")
+
+            if p_addr in open_positions:
+                pos = open_positions[p_addr]
+                entry_px = d(pos.get("Entry Price"), str(df["close"].iloc[-1]))
+                matches = df.index[df["timestamp"].apply(convert_to_ist) == pos.get("Entry (IST)")].tolist()
+                entry_idx = matches[-1] if matches else (len(df) - 1)
+                for _, row in df.iloc[entry_idx:].iterrows():
+                    c_px = d(row["close"])
+                    live_pnl = (((c_px - entry_px) / entry_px) * Decimal("100")) if entry_px > 0 else Decimal("0")
+                    active_table_rows.append({
+                        "Pool Name": pool_name,
+                        "Timestamp (IST)": convert_to_ist(row["timestamp"]),
+                        "Close": f"{c_px:.8f}",
+                        "MACD": f"{float(row['macd_line']):.6f}",
+                        "Signal": f"{float(row['macd_signal']):.6f}",
+                        "Hist": f"{float(row['histogram']):.6f}",
+                        "Supertrend": f"{float(row['supertrend']):.8f} ({'BULL' if row['supertrend_dir'] else 'BEAR'})",
+                        "RSI": f"{float(row['rsi']):.1f}",
+                        "Alloc SOL": pos.get("Allocated SOL", "0"),
+                        "Live PnL (%)": f"{live_pnl.quantize(Decimal('0.01')):+.2f}%",
+                    })
+
+        print("\n--- OPEN POSITIONS LOG ---")
+        if open_positions:
+            open_rows = []
+            for p_addr, pos in open_positions.items():
+                e_px = d(pos.get("Entry Price"), "0")
+                m_px = latest_prices.get(p_addr, e_px)
+                u_pnl = (((m_px - e_px) / e_px) * Decimal("100")) if e_px > 0 else Decimal("0")
+                open_rows.append({
+                    "Pool Name": pos.get("Pool Name", p_addr),
+                    "Entry (IST)": pos.get("Entry (IST)", ""),
+                    "Alloc SOL": pos.get("Allocated SOL", "0"),
+                    "Entry Price": f"{e_px:.8f}",
+                    "Mark Price": f"{m_px:.8f}",
+                    "Unrealized PnL (%)": f"{u_pnl.quantize(Decimal('0.01')):+.2f}%",
+                    "Entry Tx": pos.get("Entry Tx", ""),
+                })
+            print(pd.DataFrame(open_rows).to_string(index=False))
+        else:
+            print("No open positions.")
+
+        print("\n--- TABLE 1: HISTORICAL COMPLETED TRADES ---")
+        if closed_trades:
+            print(pd.DataFrame(closed_trades).to_string(index=False))
+        else:
+            print("No completed trades yet.")
+
+        print("\n--- TABLE 2: CURRENT ACTIVE POSITIVE CROSSOVERS ---")
+        if active_table_rows:
+            print(pd.DataFrame(active_table_rows).to_string(index=False))
+        else:
+            print("No active positive crossovers.")
+
+        time.sleep(INDICATOR_CHECK_INTERVAL)
+
+
+if __name__ == "__main__":
+    main()
